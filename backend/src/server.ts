@@ -1,0 +1,137 @@
+import cors from 'cors';
+import dotenv from 'dotenv';
+import express from 'express';
+import rateLimit from 'express-rate-limit';
+import helmet from 'helmet';
+import http from 'http';
+import { Server } from 'socket.io';
+import { initDatabase } from './database/connection';
+import crisisRoutes from './routes/crisis';
+import dashboardRoutes from './routes/dashboard';
+import locationRoutes from './routes/locations';
+import notificationRoutes from './routes/notifications';
+import userRoutes from './routes/users';
+import logger from './utils/logger';
+
+dotenv.config();
+
+const app = express();
+const server = http.createServer(app);
+
+const io = new Server(server, {
+  cors: {
+    origin: process.env.WS_CORS_ORIGIN || '*',
+    methods: ['GET', 'POST'],
+  },
+});
+
+app.use(helmet());
+app.use(cors());
+
+const crisisLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000,
+  max: 10,
+  message: { error: 'Too many crisis reports, please try again later' },
+});
+
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+});
+
+app.use(generalLimiter);
+app.use(express.json({ limit: '10mb' }));
+
+app.use((req: any, res: any, next: any) => {
+  req.io = io;
+  next();
+});
+
+app.use('/api/crisis', crisisLimiter, crisisRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/locations', locationRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/dashboard', dashboardRoutes);
+
+app.get('/health', (req: any, res: any) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+app.get('/', (req: any, res: any) => {
+  res.json({
+    name: 'Crisis Response API',
+    version: '1.0.0',
+    endpoints: {
+      crisis: '/api/crisis',
+      users: '/api/users',
+      locations: '/api/locations',
+      notifications: '/api/notifications',
+      dashboard: '/api/dashboard',
+      health: '/health',
+    },
+  });
+});
+
+io.on('connection', (socket: any) => {
+  logger.info(`Client connected: ${socket.id}`);
+
+  socket.on('join_property', (propertyId: number) => {
+    socket.join(`property_${propertyId}`);
+    logger.info(`Socket ${socket.id} joined property_${propertyId}`);
+  });
+
+  socket.on('join_role', (role: string) => {
+    socket.join(`role_${role}`);
+    logger.info(`Socket ${socket.id} joined role_${role}`);
+  });
+
+  socket.on('location_update', async (data: any) => {
+    try {
+      const { userId, latitude, longitude, beaconId, zoneId } = data;
+      io.to('role_admin').to('role_security').to('role_responder').emit('user_location_update', {
+        userId,
+        latitude,
+        longitude,
+        beaconId,
+        zoneId,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      logger.error('Location update error:', error);
+    }
+  });
+
+  socket.on('disconnect', () => {
+    logger.info(`Client disconnected: ${socket.id}`);
+  });
+});
+
+app.use((err: any, req: any, res: any, next: any) => {
+  logger.error('Unhandled error:', err);
+  res.status(500).json({ error: 'Internal server error' });
+});
+
+app.use((req: any, res: any) => {
+  res.status(404).json({ error: 'Endpoint not found' });
+});
+
+const PORT = process.env.PORT || 3001;
+
+async function startServer() {
+  try {
+    await initDatabase();
+    logger.info('Database connected successfully');
+
+    server.listen(PORT, () => {
+      logger.info(`Crisis Response API running on port ${PORT}`);
+      logger.info('WebSocket server ready for connections');
+    });
+  } catch (error) {
+    logger.error('Failed to start server:', error);
+    process.exit(1);
+  }
+}
+
+startServer();
+
+export { app, server, io };
