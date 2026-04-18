@@ -2,6 +2,54 @@ import { pool } from '../database/connection';
 import logger from '../utils/logger';
 import type { Request, Response } from 'express';
 
+export const getPropertySettings = async (req: Request, res: Response) => {
+  const { propertyId } = req.params;
+
+  try {
+    const result = await pool.query(
+      `SELECT id, name, address, floor_plan_data, created_at, updated_at
+       FROM properties WHERE id = $1`,
+      [propertyId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Property not found' });
+    }
+
+    res.json({ success: true, property: result.rows[0] });
+  } catch (error: any) {
+    logger.error('Error fetching property settings:', error);
+    res.status(500).json({ error: 'Failed to fetch property settings' });
+  }
+};
+
+export const updatePropertySettings = async (req: Request, res: Response) => {
+  const { propertyId } = req.params;
+  const { name, address, floorPlanData } = req.body;
+
+  try {
+    const result = await pool.query(
+      `UPDATE properties
+       SET name = COALESCE($1, name),
+           address = COALESCE($2, address),
+           floor_plan_data = COALESCE($3::jsonb, floor_plan_data),
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $4
+       RETURNING id, name, address, floor_plan_data, created_at, updated_at`,
+      [name || null, address || null, floorPlanData ? JSON.stringify(floorPlanData) : null, propertyId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Property not found' });
+    }
+
+    res.json({ success: true, property: result.rows[0], message: 'Property settings updated successfully' });
+  } catch (error: any) {
+    logger.error('Error updating property settings:', error);
+    res.status(500).json({ error: 'Failed to update property settings' });
+  }
+};
+
 export const getOverview = async (req: Request, res: Response) => {
   const { propertyId } = req.params;
   try {

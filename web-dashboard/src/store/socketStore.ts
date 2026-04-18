@@ -18,6 +18,11 @@ export const useSocketStore = create<SocketState>((set, get) => ({
   connected: false,
 
   connect: () => {
+    const existingSocket = get().socket;
+    if (existingSocket) {
+      return;
+    }
+
     const token = localStorage.getItem('token');
     const socket = io(SOCKET_URL, {
       auth: { token },
@@ -48,19 +53,25 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     });
 
     socket.on('crisis_reported', (data) => {
+      const incident = data?.incident;
+      const incidentType = incident?.incident_type || data?.incident_type || 'incident';
+      const severity = incident?.severity || data?.severity || 'high';
+      const description = incident?.description || data?.description;
+
       addNotif({
         type: 'crisis',
         title: 'New Crisis Reported',
-        message: data.description || `${data.incident_type} incident reported — Severity: ${data.severity}`,
-        severity: data.severity === 'critical' ? 'critical' : 'high',
+        message: description || `${incidentType} incident reported - Severity: ${severity}`,
+        severity: severity === 'critical' ? 'critical' : 'high',
       });
     });
 
     socket.on('panic_triggered', (data) => {
+      const userName = data?.user_name || data?.userName;
       addNotif({
         type: 'panic',
         title: 'Panic Alert!',
-        message: data.message || `Panic triggered by ${data.user_name || 'a guest'}`,
+        message: data.message || `Panic triggered by ${userName || 'a guest'}`,
         severity: 'critical',
       });
     });
@@ -84,10 +95,11 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     });
 
     socket.on('incident_status_update', (data) => {
+      const incidentId = data?.incident_id || data?.incidentId;
       addNotif({
         type: 'status',
         title: 'Incident Updated',
-        message: `Incident #${data.incident_id} status changed to ${data.status}`,
+        message: `Incident #${incidentId || 'N/A'} status changed to ${data.status}`,
         severity: 'medium',
       });
     });

@@ -33,7 +33,7 @@ export default function GuestDashboard() {
   const panicRef = useRef<HTMLButtonElement>(null);
 
   const [activeIncident, setActiveIncident] = useState(false);
-  const [countdown, setCountdown] = useState<number | null>(null);
+  const [isSendingSOS, setIsSendingSOS] = useState(false);
 
   // Check for active incidents
   useEffect(() => {
@@ -46,34 +46,24 @@ export default function GuestDashboard() {
       .catch(console.error);
   }, [user]);
 
-  // Handle countdown panic timer
-  useEffect(() => {
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    if (countdown !== null && countdown > 0) {
-      timer = setTimeout(() => setCountdown(countdown - 1), 1000);
-    } else if (countdown === 0) {
-      triggerPanic();
-      setCountdown(null);
-    }
-    return () => {
-      if (timer) {
-        clearTimeout(timer);
-      }
-    };
-  }, [countdown]);
-
   const triggerPanic = async () => {
+    if (isSendingSOS) {
+      return;
+    }
+
+    setIsSendingSOS(true);
     try {
-      await axios.post(`${API_URL}/users/panic`, {
+      const response = await axios.post(`${API_URL}/users/panic`, {
         message: `Panic triggered from Guest Dashboard (Room ${user?.room_number || 'Unknown'})`,
         latitude: 40.7128, // Mock GPS
         longitude: -74.0060,
       });
-      alert('Panic Alert Sent! Security is on the way.');
+      alert(response.data?.message || 'Panic Alert Sent! Security is on the way.');
     } catch (err) {
       console.error('Failed to trigger panic:', err);
-      // Fallback for demo if backend is offline
-      alert('Panic Alert Sent (Demo Mode)');
+      alert('Unable to send SOS. Please check your connection and try again.');
+    } finally {
+      setIsSendingSOS(false);
     }
   };
 
@@ -153,7 +143,8 @@ export default function GuestDashboard() {
             ref={panicRef}
             variant="contained"
             color="error"
-            onClick={() => countdown === null ? setCountdown(3) : setCountdown(null)}
+            onClick={triggerPanic}
+            disabled={isSendingSOS}
             sx={{
               width: 150,
               height: 150,
@@ -164,11 +155,11 @@ export default function GuestDashboard() {
               background: 'linear-gradient(135deg, #ef4444 0%, #b91c1c 100%)',
             }}
           >
-            {countdown !== null ? `CANCEL (${countdown})` : 'SOS'}
+            {isSendingSOS ? 'SENDING...' : 'SOS'}
           </Button>
         </Box>
         <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-          {countdown !== null ? 'Tap again to cancel' : 'Hold or Tap for Emergency'}
+          Tap SOS to immediately alert security and responders.
         </Typography>
       </Box>
 

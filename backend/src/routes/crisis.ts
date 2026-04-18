@@ -1,18 +1,28 @@
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
 import { body } from 'express-validator';
 import {
   getActiveIncidents,
   getIncident,
   getIncidentDetails,
+  getPublicCrisisReports,
+  reportPublicCrisis,
   reportCrisis,
+  reviewPublicCrisisReport,
   resolveIncident,
   updateIncidentStatus,
 } from '../controllers/crisisController';
-import { authenticate } from '../middleware/auth';
+import { authenticate, requireRole } from '../middleware/auth';
 
 const router = Router();
 
-router.post('/report', [
+const publicReportLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  max: 5,
+  message: { error: 'Too many public reports from this source. Please try again later.' },
+});
+
+router.post('/report', authenticate, [
   body('propertyId').isInt().withMessage('Property ID is required'),
   body('type').isIn(['fire', 'medical', 'security', 'natural_disaster', 'evacuation', 'other']),
   body('severity').optional().isIn(['low', 'medium', 'high', 'critical']),
@@ -21,6 +31,24 @@ router.post('/report', [
   body('zoneId').optional().isInt(),
   body('description').optional().isString()
 ], reportCrisis);
+
+router.post('/public-report', publicReportLimiter, [
+  body('propertyId').isInt().withMessage('Property ID is required'),
+  body('type').isIn(['fire', 'medical', 'security', 'natural_disaster', 'evacuation', 'other']),
+  body('severity').optional().isIn(['low', 'medium', 'high', 'critical']),
+  body('latitude').optional().isFloat(),
+  body('longitude').optional().isFloat(),
+  body('zoneId').optional().isInt(),
+  body('description').optional().isString(),
+  body('reporterName').optional().isString(),
+  body('reporterContact').optional().isString(),
+], reportPublicCrisis);
+
+router.get('/public-reports', authenticate, requireRole(['admin', 'security', 'responder']), getPublicCrisisReports);
+router.patch('/public-reports/:id', authenticate, requireRole(['admin', 'security', 'responder']), [
+  body('action').isIn(['escalate', 'dismiss']),
+  body('severity').optional().isIn(['low', 'medium', 'high', 'critical']),
+], reviewPublicCrisisReport);
 
 router.get('/active', getActiveIncidents);
 router.get('/:id', getIncident);

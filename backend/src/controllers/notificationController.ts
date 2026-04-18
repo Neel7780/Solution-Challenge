@@ -121,7 +121,7 @@ export const getNotificationHistory = async (req: Request, res: Response) => {
       `SELECT n.*, i.incident_type
        FROM notifications n
        LEFT JOIN incidents i ON n.incident_id = i.id
-       WHERE i.property_id = $1 OR n.recipient_id = $1
+       WHERE i.property_id = $1::int OR n.recipient_id = $1::text
        ORDER BY n.created_at DESC
        LIMIT $2`,
       [propertyId, limit]

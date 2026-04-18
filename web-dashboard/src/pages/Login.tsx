@@ -28,7 +28,7 @@ export default function Login() {
   const { login } = useAuthStore();
   const containerRef = useRef(null);
 
-  const [email, setEmail] = useState('admin@hotel.com');
+  const [identifier, setIdentifier] = useState('admin@hotel.com');
   const [password, setPassword] = useState('password');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -47,7 +47,7 @@ export default function Login() {
     setError('');
 
     try {
-      const response = await axios.post(`${API_URL}/users/login`, { email, password });
+      const response = await axios.post(`${API_URL}/users/login`, { identifier, password });
       login(response.data.token, response.data.user);
       
       if (response.data.user.role === 'guest') {
@@ -145,13 +145,13 @@ export default function Login() {
         <Box component="form" onSubmit={handleLogin} className="login-elem">
           <TextField
             fullWidth
-            label="Email Address"
+            label="Email Address or Mobile Number"
             variant="outlined"
             margin="normal"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            value={identifier}
+            onChange={(e) => setIdentifier(e.target.value)}
             required
-            autoComplete="email"
+            autoComplete="username"
             sx={{ mb: 2 }}
           />
 

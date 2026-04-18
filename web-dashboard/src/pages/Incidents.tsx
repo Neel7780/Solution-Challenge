@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import {
+  Alert,
   Box,
   Typography,
   Paper,
@@ -19,12 +20,16 @@ import {
   MenuItem,
   Grid,
   IconButton,
+  Stack,
+  Tabs,
+  Tab,
 } from '@mui/material';
 import { Add as AddIcon, MoreVert as MoreIcon } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
+import { useAuthStore } from '../store/authStore';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
@@ -39,10 +44,26 @@ interface Incident {
   zone_name: string;
 }
 
+interface PublicReport {
+  id: number;
+  property_id: number;
+  incident_type: string;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  description: string | null;
+  reporter_name: string | null;
+  reporter_contact: string | null;
+  source_ip: string;
+  status: 'pending_review' | 'escalated' | 'dismissed';
+  created_at: string;
+}
+
 export default function Incidents() {
   const [open, setOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<'incidents' | 'public-reports'>('incidents');
+  const { user } = useAuthStore();
   const queryClient = useQueryClient();
   const containerRef = useRef(null);
+  const canReviewPublicReports = ['admin', 'security', 'responder'].includes(user?.role || '');
 
   const { data: incidents, isLoading } = useQuery<Incident[]>({
     queryKey: ['incidents'],
@@ -62,6 +83,26 @@ export default function Incidents() {
   const resolveMutation = useMutation({
     mutationFn: (id: number) => axios.post(`${API_URL}/crisis/${id}/resolve`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['incidents'] }),
+  });
+
+  const { data: publicReports = [], isLoading: loadingPublicReports, isError: publicReportsError } = useQuery<PublicReport[]>({
+    queryKey: ['public-reports'],
+    queryFn: async () => {
+      const res = await axios.get(`${API_URL}/crisis/public-reports`, {
+        params: { status: 'pending_review' },
+      });
+      return res.data.reports;
+    },
+    enabled: canReviewPublicReports,
+  });
+
+  const reviewPublicReportMutation = useMutation({
+    mutationFn: ({ id, action }: { id: number; action: 'escalate' | 'dismiss' }) =>
+      axios.patch(`${API_URL}/crisis/public-reports/${id}`, { action }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['public-reports'] });
+      queryClient.invalidateQueries({ queryKey: ['incidents'] });
+    },
   });
 
   useGSAP(() => {
@@ -108,7 +149,23 @@ export default function Incidents() {
         </Button>
       </Box>
 
-      <Paper className="glass">
+      <Tabs
+        value={activeTab}
+        onChange={(_, value) => setActiveTab(value)}
+        sx={{ mb: 2 }}
+      >
+        <Tab value="incidents" label="Active Incidents" />
+        {canReviewPublicReports && <Tab value="public-reports" label="Public Reports Queue" />}
+      </Tabs>
+
+      {activeTab === 'incidents' && (
+      <Paper
+        sx={{
+          backgroundColor: 'rgba(18, 18, 26, 0.98)',
+          border: '1px solid var(--border-medium)',
+          boxShadow: 'var(--shadow-card)',
+        }}
+      >
         <TableContainer>
           <Table>
             <TableHead>
@@ -179,8 +236,115 @@ export default function Incidents() {
           </Table>
         </TableContainer>
       </Paper>
+      )}
 
-      <Dialog open={open} onClose={() => setOpen(false)} maxWidth="sm" fullWidth slotProps={{ paper: { className: 'glass-strong' } }}>
+      {activeTab === 'public-reports' && canReviewPublicReports && (
+        <Paper
+          sx={{
+            backgroundColor: 'rgba(18, 18, 26, 0.98)',
+            border: '1px solid var(--border-medium)',
+            boxShadow: 'var(--shadow-card)',
+          }}
+        >
+          {publicReportsError && (
+            <Alert severity="error" sx={{ m: 2 }}>
+              Failed to load public reports.
+            </Alert>
+          )}
+          <TableContainer>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Report ID</TableCell>
+                  <TableCell>Type / Severity</TableCell>
+                  <TableCell>Reporter</TableCell>
+                  <TableCell>Source</TableCell>
+                  <TableCell>Submitted</TableCell>
+                  <TableCell align="right">Review</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {publicReports.map((report) => (
+                  <TableRow key={report.id} hover>
+                    <TableCell>#{report.id}</TableCell>
+                    <TableCell>
+                      <Stack spacing={0.5}>
+                        <Typography sx={{ textTransform: 'capitalize', fontWeight: 600 }}>
+                          {report.incident_type}
+                        </Typography>
+                        <Chip label={report.severity} size="small" variant="outlined" sx={{ width: 'fit-content', textTransform: 'uppercase' }} />
+                        {report.description && (
+                          <Typography variant="caption" color="text.secondary">
+                            {report.description}
+                          </Typography>
+                        )}
+                      </Stack>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2">{report.reporter_name || 'Anonymous'}</Typography>
+                      <Typography variant="caption" color="text.secondary">{report.reporter_contact || 'No contact'}</Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2">IP: {report.source_ip}</Typography>
+                      <Typography variant="caption" color="text.secondary">Property {report.property_id}</Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2">{new Date(report.created_at).toLocaleString()}</Typography>
+                    </TableCell>
+                    <TableCell align="right">
+                      <Button
+                        size="small"
+                        color="error"
+                        variant="contained"
+                        sx={{ mr: 1 }}
+                        disabled={reviewPublicReportMutation.isPending}
+                        onClick={() => reviewPublicReportMutation.mutate({ id: report.id, action: 'escalate' })}
+                      >
+                        Escalate
+                      </Button>
+                      <Button
+                        size="small"
+                        color="inherit"
+                        variant="outlined"
+                        disabled={reviewPublicReportMutation.isPending}
+                        onClick={() => reviewPublicReportMutation.mutate({ id: report.id, action: 'dismiss' })}
+                      >
+                        Dismiss
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {loadingPublicReports && (
+                  <TableRow>
+                    <TableCell colSpan={6}>Loading public reports...</TableCell>
+                  </TableRow>
+                )}
+                {!loadingPublicReports && publicReports.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={6}>No public reports pending review.</TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </Paper>
+      )}
+
+      <Dialog
+        open={open}
+        onClose={() => setOpen(false)}
+        maxWidth="sm"
+        fullWidth
+        slotProps={{
+          paper: {
+            sx: {
+              backgroundColor: 'rgba(18, 18, 26, 0.98)',
+              border: '1px solid var(--border-medium)',
+              boxShadow: 'var(--shadow-card)',
+            },
+          },
+        }}
+      >
         <DialogTitle sx={{ fontWeight: 'bold' }}>Report New Incident</DialogTitle>
         <DialogContent>
           <Grid container spacing={3} sx={{ mt: 1 }}>

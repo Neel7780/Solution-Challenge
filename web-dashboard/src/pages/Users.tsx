@@ -1,5 +1,6 @@
-import React, { useRef } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
+  Alert,
   Box,
   Typography,
   Paper,
@@ -12,24 +13,91 @@ import {
   Chip,
   Avatar,
   Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   TextField,
   InputAdornment,
+  Stack,
 } from '@mui/material';
 import { Add as AddIcon, Search as SearchIcon } from '@mui/icons-material';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import axios from 'axios';
+
+import { useAuthStore } from '../store/authStore';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+
+interface UserRecord {
+  id: number;
+  name: string;
+  email?: string;
+  phone?: string;
+  role: 'guest' | 'staff' | 'security' | 'admin' | 'responder';
+  room_number?: string;
+  status?: string;
+}
 
 export default function Users() {
   const containerRef = useRef(null);
-  
-  const users = [
-    { id: 1, name: 'John Smith', email: 'john@hotel.com', role: 'guest', room: '301', status: 'active', phone: '+1 555-0101' },
-    { id: 2, name: 'Sarah Johnson', email: 'sarah@hotel.com', role: 'staff', room: '101', status: 'active', phone: '+1 555-0102' },
-    { id: 3, name: 'Mike Davis', email: 'mike@hotel.com', role: 'security', room: '102', status: 'active', phone: '+1 555-0103' },
-    { id: 4, name: 'Emma Wilson', email: 'emma@hotel.com', role: 'guest', room: '156', status: 'evacuated', phone: '+1 555-0104' },
-    { id: 5, name: 'Tom Brown', email: 'tom@hotel.com', role: 'admin', room: '100', status: 'active', phone: '+1 555-0105' },
-    { id: 6, name: 'Lisa Chen', email: 'lisa@hotel.com', role: 'staff', room: '103', status: 'active', phone: '+1 555-0106' },
-  ];
+  const queryClient = useQueryClient();
+  const { user } = useAuthStore();
+  const [searchTerm, setSearchTerm] = useState('');
+  const [openCreateGuest, setOpenCreateGuest] = useState(false);
+  const [formError, setFormError] = useState('');
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    roomNumber: '',
+    password: '',
+    propertyId: String(user?.property_id || 1),
+  });
+
+  const canCreateGuest = ['admin', 'staff', 'security'].includes(user?.role || '');
+
+  const { data: users = [], isLoading, isError } = useQuery<UserRecord[]>({
+    queryKey: ['users'],
+    queryFn: async () => {
+      const response = await axios.get(`${API_URL}/users`);
+      return response.data.users;
+    },
+  });
+
+  const createGuestMutation = useMutation({
+    mutationFn: async () => {
+      const payload: Record<string, unknown> = {
+        name: formData.name,
+        password: formData.password,
+        roomNumber: formData.roomNumber || undefined,
+        propertyId: Number(formData.propertyId) || undefined,
+      };
+
+      if (formData.email) payload.email = formData.email;
+      if (formData.phone) payload.phone = formData.phone;
+
+      return axios.post(`${API_URL}/users/guests`, payload);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      setOpenCreateGuest(false);
+      setFormError('');
+      setFormData({
+        name: '',
+        email: '',
+        phone: '',
+        roomNumber: '',
+        password: '',
+        propertyId: String(user?.property_id || 1),
+      });
+    },
+    onError: (error: any) => {
+      setFormError(error?.response?.data?.error || 'Failed to create guest account');
+    },
+  });
 
   useGSAP(() => {
     gsap.from('.table-row', {
@@ -39,7 +107,19 @@ export default function Users() {
       stagger: 0.05,
       ease: 'power2.out',
     });
-  }, { scope: containerRef });
+  }, { scope: containerRef, dependencies: [users.length] });
+
+  const filteredUsers = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase();
+    if (!q) {
+      return users;
+    }
+
+    return users.filter((u) => {
+      const fields = [u.name, u.email || '', u.phone || '', u.room_number || '', u.role];
+      return fields.some((f) => f.toLowerCase().includes(q));
+    });
+  }, [users, searchTerm]);
 
   const getRoleStyle = (role: string) => {
     switch (role) {
@@ -56,14 +136,18 @@ export default function Users() {
         <Typography variant="h2" sx={{ fontSize: '2rem' }}>
           Personnel Management
         </Typography>
-        <Button variant="contained" startIcon={<AddIcon />}>
-          Add User
-        </Button>
+        {canCreateGuest && (
+          <Button variant="contained" startIcon={<AddIcon />} onClick={() => setOpenCreateGuest(true)}>
+            Create Guest Account
+          </Button>
+        )}
       </Box>
 
       <TextField
         fullWidth
         placeholder="Search users by name, email, or room..."
+        value={searchTerm}
+        onChange={(e) => setSearchTerm(e.target.value)}
         sx={{ mb: 4, '& .MuiOutlinedInput-root': { background: 'rgba(255,255,255,0.02)' } }}
         slotProps={{
           input: {
@@ -76,7 +160,18 @@ export default function Users() {
         }}
       />
 
-      <Paper className="glass">
+      <Paper
+        sx={{
+          backgroundColor: 'rgba(18, 18, 26, 0.98)',
+          border: '1px solid var(--border-medium)',
+          boxShadow: 'var(--shadow-card)',
+        }}
+      >
+        {isError && (
+          <Alert severity="error" sx={{ m: 2 }}>
+            Failed to load users.
+          </Alert>
+        )}
         <TableContainer>
           <Table>
             <TableHead>
@@ -89,7 +184,7 @@ export default function Users() {
               </TableRow>
             </TableHead>
             <TableBody>
-              {users.map((user) => {
+              {!isLoading && filteredUsers.map((user) => {
                 const roleStyle = getRoleStyle(user.role);
                 return (
                   <TableRow key={user.id} className="table-row" hover sx={{ '&:hover': { backgroundColor: 'rgba(255,255,255,0.02)' } }}>
@@ -101,7 +196,7 @@ export default function Users() {
                         <Box>
                           <Typography sx={{ fontWeight: 'bold', color: 'text.primary' }}>{user.name}</Typography>
                           <Typography variant="caption" color="text.secondary">
-                            {user.email}
+                            {user.email || user.phone || 'No contact'}
                           </Typography>
                         </Box>
                       </Box>
@@ -114,7 +209,7 @@ export default function Users() {
                       />
                     </TableCell>
                     <TableCell>
-                      <Typography variant="body2">{user.room || '-'}</Typography>
+                      <Typography variant="body2">{user.room_number || '-'}</Typography>
                     </TableCell>
                     <TableCell>
                       <Typography variant="body2">{user.phone || '-'}</Typography>
@@ -131,10 +226,90 @@ export default function Users() {
                   </TableRow>
                 );
               })}
+              {isLoading && (
+                <TableRow>
+                  <TableCell colSpan={5}>Loading users...</TableCell>
+                </TableRow>
+              )}
+              {!isLoading && filteredUsers.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={5}>No users found.</TableCell>
+                </TableRow>
+              )}
             </TableBody>
           </Table>
         </TableContainer>
       </Paper>
+
+      <Dialog open={openCreateGuest} onClose={() => setOpenCreateGuest(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Create Guest Account</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            {formError && <Alert severity="error">{formError}</Alert>}
+            <TextField
+              label="Guest Name"
+              value={formData.name}
+              onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
+              fullWidth
+              required
+            />
+            <TextField
+              label="Email (optional)"
+              value={formData.email}
+              onChange={(e) => setFormData((prev) => ({ ...prev, email: e.target.value }))}
+              fullWidth
+            />
+            <TextField
+              label="Mobile Number (optional)"
+              value={formData.phone}
+              onChange={(e) => setFormData((prev) => ({ ...prev, phone: e.target.value }))}
+              fullWidth
+            />
+            <TextField
+              label="Room Number"
+              value={formData.roomNumber}
+              onChange={(e) => setFormData((prev) => ({ ...prev, roomNumber: e.target.value }))}
+              fullWidth
+            />
+            <TextField
+              label="Temporary Password"
+              value={formData.password}
+              onChange={(e) => setFormData((prev) => ({ ...prev, password: e.target.value }))}
+              fullWidth
+              required
+              helperText="At least 8 characters"
+            />
+            <TextField
+              label="Property ID"
+              type="number"
+              value={formData.propertyId}
+              onChange={(e) => setFormData((prev) => ({ ...prev, propertyId: e.target.value }))}
+              fullWidth
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button color="inherit" onClick={() => setOpenCreateGuest(false)}>Cancel</Button>
+          <Button
+            variant="contained"
+            disabled={createGuestMutation.isPending}
+            onClick={() => {
+              setFormError('');
+              if (!formData.name || !formData.password) {
+                setFormError('Name and temporary password are required');
+                return;
+              }
+              if (!formData.email && !formData.phone) {
+                setFormError('Provide either email or mobile number');
+                return;
+              }
+              createGuestMutation.mutate();
+            }}
+          >
+            {createGuestMutation.isPending ? 'Creating...' : 'Create Guest'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

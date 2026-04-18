@@ -10,7 +10,7 @@ import { authenticate, requireRole } from '../middleware/auth';
 
 const router = Router();
 
-router.post('/mass', authenticate, requireRole(['admin', 'security']), [
+router.post('/mass', authenticate, requireRole(['admin', 'security', 'staff']), [
   body('propertyId').isInt(),
   body('message').notEmpty(),
   body('channels').isArray().optional(),

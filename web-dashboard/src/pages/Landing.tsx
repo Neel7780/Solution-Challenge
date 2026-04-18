@@ -14,9 +14,9 @@ import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
 import {
   Shield,
-  NotificationsActive,
   LocationOn,
   Speed,
+  NotificationsActive,
   Security,
   Hotel,
   ArrowForward,
@@ -26,13 +26,13 @@ import {
 const features = [
   {
     icon: <Shield sx={{ fontSize: 32 }} />,
-    title: 'Crisis Management',
-    description: 'Comprehensive incident tracking and response coordination for hospitality security teams.',
+    title: 'Incident Command Center',
+    description: 'Centralized dashboard for real-time coordination across security, staff, and responders.',
   },
   {
     icon: <LocationOn sx={{ fontSize: 32 }} />,
-    title: 'Live Location Tracking',
-    description: 'Real-time personnel and guest location monitoring with interactive zone mapping.',
+    title: 'Live Location Intelligence',
+    description: 'Track incident hotspots and occupant check-ins with geospatial awareness.',
   },
   {
     icon: <NotificationsActive sx={{ fontSize: 32 }} />,

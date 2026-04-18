@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useMemo, useRef } from 'react';
 import {
   Box,
   Typography,
@@ -29,6 +29,7 @@ import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
 
 import { TriageData } from '../types';
+import { useAuthStore } from '../store/authStore';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
@@ -41,7 +42,7 @@ interface TriageCardProps {
 
 const TriageCard = ({ title, count, icon: Icon, color }: TriageCardProps) => (
   <Paper
-    className="glass triage-card"
+    className="triage-card"
     sx={{
       p: 3,
       display: 'flex',
@@ -50,6 +51,9 @@ const TriageCard = ({ title, count, icon: Icon, color }: TriageCardProps) => (
       borderLeft: `4px solid ${color}`,
       position: 'relative',
       overflow: 'hidden'
+      ,backgroundColor: 'rgba(18, 18, 26, 0.98)',
+      border: '1px solid var(--border-medium)',
+      boxShadow: 'var(--shadow-card)',
     }}
   >
     <Box sx={{ p: 2, borderRadius: 2, background: alpha(color, 0.1) }}>
@@ -71,19 +75,26 @@ const TriageCard = ({ title, count, icon: Icon, color }: TriageCardProps) => (
 
 export default function Triage() {
   const containerRef = useRef(null);
+  const { user } = useAuthStore();
+  const propertyId = user?.property_id || 1;
 
   const { data: triageData } = useQuery<TriageData>({
     queryKey: ['triageData'],
     queryFn: async () => {
-      try {
-        const res = await axios.get(`${API_URL}/dashboard/triage/1`);
-        return res.data.triage;
-      } catch {
-        return {
-          safe_count: 200, distressed_count: 25, needs_help_count: 5, missing_count: 15, unchecked: 30
-        };
-      }
+      const res = await axios.get(`${API_URL}/dashboard/triage/${propertyId}`);
+      return res.data.triage;
     },
+    enabled: Boolean(propertyId),
+    refetchInterval: 10000,
+  });
+
+  const { data: activeUsers = [] } = useQuery<any[]>({
+    queryKey: ['active-users', propertyId],
+    queryFn: async () => {
+      const res = await axios.get(`${API_URL}/locations/active-users/${propertyId}`);
+      return res.data.locations;
+    },
+    enabled: Boolean(propertyId),
     refetchInterval: 10000,
   });
 
@@ -113,13 +124,18 @@ export default function Triage() {
     { title: 'Missing/Unchecked', count: (triageData?.missing_count || 0) + (triageData?.unchecked || 0), icon: MissingIcon, color: '#64748b' },
   ];
 
-  const users = [
-    { id: 1, name: 'John Smith', room: '301', status: 'safe', time: '2 min ago', role: 'guest' },
-    { id: 2, name: 'Sarah Johnson', room: '205', status: 'needs_help', time: '5 min ago', role: 'guest' },
-    { id: 3, name: 'Mike Davis', room: '412', status: 'safe', time: '1 min ago', role: 'staff' },
-    { id: 4, name: 'Emma Wilson', room: '156', status: 'missing', time: '-', role: 'guest' },
-    { id: 5, name: 'Tom Brown', room: '278', status: 'distressed', time: '3 min ago', role: 'guest' },
-  ];
+  const users = useMemo(() => {
+    return activeUsers.map((item: any) => ({
+      id: item.id,
+      name: item.name,
+      room: item.room_number || item.zone_name || '-',
+      status: item.user_status || 'safe',
+      time: item.recorded_at ? new Date(item.recorded_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-',
+      role: item.role,
+      latitude: item.latitude,
+      longitude: item.longitude,
+    }));
+  }, [activeUsers]);
 
   const getStatusChip = (status: string) => {
     const config: Record<string, { color: 'success' | 'warning' | 'error' | 'default'; label: string }> = {
@@ -147,7 +163,13 @@ export default function Triage() {
         ))}
       </Grid>
 
-      <Paper className="glass">
+      <Paper
+        sx={{
+          backgroundColor: 'rgba(18, 18, 26, 0.98)',
+          border: '1px solid var(--border-medium)',
+          boxShadow: 'var(--shadow-card)',
+        }}
+      >
         <Box sx={{ p: 3, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
           <Typography variant="h6">Live Personnel Roster</Typography>
         </Box>
@@ -183,12 +205,17 @@ export default function Triage() {
                     <Typography variant="body2" color="text.secondary">{user.time}</Typography>
                   </TableCell>
                   <TableCell align="right">
-                    <IconButton size="small" sx={{ color: '#3b82f6' }}>
+                    <IconButton size="small" sx={{ color: '#3b82f6' }} title={user.latitude && user.longitude ? `${user.latitude}, ${user.longitude}` : 'No GPS'}>
                       <MessageIcon fontSize="small" />
                     </IconButton>
                   </TableCell>
                 </TableRow>
               ))}
+              {users.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={6}>No active personnel locations available.</TableCell>
+                </TableRow>
+              )}
             </TableBody>
           </Table>
         </TableContainer>

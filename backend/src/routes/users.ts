@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { body } from 'express-validator';
 import {
+  changePassword,
+  createGuestAccount,
   checkIn,
   getAllUsers,
   getProfile,
@@ -16,21 +18,35 @@ const router = Router();
 
 router.post('/register', [
   body('name').notEmpty(),
-  body('email').isEmail(),
-  body('phone').optional(),
-  body('role').isIn(['guest', 'staff', 'security', 'admin']),
-  body('propertyId').isInt(),
+  body('email').optional().isEmail(),
+  body('phone').optional().isString(),
+  body('password').isLength({ min: 8 }),
+  body('propertyId').optional().isInt(),
   body('roomNumber').optional(),
 ], register);
 
+router.post('/guests', authenticate, requireRole(['admin', 'staff', 'security']), [
+  body('name').notEmpty(),
+  body('email').optional().isEmail(),
+  body('phone').optional().isString(),
+  body('password').isLength({ min: 8 }),
+  body('propertyId').optional().isInt(),
+  body('roomNumber').optional(),
+], createGuestAccount);
+
 router.post('/login', [
-  body('email').isEmail(),
+  body('identifier').optional().isString(),
+  body('email').optional().isEmail(),
   body('password').notEmpty(),
 ], login);
 
 router.get('/me', authenticate, getProfile);
 router.patch('/me', authenticate, updateProfile);
-router.get('/', authenticate, requireRole(['admin', 'security']), getAllUsers);
+router.patch('/me/password', authenticate, [
+  body('currentPassword').notEmpty(),
+  body('newPassword').isLength({ min: 8 }),
+], changePassword);
+router.get('/', authenticate, requireRole(['admin', 'security', 'staff']), getAllUsers);
 
 router.post('/location', authenticate, [
   body('latitude').isFloat(),

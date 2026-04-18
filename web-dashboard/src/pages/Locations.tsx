@@ -66,7 +66,17 @@ export default function Locations() {
 
       <Grid container spacing={3}>
         <Grid size={{ xs: 12, lg: 8 }}>
-          <Paper className="glass anim-panel" sx={{ p: 2, height: 'calc(100vh - 180px)', minHeight: 500 }}>
+          <Paper
+            className="anim-panel"
+            sx={{
+              p: 2,
+              height: 'calc(100vh - 180px)',
+              minHeight: 500,
+              backgroundColor: 'rgba(18, 18, 26, 0.98)',
+              border: '1px solid var(--border-medium)',
+              boxShadow: 'var(--shadow-card)',
+            }}
+          >
             <Box sx={{ height: '100%', width: '100%', borderRadius: 3, overflow: 'hidden' }}>
               <MapContainer
                 center={center}
@@ -95,7 +105,15 @@ export default function Locations() {
 
         <Grid size={{ xs: 12, lg: 4 }}>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, height: 'calc(100vh - 180px)', overflow: 'auto' }}>
-            <Paper className="glass anim-panel" sx={{ p: 3 }}>
+            <Paper
+              className="anim-panel"
+              sx={{
+                p: 3,
+                backgroundColor: 'rgba(18, 18, 26, 0.98)',
+                border: '1px solid var(--border-medium)',
+                boxShadow: 'var(--shadow-card)',
+              }}
+            >
               <Typography variant="h6" sx={{ mb: 3 }}>Zone Occupancy</Typography>
               {locations.map((loc) => {
                 const percentage = (loc.current / loc.capacity) * 100;
@@ -122,7 +140,16 @@ export default function Locations() {
               })}
             </Paper>
 
-            <Paper className="glass anim-panel" sx={{ p: 3, flexGrow: 1 }}>
+            <Paper
+              className="anim-panel"
+              sx={{
+                p: 3,
+                flexGrow: 1,
+                backgroundColor: 'rgba(18, 18, 26, 0.98)',
+                border: '1px solid var(--border-medium)',
+                boxShadow: 'var(--shadow-card)',
+              }}
+            >
               <Typography variant="h6" sx={{ mb: 2 }}>Last Known Locations</Typography>
               <List disablePadding>
                 {activeUsers.map((user) => (

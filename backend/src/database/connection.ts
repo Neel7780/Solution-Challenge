@@ -2,11 +2,37 @@ import { Pool } from 'pg';
 import 'dotenv/config';
 import logger from '../utils/logger';
 
-const isSslEnabled = process.env.DB_SSL === 'true' || process.env.DATABASE_URL?.includes('sslmode=require');
+const normalizeDatabaseUrl = (databaseUrl?: string) => {
+  if (!databaseUrl) {
+    return databaseUrl;
+  }
 
-const poolConfig = process.env.DATABASE_URL
+  try {
+    const url = new URL(databaseUrl);
+    const sslMode = url.searchParams.get('sslmode');
+    const hasLibpqCompat = url.searchParams.has('uselibpqcompat');
+
+    if (!hasLibpqCompat && ['prefer', 'require', 'verify-ca'].includes(sslMode || '')) {
+      // Keep strong TLS behavior and avoid pg warning for deprecated alias modes.
+      url.searchParams.set('sslmode', 'verify-full');
+      return url.toString();
+    }
+
+    return databaseUrl;
+  } catch {
+    return databaseUrl;
+  }
+};
+
+const resolvedDatabaseUrl = normalizeDatabaseUrl(process.env.DATABASE_URL);
+const isSslEnabled =
+  process.env.DB_SSL === 'true' ||
+  resolvedDatabaseUrl?.includes('sslmode=require') ||
+  resolvedDatabaseUrl?.includes('sslmode=verify-full');
+
+const poolConfig = resolvedDatabaseUrl
   ? {
-      connectionString: process.env.DATABASE_URL,
+      connectionString: resolvedDatabaseUrl,
       ssl: isSslEnabled ? { rejectUnauthorized: false } : undefined,
     }
   : {
@@ -153,12 +179,36 @@ export async function initDatabase() {
       )
     `);
 
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS public_crisis_reports (
+        id SERIAL PRIMARY KEY,
+        property_id INTEGER REFERENCES properties(id),
+        incident_type VARCHAR(50) CHECK (incident_type IN ('fire', 'medical', 'security', 'natural_disaster', 'evacuation', 'other')),
+        severity VARCHAR(20) DEFAULT 'high' CHECK (severity IN ('low', 'medium', 'high', 'critical')),
+        zone_id INTEGER REFERENCES zones(id),
+        description TEXT,
+        location GEOMETRY(POINT, 4326),
+        latitude DECIMAL(10,8),
+        longitude DECIMAL(11,8),
+        reporter_name VARCHAR(255),
+        reporter_contact VARCHAR(255),
+        source_ip VARCHAR(255) NOT NULL,
+        user_agent TEXT,
+        status VARCHAR(50) DEFAULT 'pending_review' CHECK (status IN ('pending_review', 'escalated', 'dismissed')),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        reviewed_at TIMESTAMP
+      )
+    `);
+
     await client.query('CREATE INDEX IF NOT EXISTS idx_incidents_status ON incidents(status)');
     await client.query('CREATE INDEX IF NOT EXISTS idx_incidents_property ON incidents(property_id)');
     await client.query('CREATE INDEX IF NOT EXISTS idx_check_ins_incident ON check_ins(incident_id)');
     await client.query('CREATE INDEX IF NOT EXISTS idx_location_tracking_user ON location_tracking(user_id)');
     await client.query('CREATE INDEX IF NOT EXISTS idx_location_tracking_time ON location_tracking(recorded_at)');
     await client.query('CREATE INDEX IF NOT EXISTS idx_zones_property ON zones(property_id)');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_public_reports_property ON public_crisis_reports(property_id)');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_public_reports_status ON public_crisis_reports(status)');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_public_reports_created ON public_crisis_reports(created_at)');
 
     logger.info('Database initialized successfully');
   } finally {

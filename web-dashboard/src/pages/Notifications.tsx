@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
 import {
+  Alert,
   Box,
   Typography,
   Paper,
@@ -32,15 +33,31 @@ import {
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
 import axios from 'axios';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+
+import { useAuthStore } from '../store/authStore';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+
+interface NotificationRecord {
+  id: number;
+  message: string;
+  channel: string;
+  status: string;
+  created_at: string;
+  sent_at?: string | null;
+  incident_type?: string | null;
+}
 
 export default function Notifications() {
   const containerRef = useRef(null);
   const [openConfirm, setOpenConfirm] = useState(false);
   const [message, setMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
+  const queryClient = useQueryClient();
+  const { user } = useAuthStore();
+  const propertyId = user?.property_id || 1;
+
   const [channels, setChannels] = useState<{ [key: string]: boolean }>({
     push: true,
     sms: true,
@@ -48,11 +65,29 @@ export default function Notifications() {
     inApp: true
   });
 
-  const history = [
-    { id: 1, message: 'Fire detected in kitchen. Please evacuate via nearest exit.', channels: ['Push', 'SMS'], time: '10 min ago', status: 'delivered', reach: '142/145' },
-    { id: 2, message: 'Medical emergency in lobby. Please clear the area.', channels: ['Push'], time: '2 hours ago', status: 'delivered', reach: '145/145' },
-    { id: 3, message: 'All clear. Fire drill complete.', channels: ['Push', 'SMS', 'Email'], time: '1 day ago', status: 'delivered', reach: '210/210' },
-  ];
+  const { data: history = [], isLoading: historyLoading, isError: historyError } = useQuery<NotificationRecord[]>({
+    queryKey: ['notification-history', propertyId],
+    queryFn: async () => {
+      const response = await axios.get(`${API_URL}/notifications/history/${propertyId}`);
+      return response.data.notifications;
+    },
+    enabled: Boolean(propertyId),
+    refetchInterval: 15000,
+  });
+
+  const sendMutation = useMutation({
+    mutationFn: async () => {
+      return axios.post(`${API_URL}/notifications/mass`, {
+        propertyId,
+        message,
+        channels: Object.keys(channels).filter((k) => channels[k]),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notification-history', propertyId] });
+      setMessage('');
+    },
+  });
 
   useGSAP(() => {
     gsap.from('.anim-panel', {
@@ -67,17 +102,11 @@ export default function Notifications() {
   const handleSend = async () => {
     setIsSubmitting(true);
     try {
-      await axios.post(`${API_URL}/notifications/mass`, {
-        propertyId: 1,
-        message,
-        channels: Object.keys(channels).filter(k => channels[k]),
-      });
+      await sendMutation.mutateAsync();
       alert('Notification broadcast sent successfully.');
-      setMessage('');
     } catch (err) {
       console.error(err);
-      alert('Notification sent (Demo Mode).');
-      setMessage('');
+      alert('Unable to send broadcast. Please check the backend connection and try again.');
     } finally {
       setIsSubmitting(false);
       setOpenConfirm(false);
@@ -92,7 +121,15 @@ export default function Notifications() {
 
       <Grid container spacing={4}>
         <Grid size={{ xs: 12, md: 7 }}>
-          <Paper className="glass anim-panel" sx={{ p: 4 }}>
+          <Paper
+            className="anim-panel"
+            sx={{
+              p: 4,
+              backgroundColor: 'rgba(18, 18, 26, 0.98)',
+              border: '1px solid var(--border-medium)',
+              boxShadow: 'var(--shadow-card)',
+            }}
+          >
             <Typography variant="h6" sx={{ mb: 3 }}>Compose Mass Alert</Typography>
             
             <TextField
@@ -142,8 +179,22 @@ export default function Notifications() {
         </Grid>
 
         <Grid size={{ xs: 12, md: 5 }}>
-          <Paper className="glass anim-panel" sx={{ p: 4, height: '100%' }}>
+          <Paper
+            className="anim-panel"
+            sx={{
+              p: 4,
+              height: '100%',
+              backgroundColor: 'rgba(18, 18, 26, 0.98)',
+              border: '1px solid var(--border-medium)',
+              boxShadow: 'var(--shadow-card)',
+            }}
+          >
             <Typography variant="h6" sx={{ mb: 3 }}>Broadcast History</Typography>
+            {historyError && (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                Failed to load notification history.
+              </Alert>
+            )}
             <List disablePadding>
               {history.map((item) => (
                 <ListItem key={item.id} alignItems="flex-start" sx={{ px: 0, py: 2, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
@@ -157,23 +208,38 @@ export default function Notifications() {
                     secondary={
                       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 1 }}>
                         <Box sx={{ display: 'flex', gap: 1 }}>
-                          {item.channels.map(c => <Chip key={c} label={c} size="small" variant="outlined" sx={{ fontSize: '0.65rem' }} />)}
+                          <Chip label={item.channel.toUpperCase()} size="small" variant="outlined" sx={{ fontSize: '0.65rem' }} />
                         </Box>
                         <Box sx={{ textAlign: 'right' }}>
-                          <Typography variant="caption" sx={{ display: 'block' }}>{item.time}</Typography>
-                          <Typography variant="caption" color="success.main">Reach: {item.reach}</Typography>
+                          <Typography variant="caption" sx={{ display: 'block' }}>{new Date(item.created_at).toLocaleString()}</Typography>
+                          <Typography variant="caption" color="success.main">Status: {item.status}</Typography>
                         </Box>
                       </Box>
                     }
                   />
                 </ListItem>
               ))}
+              {!historyLoading && history.length === 0 && (
+                <Typography variant="body2" color="text.secondary">No broadcasts found.</Typography>
+              )}
             </List>
           </Paper>
         </Grid>
       </Grid>
 
-      <Dialog open={openConfirm} onClose={() => setOpenConfirm(false)} slotProps={{ paper: { className: 'glass-strong' } }}>
+      <Dialog
+        open={openConfirm}
+        onClose={() => setOpenConfirm(false)}
+        slotProps={{
+          paper: {
+            sx: {
+              backgroundColor: 'rgba(18, 18, 26, 0.98)',
+              border: '1px solid var(--border-medium)',
+              boxShadow: 'var(--shadow-card)',
+            },
+          },
+        }}
+      >
         <DialogTitle sx={{ color: '#ef4444', display: 'flex', alignItems: 'center', gap: 1 }}>
           <WarningIcon /> Confirm Broadcast
         </DialogTitle>

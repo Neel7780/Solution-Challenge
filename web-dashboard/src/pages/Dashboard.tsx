@@ -32,7 +32,17 @@ interface StatCardProps {
 }
 
 const StatCard = ({ title, value, icon: Icon, color, subtitle }: StatCardProps) => (
-  <Paper className="glass stat-card" sx={{ p: 3, position: 'relative', overflow: 'hidden' }}>
+  <Paper
+    className="stat-card"
+    sx={{
+      p: 3,
+      position: 'relative',
+      overflow: 'hidden',
+      backgroundColor: 'rgba(18, 18, 26, 0.98)',
+      border: '1px solid var(--border-medium)',
+      boxShadow: 'var(--shadow-card)',
+    }}
+  >
     <Box sx={{ position: 'relative', zIndex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
       <Box>
         <Typography variant="overline" color="textSecondary" sx={{ mb: 1, display: 'block' }}>
@@ -184,7 +194,16 @@ export default function Dashboard() {
 
       <Grid container spacing={3}>
         <Grid size={{ xs: 12, md: 5 }}>
-          <Paper className="glass chart-panel" sx={{ p: 3, height: '100%' }}>
+          <Paper
+            className="chart-panel"
+            sx={{
+              p: 3,
+              height: '100%',
+              backgroundColor: 'rgba(18, 18, 26, 0.98)',
+              border: '1px solid var(--border-medium)',
+              boxShadow: 'var(--shadow-card)',
+            }}
+          >
             <Typography variant="h6" sx={{ mb: 3 }}>Real-time Triage Status</Typography>
             <Box sx={{ height: 300, position: 'relative' }}>
               <ResponsiveContainer width="100%" height="100%">
@@ -218,7 +237,16 @@ export default function Dashboard() {
         </Grid>
 
         <Grid size={{ xs: 12, md: 7 }}>
-          <Paper className="glass chart-panel" sx={{ p: 3, height: '100%' }}>
+          <Paper
+            className="chart-panel"
+            sx={{
+              p: 3,
+              height: '100%',
+              backgroundColor: 'rgba(18, 18, 26, 0.98)',
+              border: '1px solid var(--border-medium)',
+              boxShadow: 'var(--shadow-card)',
+            }}
+          >
             <Typography variant="h6" sx={{ mb: 3 }}>Incident Activity (24h)</Typography>
             <Box sx={{ height: 300 }}>
               <ResponsiveContainer width="100%" height="100%">
