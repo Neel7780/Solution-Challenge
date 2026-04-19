@@ -54,14 +54,18 @@ export const pool = new Pool({
 pool.on('error', (err: unknown) => {
   logger.error('Unexpected database error:', err);
 });
-
 export async function initDatabase() {
   const client = await pool.connect();
   try {
-    await client.query('CREATE EXTENSION IF NOT EXISTS postgis');
+    try {
+      await client.query('CREATE EXTENSION IF NOT EXISTS postgis');
+    } catch (e: any) {
+      logger.warn('PostGIS extension creation failed or skipped: ' + e.message);
+    }
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS organizations (
+...
         id SERIAL PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
         contact_email VARCHAR(255),

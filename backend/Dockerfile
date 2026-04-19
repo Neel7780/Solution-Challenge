@@ -14,6 +14,9 @@ COPY . .
 # Build TypeScript
 RUN npm run build
 
+# Create logs directory
+RUN mkdir -p logs
+
 # Set environment variables
 ENV NODE_ENV=production
 

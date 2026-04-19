@@ -17,6 +17,8 @@ import { createAutomatedIncident } from './controllers/crisisController';
 
 dotenv.config();
 
+logger.info('Starting Crisis Response API server...');
+
 const app = express();
 const server = http.createServer(app);
 
@@ -194,7 +196,7 @@ async function startServer() {
     await initDatabase();
     logger.info('Database connected successfully');
 
-    server.listen(PORT, () => {
+    server.listen(PORT, '0.0.0.0', () => {
       logger.info(`Crisis Response API running on port ${PORT}`);
       logger.info('WebSocket server ready for connections');
     });
