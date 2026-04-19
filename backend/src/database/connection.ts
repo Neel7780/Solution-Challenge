@@ -247,6 +247,25 @@ export async function initDatabase() {
       )
     `);
 
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS simulation_runs (
+        id SERIAL PRIMARY KEY,
+        property_id INTEGER REFERENCES properties(id),
+        started_by INTEGER REFERENCES users(id),
+        started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        ended_at TIMESTAMP,
+        duration_seconds INTEGER,
+        final_snapshot JSONB,
+        ai_analysis JSONB,
+        evacuation_efficiency NUMERIC,
+        risk_score NUMERIC,
+        total_agents INTEGER,
+        casualties INTEGER,
+        evacuated INTEGER,
+        status VARCHAR(20) DEFAULT 'running' CHECK (status IN ('running', 'completed', 'aborted'))
+      )
+    `);
+
     await client.query('CREATE INDEX IF NOT EXISTS idx_properties_org ON properties(organization_id)');
     await client.query('CREATE INDEX IF NOT EXISTS idx_incidents_status ON incidents(status)');
     await client.query('CREATE INDEX IF NOT EXISTS idx_incidents_property ON incidents(property_id)');
@@ -262,6 +281,8 @@ export async function initDatabase() {
     await client.query('CREATE INDEX IF NOT EXISTS idx_public_reports_org ON public_crisis_reports(organization_id)');
     await client.query('CREATE INDEX IF NOT EXISTS idx_public_reports_status ON public_crisis_reports(status)');
     await client.query('CREATE INDEX IF NOT EXISTS idx_public_reports_created ON public_crisis_reports(created_at)');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_simulation_runs_property ON simulation_runs(property_id)');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_simulation_runs_started ON simulation_runs(started_at)');
 
     logger.info('Database initialized successfully');
   } finally {

@@ -31,6 +31,7 @@ import {
   ExpandMore as ExpandMoreIcon,
   CorporateFare as OrgIcon,
   AdminPanelSettings as PlatformIcon,
+  Videocam as SimulationIcon,
 } from '@mui/icons-material';
 import {
   Menu,
@@ -86,6 +87,7 @@ export default function Layout() {
       { text: 'Live Map', icon: MapIcon, path: '/dashboard/locations' },
       { text: 'Personnel', icon: PeopleIcon, path: '/dashboard/users' },
       { text: 'Notifications', icon: NotificationsIcon, path: '/dashboard/notifications' },
+      { text: 'Simulation', icon: SimulationIcon, path: '/dashboard/simulation' },
     ];
 
     const menu = [...baseItems];

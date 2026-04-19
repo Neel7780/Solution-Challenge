@@ -21,6 +21,7 @@ import Settings from './pages/Settings';
 import Notifications from './pages/Notifications';
 import PlatformAdmin from './pages/PlatformAdmin';
 import OrganizationAdmin from './pages/OrganizationAdmin';
+import Simulation from './pages/Simulation';
 
 // Guest Pages
 import GuestLayout from './components/GuestLayout';
@@ -67,6 +68,7 @@ function App() {
           <Route path="settings" element={<Settings />} />
           <Route path="platform" element={<PlatformAdmin />} />
           <Route path="organization" element={<OrganizationAdmin />} />
+          <Route path="simulation" element={<Simulation />} />
         </Route>
         {/* Redirect old paths to dashboard */}
         <Route path="/incidents" element={<Navigate to="/dashboard/incidents" replace />} />

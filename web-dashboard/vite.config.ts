@@ -18,6 +18,11 @@ export default defineConfig({
         changeOrigin: true,
         ws: true,
       },
+      '/simulation': {
+        target: 'http://localhost:8060',
+        changeOrigin: true,
+        rewrite: (path: string) => path.replace(/^\/simulation/, ''),
+      },
     },
   },
   build: {

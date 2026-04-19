@@ -16,6 +16,7 @@ import locationRoutes from './routes/locations';
 import notificationRoutes from './routes/notifications';
 import userRoutes from './routes/users';
 import platformRoutes from './routes/platform';
+import simulationRoutes from './routes/simulation';
 import logger from './utils/logger';
 import { createAutomatedIncident } from './controllers/crisisController';
 
@@ -71,6 +72,7 @@ app.use('/api/locations', locationRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/platform', platformRoutes);
+app.use('/api/simulation', simulationRoutes);
 
 app.get('/health', (req: any, res: any) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -166,6 +168,26 @@ io.on('connection', (socket: any) => {
       update, 
       timestamp: new Date().toISOString() 
     });
+  });
+
+  // Real-time simulation analysis via Socket.io
+  socket.on('simulation:request_analysis', async (data: any) => {
+    const { snapshot, propertyId, simulationDuration = 0 } = data;
+    if (!snapshot || !propertyId) {
+      socket.emit('simulation:analysis_error', { error: 'Missing snapshot or propertyId' });
+      return;
+    }
+    try {
+      const { analyzeSimulation } = await import('./services/simulationAnalysisService.js');
+      const analysis = await analyzeSimulation({ snapshot, propertyId, simulationDuration });
+      io.to(`property_${propertyId}`).emit('simulation:analysis_result', {
+        analysis,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      logger.error('Socket simulation analysis failed:', error);
+      socket.emit('simulation:analysis_error', { error: 'Analysis failed' });
+    }
   });
 
   socket.on('location_update', async (data: any) => {

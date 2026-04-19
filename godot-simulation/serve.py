@@ -22,6 +22,8 @@ class CORSRequestHandler(http.server.SimpleHTTPRequestHandler):
         self.send_header("Cross-Origin-Opener-Policy", "same-origin")
         self.send_header("Cross-Origin-Embedder-Policy", "require-corp")
         self.send_header("Cross-Origin-Resource-Policy", "cross-origin")
+        # Allow embedding in dashboard iframe
+        self.send_header("Access-Control-Allow-Origin", "*")
         # Disable caching during development
         self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
         super().end_headers()

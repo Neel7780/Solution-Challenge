@@ -1,0 +1,146 @@
+[gd_scene format=3 uid="uid://dblbl7bbsifr6"]
+
+[ext_resource type="PackedScene" uid="uid://dwl2xatke6iuk" path="res://main.tscn" id="1_oj3tl"]
+[ext_resource type="Script" uid="uid://1lcdmyyhqgxp" path="res://agent.gd" id="2_cgngl"]
+[ext_resource type="Script" uid="uid://d3kswo6jj6lw3" path="res://fire.gd" id="3_wd3ws"]
+
+[sub_resource type="CapsuleMesh" id="CapsuleMesh_wd3ws"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_cgngl"]
+albedo_color = Color(0.13725491, 0.96862745, 0.1254902, 1)
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_wd3ws"]
+
+[sub_resource type="SphereMesh" id="SphereMesh_cgngl"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_wd3ws"]
+albedo_color = Color(1, 0, 0, 1)
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_qn07e"]
+radius = 0.680856
+
+[sub_resource type="NavigationMesh" id="NavigationMesh_wd3ws"]
+geometry_parsed_geometry_type = 1
+agent_height = 1.0
+agent_radius = 0.2
+
+[sub_resource type="BoxMesh" id="BoxMesh_qn07e"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_wd3ws"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_dgmes"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_qn07e"]
+
+[sub_resource type="Environment" id="Environment_wd3ws"]
+ambient_light_color = Color(0.21960784, 0.25490198, 0.31764707, 1)
+
+[sub_resource type="CameraAttributesPractical" id="CameraAttributesPractical_qn07e"]
+
+[node name="Node3D" type="Node3D" unique_id=1525639746]
+
+[node name="Agent" type="CharacterBody3D" parent="." unique_id=12277665]
+transform = Transform3D(0.2, 0, 0, 0, 0.2, 0, 0, 0, 0.2, -3.2601118, 0.2, -2.4827147)
+script = ExtResource("2_cgngl")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Agent" unique_id=1065960182]
+mesh = SubResource("CapsuleMesh_wd3ws")
+surface_material_override/0 = SubResource("StandardMaterial3D_cgngl")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Agent" unique_id=1857936646]
+shape = SubResource("CapsuleShape3D_wd3ws")
+
+[node name="NavigationAgent3D" type="NavigationAgent3D" parent="Agent" unique_id=1678032928]
+path_desired_distance = 0.1
+
+[node name="Camera3D" type="Camera3D" parent="." unique_id=1837872415]
+transform = Transform3D(1, 0, 0, 0, -4.3711385e-08, 0.99999994, 0, -0.99999994, -4.3711385e-08, 0, 20, 0)
+current = true
+
+[node name="Fire" type="Node3D" parent="." unique_id=1384027373]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.6417408, 0, -6.368628)
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Fire" unique_id=220750130]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.2340066, 0.5011697, 0)
+mesh = SubResource("SphereMesh_cgngl")
+surface_material_override/0 = SubResource("StandardMaterial3D_wd3ws")
+
+[node name="Area3D" type="Area3D" parent="Fire" unique_id=1608928431]
+script = ExtResource("3_wd3ws")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Fire/Area3D" unique_id=53351286]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.237, 0.501, 0)
+shape = SubResource("SphereShape3D_qn07e")
+
+[node name="NavigationRegion3D" type="NavigationRegion3D" parent="." unique_id=1014344991]
+navigation_mesh = SubResource("NavigationMesh_wd3ws")
+
+[node name="MainExit" type="Marker3D" parent="." unique_id=1207649256]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.382946, 0, -13.526064)
+gizmo_extents = 10.0
+
+[node name="FireExit" type="Marker3D" parent="." unique_id=31531920]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8.961209, 0, -1.9079738)
+
+[node name="Main" parent="." unique_id=1299402096 instance=ExtResource("1_oj3tl")]
+
+[node name="Main2" parent="." unique_id=2091400949 instance=ExtResource("1_oj3tl")]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, -5, 0, 2.25)
+
+[node name="Main3" parent="." unique_id=2009288124 instance=ExtResource("1_oj3tl")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -6)
+
+[node name="Main4" parent="." unique_id=1723579335 instance=ExtResource("1_oj3tl")]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, -5, 0, -4.25)
+
+[node name="Main5" parent="." unique_id=321041305 instance=ExtResource("1_oj3tl")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 6)
+
+[node name="Main6" parent="." unique_id=616887423 instance=ExtResource("1_oj3tl")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -12)
+
+[node name="Main7" parent="." unique_id=475531356 instance=ExtResource("1_oj3tl")]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, -5, 0, 8.25)
+
+[node name="Main8" parent="." unique_id=1534340691 instance=ExtResource("1_oj3tl")]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, -5.0145426, 0, -10.249009)
+
+[node name="CorridorFloor" type="MeshInstance3D" parent="." unique_id=199307142]
+transform = Transform3D(4.85, 0, 0, 0, 0.2, 0, 0, 0, 30, -2.5, -0.1, 0)
+mesh = SubResource("BoxMesh_qn07e")
+
+[node name="StaticBody3D" type="StaticBody3D" parent="CorridorFloor" unique_id=1968687699]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="CorridorFloor/StaticBody3D" unique_id=403720334]
+shape = SubResource("BoxShape3D_wd3ws")
+
+[node name="FireFloor" type="MeshInstance3D" parent="." unique_id=492008901]
+transform = Transform3D(5, 0, 0, 0, 0.2, 0, 0, 0, 0.44, -7, -0.1, -1.975)
+mesh = SubResource("BoxMesh_dgmes")
+
+[node name="StaticBody3D" type="StaticBody3D" parent="FireFloor" unique_id=1934896963]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="FireFloor/StaticBody3D" unique_id=914124318]
+shape = SubResource("BoxShape3D_qn07e")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=1145886426]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.7487147, 11.577628, 41.57495)
+light_energy = 3.5
+
+[node name="DirectionalLight3D4" type="DirectionalLight3D" parent="." unique_id=376567070]
+transform = Transform3D(1, 0, 0, 0, -1, 8.742278e-08, 0, -8.742278e-08, -1, -2.749, 11.578, -41.57)
+light_energy = 3.5
+
+[node name="DirectionalLight3D3" type="DirectionalLight3D" parent="." unique_id=1199177867]
+transform = Transform3D(-4.371139e-08, 0, -1, 0, 1, 0, 1, 0, -4.371139e-08, -36.46, 11.578, 7.284)
+light_energy = 3.5
+
+[node name="DirectionalLight3D2" type="DirectionalLight3D" parent="." unique_id=1237526630]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 36.46398, 11.577628, 7.2838593)
+light_energy = 3.5
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1927331401]
+environment = SubResource("Environment_wd3ws")
+camera_attributes = SubResource("CameraAttributesPractical_qn07e")
+
+[connection signal="body_entered" from="Fire/Area3D" to="Fire/Area3D" method="_on_body_entered"]
