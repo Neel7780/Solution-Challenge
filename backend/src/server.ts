@@ -1,5 +1,9 @@
-import cors from 'cors';
 import dotenv from 'dotenv';
+dotenv.config();
+
+console.log('--- CRISIS RESPONSE API STARTING ---');
+
+import cors from 'cors';
 import express from 'express';
 import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
@@ -15,9 +19,14 @@ import platformRoutes from './routes/platform';
 import logger from './utils/logger';
 import { createAutomatedIncident } from './controllers/crisisController';
 
-dotenv.config();
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
 
-logger.info('Starting Crisis Response API server...');
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err);
+  process.exit(1);
+});
 
 const app = express();
 const server = http.createServer(app);
