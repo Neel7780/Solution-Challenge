@@ -37,7 +37,7 @@ import {
 import { 
   ExitToApp as EvacuateIcon, 
   Check as SafeIcon, 
-  HelpOutline as UnaccountedIcon,
+  HelpOutlined as UnaccountedIcon,
   LocalHospital as AidIcon,
 } from '@mui/icons-material';
 
@@ -199,6 +199,9 @@ export default function Dashboard() {
     { time: 'Now', incidents: 1 },
   ];
 
+  const criticalCount = overview?.incidents?.critical_count ?? 0;
+  const activeIncidents = overview?.incidents?.active_incidents ?? 0;
+
   return (
     <Box ref={containerRef}>
       <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -209,7 +212,7 @@ export default function Dashboard() {
         
         {/* Tactical Evacuation Control */}
         <Stack direction="row" spacing={2}>
-           {overview?.incidents?.critical_count > 0 && (
+            {criticalCount > 0 && (
              <Button
                variant="contained"
                color="error"
@@ -234,7 +237,7 @@ export default function Dashboard() {
       </Box>
 
       {/* Evacuation Alert Banner */}
-      {safetyRoster?.stats?.unaccounted > 0 && overview?.incidents?.critical_count > 0 && (
+      {safetyRoster?.stats?.unaccounted > 0 && criticalCount > 0 && (
         <Alert 
           severity="error" 
           sx={{ mb: 4, backgroundColor: 'rgba(255, 62, 62, 0.1)', border: '1px solid var(--accent-red)', color: '#fff' }}
@@ -369,7 +372,7 @@ export default function Dashboard() {
       </Grid>
 
       {/* Safety Roll Call Table */}
-      {overview?.incidents?.active_incidents > 0 && (
+      {activeIncidents > 0 && (
         <Paper sx={{ p: 0, mb: 4, background: 'transparent', border: '1px solid rgba(255,255,255,0.05)' }}>
            <Box sx={{ p: 2, borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <Typography variant="overline" sx={{ color: 'var(--text-muted)' }}>Safety Roll Call</Typography>

@@ -198,7 +198,7 @@ export default function PlatformAdmin() {
                         <Typography variant="body2">{new Date(req.created_at).toLocaleDateString()}</Typography>
                       </TableCell>
                       <TableCell align="right">
-                        <Stack direction="row" spacing={1} justifyContent="flex-end">
+                        <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end' }}>
                           <Tooltip title="View Details">
                             <IconButton size="small" onClick={() => setSelectedRequest(req)}>
                               <InfoIcon fontSize="small" />
@@ -348,14 +348,14 @@ export default function PlatformAdmin() {
           <Stack spacing={2}>
             <Paper variant="outlined" sx={{ p: 2, backgroundColor: 'rgba(255,255,255,0.03)' }}>
               <Typography variant="caption" color="text.secondary">Admin Email</Typography>
-              <Stack direction="row" alignItems="center" justifyContent="space-between">
+              <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
                 <Typography sx={{ fontWeight: 'mono' }}>{credentials?.email}</Typography>
                 <IconButton size="small" onClick={() => copyToClipboard(credentials?.email || '')}><CopyIcon fontSize="small" /></IconButton>
               </Stack>
             </Paper>
             <Paper variant="outlined" sx={{ p: 2, backgroundColor: 'rgba(255,255,255,0.03)' }}>
               <Typography variant="caption" color="text.secondary">Temporary Password</Typography>
-              <Stack direction="row" alignItems="center" justifyContent="space-between">
+              <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
                 <Typography sx={{ fontWeight: 'mono', color: 'var(--accent-red)' }}>{credentials?.password}</Typography>
                 <IconButton size="small" onClick={() => copyToClipboard(credentials?.password || '')}><CopyIcon fontSize="small" /></IconButton>
               </Stack>

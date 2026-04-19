@@ -188,15 +188,15 @@ export default function Landing() {
         {/* Feature Bento Grid */}
         <Grid container spacing={2} sx={{ mt: 15 }}>
           {features.map((f, i) => (
-            <Grid item xs={12} sm={6} md={4} key={i}>
+            <Grid size={{ xs: 12, sm: 6, md: 4 }} key={i}>
               <Paper sx={{ 
                 p: 4, height: '100%', background: 'rgba(255,255,255,0.01)', 
                 border: '1px solid rgba(255,255,255,0.03)', borderRadius: 2,
                 transition: 'border-color 0.3s ease',
                 '&:hover': { borderColor: 'rgba(255,255,255,0.1)' }
               }}>
-                <Box sx={{ color: 'var(--accent-red)', mb: 2, opacity: 0.8 }}>
-                  {React.cloneElement(f.icon as React.ReactElement, { sx: { fontSize: 28 } })}
+                <Box sx={{ color: 'var(--accent-red)', mb: 2, opacity: 0.8, '& .MuiSvgIcon-root': { fontSize: 28 } }}>
+                  {f.icon}
                 </Box>
                 <Typography variant="h6" sx={{ fontSize: '1rem', fontWeight: 500, mb: 1 }}>{f.title}</Typography>
                 <Typography variant="body2" sx={{ color: 'var(--text-secondary)', lineHeight: 1.6 }}>{f.description}</Typography>
@@ -293,16 +293,16 @@ function OnboardingRequestDialog({ open, onClose }: { open: boolean; onClose: ()
           <Box component="form" onSubmit={handleSubmit} sx={{ mt: 2 }}>
             {error && <Alert severity="error" sx={{ mb: 3, background: 'rgba(255, 62, 62, 0.1)', color: 'var(--accent-red)', border: '1px solid rgba(255, 62, 62, 0.2)' }}>{error}</Alert>}
             <Grid container spacing={2}>
-              <Grid item xs={12} sm={8}><TextField fullWidth label="Organization Name" required sx={inputSx} value={formData.orgName} onChange={(e) => setFormData({ ...formData, orgName: e.target.value })} /></Grid>
-              <Grid item xs={12} sm={4}><TextField select fullWidth label="Type" sx={inputSx} value={formData.orgType} onChange={(e) => setFormData({ ...formData, orgType: e.target.value })}>
+              <Grid size={{ xs: 12, sm: 8 }}><TextField fullWidth label="Organization Name" required sx={inputSx} value={formData.orgName} onChange={(e) => setFormData({ ...formData, orgName: e.target.value })} /></Grid>
+              <Grid size={{ xs: 12, sm: 4 }}><TextField select fullWidth label="Type" sx={inputSx} value={formData.orgType} onChange={(e) => setFormData({ ...formData, orgType: e.target.value })}>
                 <MenuItem value="hotel">Hotel</MenuItem><MenuItem value="mall">Mall</MenuItem><MenuItem value="hospital">Hospital</MenuItem><MenuItem value="stadium">Stadium</MenuItem>
               </TextField></Grid>
-              <Grid item xs={12}><TextField fullWidth label="Headquarters Address" multiline rows={2} required sx={inputSx} value={formData.address} onChange={(e) => setFormData({ ...formData, address: e.target.value })} /></Grid>
-              <Grid item xs={12} sm={6}><TextField fullWidth label="Contact Name" required sx={inputSx} value={formData.contactName} onChange={(e) => setFormData({ ...formData, contactName: e.target.value })} /></Grid>
-              <Grid item xs={12} sm={6}><TextField fullWidth label="Contact Email" type="email" required sx={inputSx} value={formData.contactEmail} onChange={(e) => setFormData({ ...formData, contactEmail: e.target.value })} /></Grid>
-              <Grid item xs={12} sm={6}><TextField fullWidth label="Phone" required sx={inputSx} value={formData.contactPhone} onChange={(e) => setFormData({ ...formData, contactPhone: e.target.value })} /></Grid>
-              <Grid item xs={12} sm={6}><TextField fullWidth label="Est. Daily Occupancy" type="number" sx={inputSx} value={formData.expectedCapacity} onChange={(e) => setFormData({ ...formData, expectedCapacity: e.target.value })} /></Grid>
-              <Grid item xs={12}><TextField fullWidth label="Specific Security Protocols" multiline rows={2} sx={inputSx} value={formData.additionalInfo} onChange={(e) => setFormData({ ...formData, additionalInfo: e.target.value })} /></Grid>
+              <Grid size={12}><TextField fullWidth label="Headquarters Address" multiline rows={2} required sx={inputSx} value={formData.address} onChange={(e) => setFormData({ ...formData, address: e.target.value })} /></Grid>
+              <Grid size={{ xs: 12, sm: 6 }}><TextField fullWidth label="Contact Name" required sx={inputSx} value={formData.contactName} onChange={(e) => setFormData({ ...formData, contactName: e.target.value })} /></Grid>
+              <Grid size={{ xs: 12, sm: 6 }}><TextField fullWidth label="Contact Email" type="email" required sx={inputSx} value={formData.contactEmail} onChange={(e) => setFormData({ ...formData, contactEmail: e.target.value })} /></Grid>
+              <Grid size={{ xs: 12, sm: 6 }}><TextField fullWidth label="Phone" required sx={inputSx} value={formData.contactPhone} onChange={(e) => setFormData({ ...formData, contactPhone: e.target.value })} /></Grid>
+              <Grid size={{ xs: 12, sm: 6 }}><TextField fullWidth label="Est. Daily Occupancy" type="number" sx={inputSx} value={formData.expectedCapacity} onChange={(e) => setFormData({ ...formData, expectedCapacity: e.target.value })} /></Grid>
+              <Grid size={12}><TextField fullWidth label="Specific Security Protocols" multiline rows={2} sx={inputSx} value={formData.additionalInfo} onChange={(e) => setFormData({ ...formData, additionalInfo: e.target.value })} /></Grid>
             </Grid>
             <Button type="submit" fullWidth variant="contained" disabled={loading} sx={{ mt: 4, py: 1.5, background: '#fff', color: '#000', fontWeight: 600, '&:hover': { background: '#e2e8f0' } }}>
               {loading ? <CircularProgress size={24} color="inherit" /> : 'Submit Onboarding Request'}

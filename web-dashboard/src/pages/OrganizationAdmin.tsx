@@ -472,9 +472,9 @@ export default function OrganizationAdmin() {
 
       {/* Cross-Property Stats */}
       <Grid container spacing={2} sx={{ mb: 4 }}>
-        <Grid item xs={12} sm={4} className="anim-item">
+        <Grid size={{ xs: 12, sm: 4 }} className="anim-item">
           <Paper sx={{ p: 2, background: 'rgba(255,255,255,0.015)', border: '1px solid rgba(255,255,255,0.05)' }}>
-            <Stack direction="row" justifyContent="space-between" alignItems="center">
+            <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
               <Box>
                 <Typography variant="overline" sx={{ color: 'var(--text-muted)', fontSize: '0.6rem' }}>Total Properties</Typography>
                 <Typography sx={{ fontSize: '1.8rem', fontWeight: 200 }}>{properties.length}</Typography>
@@ -483,9 +483,9 @@ export default function OrganizationAdmin() {
             </Stack>
           </Paper>
         </Grid>
-        <Grid item xs={12} sm={4} className="anim-item">
+        <Grid size={{ xs: 12, sm: 4 }} className="anim-item">
           <Paper sx={{ p: 2, background: 'rgba(255,255,255,0.015)', border: '1px solid rgba(255,255,255,0.05)' }}>
-            <Stack direction="row" justifyContent="space-between" alignItems="center">
+            <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
               <Box>
                 <Typography variant="overline" sx={{ color: 'var(--text-muted)', fontSize: '0.6rem' }}>Active Incidents</Typography>
                 <Typography sx={{ fontSize: '1.8rem', fontWeight: 200, color: 'var(--accent-red)' }}>
@@ -496,9 +496,9 @@ export default function OrganizationAdmin() {
             </Stack>
           </Paper>
         </Grid>
-        <Grid item xs={12} sm={4} className="anim-item">
+        <Grid size={{ xs: 12, sm: 4 }} className="anim-item">
           <Paper sx={{ p: 2, background: 'rgba(255,255,255,0.015)', border: '1px solid rgba(255,255,255,0.05)' }}>
-            <Stack direction="row" justifyContent="space-between" alignItems="center">
+            <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
               <Box>
                 <Typography variant="overline" sx={{ color: 'var(--text-muted)', fontSize: '0.6rem' }}>Total Personnel</Typography>
                 <Typography sx={{ fontSize: '1.8rem', fontWeight: 200 }}>

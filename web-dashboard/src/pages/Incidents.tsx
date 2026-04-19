@@ -312,7 +312,7 @@ export default function Incidents() {
                       </Typography>
                     </TableCell>
                     <TableCell align="right">
-                      <Stack direction="row" spacing={1} justifyContent="flex-end">
+                      <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end' }}>
                         {incident.status === 'active' && (
                           <Button
                             size="small"
@@ -413,7 +413,7 @@ export default function Incidents() {
                         <Typography variant="caption" sx={{ color: 'var(--text-muted)' }}>{new Date(report.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</Typography>
                       </TableCell>
                       <TableCell align="right">
-                        <Stack direction="row" spacing={1} justifyContent="flex-end">
+                        <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end' }}>
                           <Button
                             size="small"
                             variant="contained"
