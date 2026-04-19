@@ -3,6 +3,7 @@ import { io, Socket } from 'socket.io-client';
 import { useNotificationStore } from './notificationStore';
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
+
 interface SocketState {
   socket: Socket | null;
   connected: boolean;
@@ -14,16 +15,7 @@ interface SocketState {
 }
 
 export const useSocketStore = create<SocketState>((set, get) => ({
-...
-  joinOrganization: (organizationId: number) => {
-    const { socket } = get();
-    if (socket) {
-      socket.emit('join_organization', organizationId);
-    }
-  },
-
-  joinRole: (role: string) => {
-
+  socket: null,
   connected: false,
 
   connect: () => {
@@ -75,6 +67,18 @@ export const useSocketStore = create<SocketState>((set, get) => ({
         message: description || `${incidentType} incident reported - Severity: ${severity}`,
         severity: severity === 'critical' ? 'critical' : 'high',
       });
+    });
+
+    socket.on('incident_enriched', (data) => {
+      const enrichment = data?.enrichment;
+      if (enrichment) {
+        addNotif({
+          type: 'mass',
+          title: 'Intelligence Brief Received',
+          message: enrichment.massAlertMessage || 'New incident enrichment data available',
+          severity: enrichment.severity === 'critical' ? 'critical' : 'high',
+        });
+      }
     });
 
     socket.on('panic_triggered', (data) => {
@@ -143,6 +147,13 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     const { socket } = get();
     if (socket) {
       socket.emit('join_property', propertyId);
+    }
+  },
+
+  joinOrganization: (organizationId: number) => {
+    const { socket } = get();
+    if (socket) {
+      socket.emit('join_organization', organizationId);
     }
   },
 
