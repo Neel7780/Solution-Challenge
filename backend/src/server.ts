@@ -13,6 +13,7 @@ import notificationRoutes from './routes/notifications';
 import userRoutes from './routes/users';
 import platformRoutes from './routes/platform';
 import logger from './utils/logger';
+import { createAutomatedIncident } from './controllers/crisisController';
 
 dotenv.config();
 
@@ -21,10 +22,15 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: process.env.WS_CORS_ORIGIN || '*',
+    origin: process.env.CORS_ORIGIN || '*',
     methods: ['GET', 'POST'],
+    credentials: true
   },
 });
+
+// Track active simulation incidents to avoid duplicates and allow state updates
+const activeSimulationIncidents = new Map<string, { id: number, lastUpdate: number }>();
+const INCIDENT_DEDUPLICATION_WINDOW = 30000; // 30 seconds for idempotency
 
 app.use(helmet());
 app.use(cors());
@@ -96,6 +102,59 @@ io.on('connection', (socket: any) => {
   socket.on('join_user', (userId: number) => {
     socket.join(`user_${userId}`);
     logger.info(`Socket ${socket.id} joined user_${userId}`);
+  });
+
+  // Simulation Events: Godot -> Backend
+  socket.on('simulation:event_detected', async (data: any) => {
+    const { version = "1.0", propertyId, type, confidence, description } = data;
+
+    // EVENT VERSIONING: Future-proof + professional
+    if (version !== "1.0") {
+       logger.warn(`Simulation event version mismatch: ${version}`);
+       return;
+    }
+
+    // PRE-FILTER LAYER: Drop low confidence unless in SIMULATION_MODE
+    if (confidence < 0.7 && process.env.SIMULATION_MODE !== 'true') {
+      logger.debug(`Simulation event dropped: low confidence (${confidence})`);
+      return;
+    }
+
+    const incidentKey = `${propertyId}_${type}`;
+    const now = Date.now();
+    
+    // IDEMPOTENCY / DEDUPLICATION: Prevent event spamming DB/LLM
+    if (activeSimulationIncidents.has(incidentKey)) {
+      const existing = activeSimulationIncidents.get(incidentKey)!;
+      
+      // If event arrives within deduplication window, only update state on dashboard
+      if (now - existing.lastUpdate < INCIDENT_DEDUPLICATION_WINDOW) {
+        io.to(`property_${propertyId}`).emit('simulation:state_update', { 
+          incidentId: existing.id, 
+          update: description,
+          timestamp: new Date().toISOString()
+        });
+        return;
+      }
+      
+      // If window passed, we might want to re-enrich, but for now we just update timestamp
+      existing.lastUpdate = now;
+    } else {
+      const incident = await createAutomatedIncident(io, data);
+      if (incident) {
+        activeSimulationIncidents.set(incidentKey, { id: incident.id, lastUpdate: now });
+      }
+    }
+  });
+
+  socket.on('simulation:state_update', (data: any) => {
+    const { propertyId, incidentId, update } = data;
+    // Broadcast state updates (like fire spread) to all property clients instantly
+    io.to(`property_${propertyId}`).emit('simulation:state_update', { 
+      incidentId, 
+      update, 
+      timestamp: new Date().toISOString() 
+    });
   });
 
   socket.on('location_update', async (data: any) => {

@@ -144,10 +144,18 @@ export async function initDatabase() {
         description TEXT,
         latitude DECIMAL(10,8),
         longitude DECIMAL(11,8),
+        mass_alert_message TEXT,
+        responder_action_plan TEXT,
+        evacuation_routes JSONB,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         resolved_at TIMESTAMP
       )
     `);
+
+    // Ensure new columns exist for existing installations
+    await client.query('ALTER TABLE incidents ADD COLUMN IF NOT EXISTS mass_alert_message TEXT');
+    await client.query('ALTER TABLE incidents ADD COLUMN IF NOT EXISTS responder_action_plan TEXT');
+    await client.query('ALTER TABLE incidents ADD COLUMN IF NOT EXISTS evacuation_routes JSONB');
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS check_ins (

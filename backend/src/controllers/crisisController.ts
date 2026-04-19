@@ -1,6 +1,7 @@
 import { pool, queryWithContext } from '../database/connection';
 import logger from '../utils/logger';
 import type { Request, Response } from 'express';
+import { enrichIncident } from '../services/intelligenceService';
 
 const getClientIp = (req: Request) => {
   const forwardedFor = req.headers['x-forwarded-for'];
@@ -630,4 +631,92 @@ export const getSafetyRoster = async (req: Request, res: Response) => {
     res.status(500).json({ error: 'Failed to fetch safety roster' });
   }
 };
+
+export const createAutomatedIncident = async (io: any, data: any) => {
+  const { propertyId, type, zoneId, description, latitude, longitude, confidence } = data;
+
+  try {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // 1. FAST PATH: Immediate Persistence
+      const incidentResult = await client.query(
+        `WITH coords AS (
+           SELECT $6::double precision AS lat, $7::double precision AS lon
+         )
+         INSERT INTO incidents (property_id, incident_type, severity, status, zone_id, description, latitude, longitude, location)
+         SELECT $1, $2, $3, 'active', $4, $5, coords.lat::numeric, coords.lon::numeric, ST_SetSRID(ST_MakePoint(coords.lon, coords.lat), 4326)
+         FROM coords
+         RETURNING *`,
+        [propertyId, type, 'high', zoneId, `[SIMULATION] ${description}`, latitude, longitude]
+      );
+
+      const incident = incidentResult.rows[0];
+
+      // 2. Deterministic Logic: Evacuation Routes (Placeholder for A* algorithm)
+      const evacuationRoutes = {
+        primary: "Exit via North Stairwell",
+        secondary: "Exit via Main Lobby",
+        blocked: zoneId ? [zoneId] : []
+      };
+
+      await client.query(
+        `UPDATE incidents SET evacuation_routes = $1 WHERE id = $2`,
+        [JSON.stringify(evacuationRoutes), incident.id]
+      );
+
+      await client.query('COMMIT');
+
+      // 3. FAST PATH: Immediate Broadcast
+      const orgResult = await client.query('SELECT organization_id FROM properties WHERE id = $1', [propertyId]);
+      const orgId = orgResult.rows[0]?.organization_id;
+
+      if (io) {
+        io.to(`property_${propertyId}`).emit('crisis_reported', { incident, timestamp: new Date().toISOString() });
+        io.to('role_security')
+          .to('role_responder')
+          .to('role_admin')
+          .to('role_org_admin')
+          .to('role_super_admin')
+          .to(`organization_${orgId}`)
+          .emit('new_crisis', { incident, timestamp: new Date().toISOString() });
+      }
+
+      logger.info(`Automated incident created for property ${propertyId}, ID: ${incident.id} (Confidence: ${confidence})`);
+
+      // 4. SLOW PATH: Asynchronous LLM Enrichment
+      const propertyResult = await client.query('SELECT floor_plan_data FROM properties WHERE id = $1', [propertyId]);
+      const activeUsersResult = await client.query('SELECT COUNT(*) FROM users WHERE property_id = $1 AND status = $2', [propertyId, 'active']);
+
+      const aggregatedState = {
+        propertyContext: propertyResult.rows[0]?.floor_plan_data,
+        activeUsersCount: parseInt(activeUsersResult.rows[0]?.count || '0'),
+        lastEvents: [data],
+        description: description
+      };
+
+      // Trigger enrichment without awaiting (async)
+      enrichIncident(incident.id, aggregatedState).then((enrichment) => {
+        if (enrichment && io) {
+          io.to(`property_${propertyId}`).emit('incident_enriched', { 
+            incidentId: incident.id, 
+            enrichment, 
+            timestamp: new Date().toISOString() 
+          });
+        }
+      });
+
+      return incident;
+    } catch (error: any) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  } catch (error: any) {
+    logger.error('Error creating automated incident:', error);
+  }
+};
+
 

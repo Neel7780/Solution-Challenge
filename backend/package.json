@@ -11,22 +11,29 @@
     "db:migrate": "tsx src/database/migrate.ts",
     "db:seed": "tsx src/database/seed.ts"
   },
-  "keywords": ["crisis", "emergency", "hospitality", "response"],
+  "keywords": [
+    "crisis",
+    "emergency",
+    "hospitality",
+    "response"
+  ],
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
     "express": "^5.2.1",
-    "socket.io": "^4.8.3",
+    "express-rate-limit": "^8.3.2",
+    "express-validator": "^7.3.2",
+    "helmet": "^8.1.0",
+    "jsonwebtoken": "^9.0.3",
     "pg": "^8.20.0",
     "pg-postgis-types": "^3.0.0",
-    "dotenv": "^17.4.2",
-    "cors": "^2.8.6",
-    "helmet": "^8.1.0",
-    "express-rate-limit": "^8.3.2",
+    "socket.io": "^4.8.3",
+    "socket.io-client": "^4.8.3",
     "twilio": "^5.13.1",
-    "jsonwebtoken": "^9.0.3",
-    "bcryptjs": "^3.0.3",
-    "express-validator": "^7.3.2",
     "winston": "^3.19.0"
   },
   "devDependencies": {
@@ -37,9 +44,9 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^24.0.10",
     "@types/supertest": "^6.0.3",
-    "tsx": "^4.20.3",
-    "typescript": "^5.8.3",
     "jest": "^30.3.0",
-    "supertest": "^7.2.2"
+    "supertest": "^7.2.2",
+    "tsx": "^4.20.3",
+    "typescript": "^5.8.3"
   }
 }
