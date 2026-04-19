@@ -13,7 +13,6 @@ const normalizeDatabaseUrl = (databaseUrl?: string) => {
     const hasLibpqCompat = url.searchParams.has('uselibpqcompat');
 
     if (!hasLibpqCompat && ['prefer', 'require', 'verify-ca'].includes(sslMode || '')) {
-      // Keep strong TLS behavior and avoid pg warning for deprecated alias modes.
       url.searchParams.set('sslmode', 'verify-full');
       return url.toString();
     }
@@ -54,6 +53,7 @@ export const pool = new Pool({
 pool.on('error', (err: unknown) => {
   logger.error('Unexpected database error:', err);
 });
+
 export async function initDatabase() {
   const client = await pool.connect();
   try {
@@ -65,7 +65,6 @@ export async function initDatabase() {
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS organizations (
-...
         id SERIAL PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
         contact_email VARCHAR(255),
@@ -156,7 +155,6 @@ export async function initDatabase() {
       )
     `);
 
-    // Ensure new columns exist for existing installations
     await client.query('ALTER TABLE incidents ADD COLUMN IF NOT EXISTS mass_alert_message TEXT');
     await client.query('ALTER TABLE incidents ADD COLUMN IF NOT EXISTS responder_action_plan TEXT');
     await client.query('ALTER TABLE incidents ADD COLUMN IF NOT EXISTS evacuation_routes JSONB');
@@ -273,10 +271,6 @@ export async function initDatabase() {
 
 export const query = (text: string, params?: unknown[]) => pool.query(text, params);
 
-/**
- * Multi-tenant query wrapper to ensure property/org scoping.
- * Automatically injects property_id and organization_id into queries.
- */
 export const queryWithContext = async (
   user: { userId: number; propertyId: number; organizationId: number; role: string } | undefined, 
   text: string, 
@@ -287,7 +281,6 @@ export const queryWithContext = async (
     try {
       return await pool.query(queryText, queryParams);
     } catch (error: any) {
-      // Retry transient connection errors (e.g., DNS, timeout) once
       if (attempt < 2 && (error.code === 'EAI_AGAIN' || error.code === 'ETIMEDOUT' || error.message?.includes('timeout'))) {
         logger.warn(`Transient DB error ${error.code}, retrying...`);
         await new Promise(resolve => setTimeout(resolve, 1000));
@@ -305,12 +298,10 @@ export const queryWithContext = async (
   const isSuperAdmin = user.role === 'super_admin';
   const isOrgAdmin = user.role === 'org_admin';
 
-  // Super Admins see everything. 
   if (isSuperAdmin) {
     return executeQuery(text, params);
   }
 
-  // If we don't have an organization ID, we can't filter correctly for non-super admins.
   if (!user.organizationId) {
     logger.warn(`Non-super-admin user ${user.userId} has no organizationId in context`);
     return executeQuery(text, params);
@@ -322,7 +313,6 @@ export const queryWithContext = async (
   const uppercaseQuery = text.toUpperCase();
   const hasWhere = uppercaseQuery.includes('WHERE');
   
-  // Find injection point (before ORDER BY, GROUP BY, or LIMIT)
   let injectionPoint = text.length;
   const modifiers = ['ORDER BY', 'GROUP BY', 'LIMIT'];
   
@@ -338,7 +328,6 @@ export const queryWithContext = async (
 
   const prefix = tableAlias ? `${tableAlias}.` : '';
   
-  // Scoping logic: Org Admin sees all properties in Org, others see only their Property in Org.
   const condition = (isOrgAdmin || !user.propertyId)
     ? `${prefix}organization_id = $${contextualParams.length + 1}`
     : `${prefix}property_id = $${contextualParams.length + 1} AND ${prefix}organization_id = $${contextualParams.length + 2}`;
