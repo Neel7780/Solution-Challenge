@@ -9,7 +9,8 @@ if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
 }
 
 export const sendMassNotification = async (req: Request, res: Response) => {
-  const { propertyId, message, channels = ['push'], zones } = req.body;
+  const propertyId = req.user!.propertyId;
+  const { message, channels = ['push'], zones } = req.body;
   try {
     const client = await pool.connect();
     const notifications: any[] = [];
@@ -114,17 +115,17 @@ export const getNotificationStatus = async (req: Request, res: Response) => {
 };
 
 export const getNotificationHistory = async (req: Request, res: Response) => {
-  const { propertyId } = req.params;
+  const propertyId = req.user!.propertyId;
   const { limit = 50 } = req.query;
   try {
     const result = await pool.query(
       `SELECT n.*, i.incident_type
        FROM notifications n
        LEFT JOIN incidents i ON n.incident_id = i.id
-       WHERE i.property_id = $1::int OR n.recipient_id = $1::text
+       WHERE i.property_id = $1 OR (n.recipient_type = 'individual' AND n.recipient_id = $2::text)
        ORDER BY n.created_at DESC
-       LIMIT $2`,
-      [propertyId, limit]
+       LIMIT $3`,
+      [propertyId, req.user!.userId, limit]
     );
     res.json({ success: true, notifications: result.rows });
   } catch (error: any) {

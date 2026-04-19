@@ -71,11 +71,13 @@ export default function Settings() {
 
   useGSAP(() => {
     gsap.from('.anim-panel', {
-      y: 30,
+      y: 20,
       opacity: 0,
       duration: 0.6,
       stagger: 0.2,
       ease: 'power3.out',
+      clearProps: 'all',
+      force3D: false,
     });
   }, { scope: containerRef });
 

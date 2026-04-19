@@ -23,11 +23,13 @@ export default function GuestNotifications() {
 
   useGSAP(() => {
     gsap.from('.notif-item', {
-      x: -50,
+      x: -15,
       opacity: 0,
       duration: 0.4,
       stagger: 0.05,
       ease: 'power2.out',
+      clearProps: 'all',
+      force3D: false,
     });
   }, { scope: containerRef, dependencies: [notifications.length] });
 

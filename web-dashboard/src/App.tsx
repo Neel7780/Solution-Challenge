@@ -19,6 +19,8 @@ import Locations from './pages/Locations';
 import Triage from './pages/Triage';
 import Settings from './pages/Settings';
 import Notifications from './pages/Notifications';
+import PlatformAdmin from './pages/PlatformAdmin';
+import OrganizationAdmin from './pages/OrganizationAdmin';
 
 // Guest Pages
 import GuestLayout from './components/GuestLayout';
@@ -54,7 +56,7 @@ function App() {
       </Route>
 
       {/* Admin/Staff Routes */}
-      <Route element={<AuthGuard allowedRoles={['admin', 'staff', 'security', 'responder']} />}>
+      <Route element={<AuthGuard allowedRoles={['admin', 'staff', 'security', 'responder', 'super_admin', 'org_admin']} />}>
         <Route path="/dashboard" element={<Layout />}>
           <Route index element={<Dashboard />} />
           <Route path="incidents" element={<Incidents />} />
@@ -63,6 +65,8 @@ function App() {
           <Route path="users" element={<Users />} />
           <Route path="notifications" element={<Notifications />} />
           <Route path="settings" element={<Settings />} />
+          <Route path="platform" element={<PlatformAdmin />} />
+          <Route path="organization" element={<OrganizationAdmin />} />
         </Route>
         {/* Redirect old paths to dashboard */}
         <Route path="/incidents" element={<Navigate to="/dashboard/incidents" replace />} />

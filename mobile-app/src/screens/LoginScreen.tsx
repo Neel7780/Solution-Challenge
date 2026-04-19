@@ -7,10 +7,12 @@ import {
   StyleSheet,
   Alert,
   ActivityIndicator,
+  FlatList,
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../types';
+import Icon from 'react-native-vector-icons/MaterialIcons';
 
 type LoginScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Login'>;
 
@@ -19,69 +21,117 @@ interface LoginScreenProps {
 }
 
 export default function LoginScreen({ navigation }: LoginScreenProps) {
-  const [email, setEmail] = useState<string>('');
+  const [identifier, setIdentifier] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
+  
+  // Context selection state
+  const [showPropertySelection, setShowPropertySelection] = useState(false);
+  const [availableContexts, setAvailableContexts] = useState<any[]>([]);
+  
   const { login } = useAuth();
 
-  const handleLogin = async () => {
-    if (!email || !password) {
-      Alert.alert('Error', 'Please enter both email and password');
+  const handleLogin = async (propertyId?: number) => {
+    if (!identifier || !password) {
+      Alert.alert('Error', 'Please enter both credentials and password');
       return;
     }
 
     setLoading(true);
-    const result = await login(email, password);
+    const result = await login(identifier, password, propertyId);
     setLoading(false);
 
     if (result.success) {
-      navigation.replace('Main');
+      if (result.requiresContextSelection) {
+        setAvailableContexts(result.contexts || []);
+        setShowPropertySelection(true);
+      } else {
+        navigation.replace('Main');
+      }
     } else {
       Alert.alert('Login Failed', result.error || 'An error occurred');
     }
   };
 
+  const renderPropertyItem = ({ item }: { item: any }) => (
+    <TouchableOpacity 
+      style={styles.propertyItem}
+      onPress={() => handleLogin(item.propertyId)}
+    >
+      <View style={styles.propertyIcon}>
+        <Icon name="business" size={24} color="#d32f2f" />
+      </View>
+      <View style={styles.propertyInfo}>
+        <Text style={styles.propertyName}>{item.propertyName}</Text>
+        <Text style={styles.propertyRole}>{item.role.toUpperCase()}</Text>
+      </View>
+      <Icon name="chevron-right" size={24} color="#ccc" />
+    </TouchableOpacity>
+  );
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Crisis Response</Text>
-        <Text style={styles.subtitle}>Hospitality Emergency App</Text>
+        <Text style={styles.subtitle}>Enterprise Emergency System</Text>
       </View>
 
-      <View style={styles.form}>
-        <TextInput
-          style={styles.input}
-          placeholder="Email"
-          value={email}
-          onChangeText={setEmail}
-          keyboardType="email-address"
-          autoCapitalize="none"
-          editable={!loading}
-        />
+      {!showPropertySelection ? (
+        <View style={styles.form}>
+          <TextInput
+            style={styles.input}
+            placeholder="Email or Mobile"
+            value={identifier}
+            onChangeText={setIdentifier}
+            autoCapitalize="none"
+            editable={!loading}
+          />
 
-        <TextInput
-          style={styles.input}
-          placeholder="Password"
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-          editable={!loading}
-        />
+          <TextInput
+            style={styles.input}
+            placeholder="Password"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+            editable={!loading}
+          />
 
-        <TouchableOpacity
-          style={[styles.button, loading && styles.buttonDisabled]}
-          onPress={handleLogin}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.buttonText}>Sign In</Text>
-          )}
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.button, loading && styles.buttonDisabled]}
+            onPress={() => handleLogin()}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.buttonText}>Sign In</Text>
+            )}
+          </TouchableOpacity>
 
-        <Text style={styles.hint}>Demo: staff@hotel.com / password</Text>
-      </View>
+          <Text style={styles.hint}>Demo: staff@enterprise.com / password</Text>
+        </View>
+      ) : (
+        <View style={styles.selectionContainer}>
+          <Text style={styles.selectionTitle}>Select Property</Text>
+          <Text style={styles.selectionSubtitle}>
+            Your account has access to multiple locations.
+          </Text>
+          
+          <FlatList
+            data={availableContexts}
+            keyExtractor={(item) => item.propertyId.toString()}
+            renderItem={renderPropertyItem}
+            contentContainerStyle={styles.propertyList}
+          />
+          
+          <TouchableOpacity 
+            style={styles.backButton}
+            onPress={() => setShowPropertySelection(false)}
+          >
+            <Text style={styles.backButtonText}>Back to Login</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 }
@@ -144,5 +194,69 @@ const styles = StyleSheet.create({
     color: '#999',
     fontSize: 12,
     marginTop: 16,
+  },
+  selectionContainer: {
+    backgroundColor: '#fff',
+    padding: 20,
+    borderRadius: 12,
+    height: '60%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  selectionTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  selectionSubtitle: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  propertyList: {
+    paddingVertical: 10,
+  },
+  propertyItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  propertyIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(211, 47, 47, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 15,
+  },
+  propertyInfo: {
+    flex: 1,
+  },
+  propertyName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  propertyRole: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 2,
+  },
+  backButton: {
+    marginTop: 20,
+    padding: 10,
+    alignItems: 'center',
+  },
+  backButtonText: {
+    color: '#666',
+    fontSize: 14,
   },
 });

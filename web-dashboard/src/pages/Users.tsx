@@ -36,16 +36,19 @@ interface UserRecord {
   name: string;
   email?: string;
   phone?: string;
-  role: 'guest' | 'staff' | 'security' | 'admin' | 'responder';
+  role: 'guest' | 'staff' | 'security' | 'admin' | 'responder' | 'super_admin' | 'org_admin';
   room_number?: string;
   status?: string;
+  organization_name?: string;
+  property_name?: string;
 }
 
 export default function Users() {
   const containerRef = useRef(null);
   const queryClient = useQueryClient();
-  const { user } = useAuthStore();
+  const { user, isSuperAdmin } = useAuthStore();
   const [searchTerm, setSearchTerm] = useState('');
+  const [activeTab, setActiveTab] = useState<'personnel' | 'organizations'>('personnel');
   const [openCreateGuest, setOpenCreateGuest] = useState(false);
   const [formError, setFormError] = useState('');
   const [formData, setFormData] = useState({
@@ -65,6 +68,15 @@ export default function Users() {
       const response = await axios.get(`${API_URL}/users`);
       return response.data.users;
     },
+  });
+
+  const { data: organizations = [], isLoading: loadingOrgs } = useQuery({
+    queryKey: ['platform-organizations'],
+    queryFn: async () => {
+      const res = await axios.get(`${API_URL}/platform/organizations`);
+      return res.data.organizations;
+    },
+    enabled: isSuperAdmin() && activeTab === 'organizations',
   });
 
   const createGuestMutation = useMutation({
@@ -101,11 +113,13 @@ export default function Users() {
 
   useGSAP(() => {
     gsap.from('.table-row', {
-      x: -20,
+      x: -15,
       opacity: 0,
       duration: 0.4,
       stagger: 0.05,
       ease: 'power2.out',
+      clearProps: 'all',
+      force3D: false,
     });
   }, { scope: containerRef, dependencies: [users.length] });
 
@@ -123,123 +137,247 @@ export default function Users() {
 
   const getRoleStyle = (role: string) => {
     switch (role) {
-      case 'admin': return { bg: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', label: 'Admin' };
-      case 'security': return { bg: 'rgba(245, 158, 11, 0.1)', color: '#f59e0b', label: 'Security' };
-      case 'staff': return { bg: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6', label: 'Staff' };
+      case 'super_admin': return { bg: 'rgba(255, 62, 62, 0.1)', color: 'var(--accent-red)', label: 'Super Admin' };
+      case 'org_admin': return { bg: 'rgba(59, 130, 246, 0.1)', color: 'var(--accent-blue)', label: 'Org Admin' };
+      case 'admin': return { bg: 'rgba(251, 146, 60, 0.1)', color: 'var(--accent-orange)', label: 'Admin' };
+      case 'security': return { bg: 'rgba(255, 167, 38, 0.1)', color: '#ffa726', label: 'Security' };
+      case 'staff': return { bg: 'rgba(0, 245, 140, 0.1)', color: 'var(--accent-green)', label: 'Staff' };
       default: return { bg: 'rgba(148, 163, 184, 0.1)', color: '#94a3b8', label: 'Guest' };
     }
   };
 
   return (
     <Box ref={containerRef}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3, alignItems: 'center' }}>
-        <Typography variant="h2" sx={{ fontSize: '2rem' }}>
-          Personnel Management
-        </Typography>
-        {canCreateGuest && (
-          <Button variant="contained" startIcon={<AddIcon />} onClick={() => setOpenCreateGuest(true)}>
-            Create Guest Account
-          </Button>
-        )}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3, alignItems: 'flex-end' }}>
+        <Box>
+          <Typography variant="h2" sx={{ fontSize: '1.5rem', fontWeight: 400 }}>
+            {activeTab === 'personnel' ? 'Personnel Management' : 'Organization Directory'}
+          </Typography>
+          <Typography variant="caption" sx={{ color: 'var(--text-muted)' }}>
+             {activeTab === 'personnel' 
+                ? 'Unified directory of all registered occupants and responders'
+                : 'Strategic oversight of all onboarded enterprise entities'}
+          </Typography>
+        </Box>
+        <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
+          {isSuperAdmin() && (
+            <Box sx={{ 
+              backgroundColor: 'rgba(255,255,255,0.02)', 
+              borderRadius: 1, 
+              p: 0.5,
+              border: '1px solid rgba(255,255,255,0.05)'
+            }}>
+              <Button 
+                size="small" 
+                onClick={() => setActiveTab('personnel')}
+                sx={{ 
+                  fontSize: '0.65rem', px: 2, py: 0.5, minWidth: 0,
+                  color: activeTab === 'personnel' ? '#fff' : 'var(--text-muted)',
+                  backgroundColor: activeTab === 'personnel' ? 'rgba(255,255,255,0.05)' : 'transparent',
+                  '&:hover': { backgroundColor: 'rgba(255,255,255,0.08)' }
+                }}
+              >
+                Personnel
+              </Button>
+              <Button 
+                size="small" 
+                onClick={() => setActiveTab('organizations')}
+                sx={{ 
+                  fontSize: '0.65rem', px: 2, py: 0.5, minWidth: 0,
+                  color: activeTab === 'organizations' ? '#fff' : 'var(--text-muted)',
+                  backgroundColor: activeTab === 'organizations' ? 'rgba(255,255,255,0.05)' : 'transparent',
+                  '&:hover': { backgroundColor: 'rgba(255,255,255,0.08)' }
+                }}
+              >
+                Organizations
+              </Button>
+            </Box>
+          )}
+          {canCreateGuest && activeTab === 'personnel' && (
+            <Button 
+              variant="contained" 
+              size="small"
+              startIcon={<AddIcon sx={{ fontSize: 16 }} />} 
+              onClick={() => setOpenCreateGuest(true)}
+              sx={{ background: 'var(--accent-red)', fontSize: '0.75rem', px: 3 }}
+            >
+              Create Guest Account
+            </Button>
+          )}
+        </Stack>
       </Box>
 
-      <TextField
-        fullWidth
-        placeholder="Search users by name, email, or room..."
-        value={searchTerm}
-        onChange={(e) => setSearchTerm(e.target.value)}
-        sx={{ mb: 4, '& .MuiOutlinedInput-root': { background: 'rgba(255,255,255,0.02)' } }}
-        slotProps={{
-          input: {
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon sx={{ color: 'text.secondary' }} />
-              </InputAdornment>
-            ),
-          },
-        }}
-      />
+      {activeTab === 'personnel' ? (
+        <>
+          <TextField
+            fullWidth
+            placeholder="Search personnel by name, email, role, or property..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            sx={{ 
+              mb: 4, 
+              '& .MuiOutlinedInput-root': { 
+                background: 'rgba(255,255,255,0.01)',
+                border: '1px solid rgba(255,255,255,0.04)',
+                fontSize: '0.85rem'
+              } 
+            }}
+            slotProps={{
+              input: {
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon sx={{ color: 'var(--text-muted)', fontSize: 18 }} />
+                  </InputAdornment>
+                ),
+              },
+            }}
+          />
 
-      <Paper
-        sx={{
-          backgroundColor: 'rgba(18, 18, 26, 0.98)',
-          border: '1px solid var(--border-medium)',
-          boxShadow: 'var(--shadow-card)',
-        }}
-      >
-        {isError && (
-          <Alert severity="error" sx={{ m: 2 }}>
-            Failed to load users.
-          </Alert>
-        )}
-        <TableContainer>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>User</TableCell>
-                <TableCell>Role</TableCell>
-                <TableCell>Room</TableCell>
-                <TableCell>Phone</TableCell>
-                <TableCell>Status</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {!isLoading && filteredUsers.map((user) => {
-                const roleStyle = getRoleStyle(user.role);
-                return (
-                  <TableRow key={user.id} className="table-row" hover sx={{ '&:hover': { backgroundColor: 'rgba(255,255,255,0.02)' } }}>
+          <Paper
+            sx={{
+              backgroundColor: 'transparent',
+              border: '1px solid rgba(255, 255, 255, 0.04)',
+              borderRadius: 1,
+            }}
+          >
+            {isError && (
+              <Alert severity="error" sx={{ m: 2, borderRadius: 1 }}>
+                Failed to load personnel data. Check backend connectivity.
+              </Alert>
+            )}
+            <TableContainer>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>USER</TableCell>
+                    <TableCell sx={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>ROLE</TableCell>
+                    {isSuperAdmin() && <TableCell sx={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>ORGANIZATION / PROPERTY</TableCell>}
+                    <TableCell sx={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>LOCATION / ROOM</TableCell>
+                    <TableCell sx={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>PHONE</TableCell>
+                    <TableCell sx={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>STATUS</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {!isLoading && filteredUsers.map((person) => {
+                    const roleStyle = getRoleStyle(person.role);
+                    return (
+                      <TableRow key={person.id} className="table-row" hover sx={{ '&:hover': { backgroundColor: 'rgba(255,255,255,0.01) !important' } }}>
+                        <TableCell>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                            <Avatar sx={{ width: 24, height: 24, fontSize: '0.7rem', background: roleStyle.bg, color: roleStyle.color, fontWeight: 700 }}>
+                              {person.name.charAt(0)}
+                            </Avatar>
+                            <Box>
+                              <Typography sx={{ fontWeight: 400, fontSize: '0.85rem' }}>{person.name}</Typography>
+                              <Typography variant="caption" sx={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>
+                                {person.email || 'No email provided'}
+                              </Typography>
+                            </Box>
+                          </Box>
+                        </TableCell>
+                        <TableCell>
+                          <Box sx={{ 
+                            display: 'inline-flex', px: 1, py: 0.1, borderRadius: '2px', 
+                            backgroundColor: roleStyle.bg, color: roleStyle.color, 
+                            fontSize: '0.6rem', fontWeight: 600 
+                          }}>
+                            {roleStyle.label.toUpperCase()}
+                          </Box>
+                        </TableCell>
+                        {isSuperAdmin() && (
+                          <TableCell>
+                            <Typography variant="caption" sx={{ display: 'block', color: 'var(--text-primary)' }}>{person.organization_name || 'N/A'}</Typography>
+                            <Typography variant="caption" sx={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>{person.property_name || 'Global'}</Typography>
+                          </TableCell>
+                        )}
+                        <TableCell>
+                          <Typography variant="caption" sx={{ color: 'var(--text-muted)' }}>{person.room_number || '-'}</Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="caption" sx={{ color: 'var(--text-muted)', fontFamily: 'monospace' }}>{person.phone || '-'}</Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            <Box sx={{ width: 4, height: 4, borderRadius: '50%', backgroundColor: person.status === 'active' ? 'var(--accent-green)' : 'var(--accent-orange)' }} />
+                            <Typography variant="caption" sx={{ color: person.status === 'active' ? 'var(--accent-green)' : 'var(--accent-orange)', fontWeight: 500, fontSize: '0.7rem' }}>
+                              {person.status?.toUpperCase() || 'UNKNOWN'}
+                            </Typography>
+                          </Box>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                  {isLoading && (
+                    <TableRow>
+                      <TableCell colSpan={isSuperAdmin() ? 6 : 5} align="center" sx={{ py: 4, color: 'var(--text-muted)' }}>Synchronizing personnel directory...</TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Paper>
+        </>
+      ) : (
+        <Paper
+          sx={{
+            backgroundColor: 'transparent',
+            border: '1px solid rgba(255, 255, 255, 0.04)',
+            borderRadius: 1,
+          }}
+        >
+          <TableContainer>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell sx={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>ORGANIZATION</TableCell>
+                  <TableCell sx={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>CONTACT EMAIL</TableCell>
+                  <TableCell sx={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>TIER</TableCell>
+                  <TableCell sx={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>CREATED</TableCell>
+                  <TableCell align="right" sx={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>STATUS</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {organizations.map((org: any) => (
+                  <TableRow key={org.id} hover className="table-row" sx={{ '&:hover': { backgroundColor: 'rgba(255,255,255,0.01) !important' } }}>
                     <TableCell>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                        <Avatar sx={{ background: roleStyle.bg, color: roleStyle.color, fontWeight: 700 }}>
-                          {user.name.charAt(0)}
-                        </Avatar>
-                        <Box>
-                          <Typography sx={{ fontWeight: 'bold', color: 'text.primary' }}>{user.name}</Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {user.email || user.phone || 'No contact'}
-                          </Typography>
-                        </Box>
+                      <Typography sx={{ fontWeight: 500, fontSize: '0.85rem' }}>{org.name}</Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="caption" sx={{ color: 'var(--text-muted)' }}>{org.contact_email}</Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Box sx={{ 
+                        display: 'inline-flex', px: 1, py: 0.1, borderRadius: '2px', 
+                        backgroundColor: 'rgba(59, 130, 246, 0.05)', color: 'var(--accent-blue)', 
+                        fontSize: '0.6rem', fontWeight: 600, border: '1px solid rgba(59, 130, 246, 0.2)'
+                      }}>
+                        {org.subscription_tier.toUpperCase()}
                       </Box>
                     </TableCell>
                     <TableCell>
-                      <Chip
-                        label={roleStyle.label}
-                        sx={{ background: roleStyle.bg, color: roleStyle.color, fontWeight: 700 }}
-                        size="small"
-                      />
+                      <Typography variant="caption" sx={{ color: 'var(--text-muted)' }}>{new Date(org.created_at).toLocaleDateString()}</Typography>
                     </TableCell>
-                    <TableCell>
-                      <Typography variant="body2">{user.room_number || '-'}</Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2">{user.phone || '-'}</Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={user.status}
-                        variant="outlined"
-                        color={user.status === 'active' ? 'success' : 'warning'}
-                        size="small"
-                        sx={{ fontWeight: 600, textTransform: 'uppercase' }}
-                      />
+                    <TableCell align="right">
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, justifyContent: 'flex-end' }}>
+                        <Box sx={{ width: 4, height: 4, borderRadius: '50%', backgroundColor: org.status === 'active' ? 'var(--accent-green)' : 'var(--text-muted)' }} />
+                        <Typography variant="caption" sx={{ color: org.status === 'active' ? 'var(--accent-green)' : 'var(--text-muted)', fontWeight: 500, fontSize: '0.7rem' }}>
+                          {org.status.toUpperCase()}
+                        </Typography>
+                      </Box>
                     </TableCell>
                   </TableRow>
-                );
-              })}
-              {isLoading && (
-                <TableRow>
-                  <TableCell colSpan={5}>Loading users...</TableCell>
-                </TableRow>
-              )}
-              {!isLoading && filteredUsers.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={5}>No users found.</TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </Paper>
+                ))}
+                {loadingOrgs && (
+                  <TableRow><TableCell colSpan={5} align="center" sx={{ py: 4, color: 'var(--text-muted)' }}>Synchronizing organization records...</TableCell></TableRow>
+                )}
+                {!loadingOrgs && organizations.length === 0 && (
+                  <TableRow><TableCell colSpan={5} align="center" sx={{ py: 8, color: 'var(--text-muted)' }}>No organizations onboarded yet.</TableCell></TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </Paper>
+      )}
 
       <Dialog open={openCreateGuest} onClose={() => setOpenCreateGuest(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Create Guest Account</DialogTitle>

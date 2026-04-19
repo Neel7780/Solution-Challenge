@@ -3,7 +3,7 @@ import logger from '../utils/logger';
 import type { Request, Response } from 'express';
 
 export const getZones = async (req: Request, res: Response) => {
-  const { propertyId } = req.params;
+  const propertyId = req.user!.propertyId;
   try {
     const result = await pool.query(
       `SELECT id, name, zone_type, floor_number, capacity, current_occupancy,
@@ -21,18 +21,20 @@ export const getZones = async (req: Request, res: Response) => {
 
 export const getZoneDetails = async (req: Request, res: Response) => {
   const { zoneId } = req.params;
+  const propertyId = req.user!.propertyId;
+
   try {
     const zoneResult = await pool.query(
       `SELECT z.*, ST_AsGeoJSON(z.coordinates) as coordinates,
        p.name as property_name
        FROM zones z
        JOIN properties p ON z.property_id = p.id
-       WHERE z.id = $1`,
-      [zoneId]
+       WHERE z.id = $1 AND z.property_id = $2`,
+      [zoneId, propertyId]
     );
 
     if (zoneResult.rows.length === 0) {
-      return res.status(404).json({ error: 'Zone not found' });
+      return res.status(404).json({ error: 'Zone not found or access denied' });
     }
 
     const usersResult = await pool.query(
@@ -54,7 +56,7 @@ export const getZoneDetails = async (req: Request, res: Response) => {
 };
 
 export const getOccupancy = async (req: Request, res: Response) => {
-  const { propertyId } = req.params;
+  const propertyId = req.user!.propertyId;
   try {
     const result = await pool.query(
       `SELECT zone_type, SUM(current_occupancy) as total_occupancy, SUM(capacity) as total_capacity
@@ -98,16 +100,19 @@ export const getUserLocationHistory = async (req: Request, res: Response) => {
 
 export const getUsersInZone = async (req: Request, res: Response) => {
   const { zoneId } = req.params;
+  const propertyId = req.user!.propertyId;
+
   try {
     const result = await pool.query(
       `SELECT DISTINCT ON (lt.user_id) u.id, u.name, u.role, u.room_number,
        lt.latitude, lt.longitude, lt.beacon_id, lt.recorded_at
        FROM location_tracking lt
        JOIN users u ON lt.user_id = u.id
-       WHERE lt.zone_id = $1
+       JOIN zones z ON lt.zone_id = z.id
+       WHERE lt.zone_id = $1 AND z.property_id = $2
        AND lt.recorded_at > NOW() - INTERVAL '5 minutes'
        ORDER BY lt.user_id, lt.recorded_at DESC`,
-      [zoneId]
+      [zoneId, propertyId]
     );
 
     res.json({ success: true, count: result.rows.length, users: result.rows });
@@ -118,7 +123,7 @@ export const getUsersInZone = async (req: Request, res: Response) => {
 };
 
 export const getAllActiveLocations = async (req: Request, res: Response) => {
-  const { propertyId } = req.params;
+  const propertyId = req.user!.propertyId;
   try {
     const result = await pool.query(
       `SELECT DISTINCT ON (lt.user_id) u.id, u.name, u.role, u.status as user_status,

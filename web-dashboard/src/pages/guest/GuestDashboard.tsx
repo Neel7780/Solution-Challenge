@@ -69,11 +69,13 @@ export default function GuestDashboard() {
 
   useGSAP(() => {
     gsap.from('.stagger-item', {
-      y: 40,
+      y: 20,
       opacity: 0,
       duration: 0.6,
       stagger: 0.1,
-      ease: 'back.out(1.7)',
+      ease: 'back.out(1.2)',
+      clearProps: 'all',
+      force3D: false,
     });
 
     // Subtly pulsate the panic button
@@ -85,6 +87,7 @@ export default function GuestDashboard() {
         repeat: -1,
         duration: 1.5,
         ease: 'sine.inOut',
+        force3D: false,
       });
     }
   }, { scope: containerRef });

@@ -1,257 +1,120 @@
 /* ===== Google Fonts ===== */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600&family=Outfit:wght@300;400;500;600;700&display=swap');
 
-/* ===== CSS Custom Properties ===== */
+/* ===== Design Tokens (Neon.tech Inspired) ===== */
 :root {
-  --bg-primary: #0a0a0f;
-  --bg-secondary: #12121a;
-  --bg-surface: rgba(255, 255, 255, 0.04);
-  --bg-surface-hover: rgba(255, 255, 255, 0.08);
-  --bg-glass: rgba(18, 18, 26, 0.8);
-
-  --accent-red: #ef4444;
-  --accent-red-glow: rgba(239, 68, 68, 0.3);
-  --accent-blue: #3b82f6;
-  --accent-blue-glow: rgba(59, 130, 246, 0.3);
-  --accent-green: #22c55e;
-  --accent-green-glow: rgba(34, 197, 94, 0.3);
-  --accent-amber: #f59e0b;
-  --accent-amber-glow: rgba(245, 158, 11, 0.3);
-  --accent-purple: #a855f7;
-
-  --text-primary: #f1f5f9;
+  --bg-obsidian: #030303;
+  --bg-card: rgba(10, 10, 10, 0.7);
+  --border-subtle: rgba(255, 255, 255, 0.04);
+  --border-medium: rgba(255, 255, 255, 0.08);
+  
+  --text-primary: #f8fafc;
   --text-secondary: #94a3b8;
   --text-muted: #64748b;
 
-  --border-subtle: rgba(255, 255, 255, 0.06);
-  --border-medium: rgba(255, 255, 255, 0.1);
+  --accent-red: #ff3e3e;
+  --accent-green: #00f58c;
+  --accent-blue: #3b82f6;
+  --accent-orange: #fb923c;
 
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
-  --radius-xl: 24px;
-  --radius-full: 9999px;
-
-  --shadow-glow-red: 0 0 20px rgba(239, 68, 68, 0.15);
-  --shadow-glow-blue: 0 0 20px rgba(59, 130, 246, 0.15);
-  --shadow-glow-green: 0 0 20px rgba(34, 197, 94, 0.15);
-  --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.3);
-
+  --font-main: 'Inter', -apple-system, sans-serif;
   --font-display: 'Outfit', sans-serif;
-  --font-body: 'Inter', sans-serif;
+  
+  --shadow-neon: 0 0 20px rgba(255, 62, 62, 0.1);
 }
 
-/* ===== Global Reset & Base ===== */
-*, *::before, *::after {
-  box-sizing: border-box;
+* {
   margin: 0;
   padding: 0;
-}
-
-html {
-  scroll-behavior: smooth;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  box-sizing: border-box;
 }
 
 body {
-  font-family: var(--font-body);
-  background: var(--bg-primary);
+  background-color: var(--bg-obsidian);
   color: var(--text-primary);
+  font-family: var(--font-main);
+  -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
+  /* Signature Neon Grid */
+  background-image: 
+    linear-gradient(var(--border-subtle) 1px, transparent 1px),
+    linear-gradient(90deg, var(--border-subtle) 1px, transparent 1px);
+  background-size: 40px 40px;
 }
 
-/* ===== Scrollbar ===== */
+/* ===== Typography Revamp ===== */
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+p, span, div {
+  font-weight: 300; /* Lighter body text */
+  font-size: 0.875rem; /* Smaller professional size */
+}
+
+/* ===== High-End Components ===== */
+.glass-panel {
+  background: var(--bg-card);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border-medium);
+  border-radius: 8px;
+  transition: border-color 0.3s ease;
+}
+
+.glass-panel:hover {
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.neon-border-red { border-left: 2px solid var(--accent-red); }
+.neon-border-green { border-left: 2px solid var(--accent-green); }
+
+/* ===== Custom Scrollbar ===== */
 ::-webkit-scrollbar {
   width: 6px;
-  height: 6px;
 }
-
 ::-webkit-scrollbar-track {
   background: transparent;
 }
-
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 3px;
+  background: var(--border-medium);
+  border-radius: 10px;
 }
-
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--text-muted);
 }
 
-/* ===== Glassmorphism Utilities ===== */
-.glass {
-  background: rgba(255, 255, 255, 0.04);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid var(--border-subtle);
+/* ===== Utility ===== */
+.mono {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
 }
 
-.glass-medium {
-  background: rgba(255, 255, 255, 0.06);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border: 1px solid var(--border-medium);
+.stat-value {
+  font-family: var(--font-display);
+  font-weight: 200; /* Super slim values like Neon */
+  font-size: 2.2rem;
+  line-height: 1;
 }
 
-.glass-strong {
-  background: rgba(18, 18, 26, 0.85);
-  backdrop-filter: blur(40px);
-  -webkit-backdrop-filter: blur(40px);
-  border: 1px solid var(--border-medium);
+/* Animations */
+@keyframes pulse-subtle {
+  0% { opacity: 1; }
+  50% { opacity: 0.6; }
+  100% { opacity: 1; }
 }
 
-/* ===== Glow Effects ===== */
-.glow-red {
-  box-shadow: var(--shadow-glow-red);
-}
-
-.glow-blue {
-  box-shadow: var(--shadow-glow-blue);
-}
-
-.glow-green {
-  box-shadow: var(--shadow-glow-green);
-}
-
-/* ===== Animation Keyframes ===== */
-@keyframes pulse-glow {
-  0%, 100% { box-shadow: 0 0 20px rgba(239, 68, 68, 0.2); }
-  50% { box-shadow: 0 0 40px rgba(239, 68, 68, 0.4), 0 0 60px rgba(239, 68, 68, 0.1); }
-}
-
-@keyframes pulse-dot {
-  0%, 100% { transform: scale(1); opacity: 1; }
-  50% { transform: scale(1.5); opacity: 0.5; }
-}
-
-@keyframes slide-up {
-  from { transform: translateY(20px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
-}
-
-@keyframes fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-@keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
-}
-
-@keyframes ripple {
-  0% { transform: scale(0.8); opacity: 1; }
-  100% { transform: scale(2.5); opacity: 0; }
-}
-
-@keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-6px); }
-}
-
-@keyframes spin-slow {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-@keyframes gradient-shift {
-  0% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
-}
-
-/* ===== Utility Classes ===== */
-.animate-slide-up {
-  animation: slide-up 0.5s ease-out forwards;
-}
-
-.animate-fade-in {
-  animation: fade-in 0.4s ease-out forwards;
-}
-
-.animate-pulse-glow {
-  animation: pulse-glow 2s ease-in-out infinite;
-}
-
-.animate-float {
-  animation: float 3s ease-in-out infinite;
-}
-
-.animate-gradient {
-  background-size: 200% 200%;
-  animation: gradient-shift 3s ease infinite;
-}
-
-/* ===== Status Indicator ===== */
 .status-dot {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   display: inline-block;
-  position: relative;
-}
-
-.status-dot::after {
-  content: '';
-  position: absolute;
-  inset: -2px;
-  border-radius: 50%;
-  animation: pulse-dot 2s ease-in-out infinite;
 }
 
 .status-dot--live {
-  background: var(--accent-green);
-}
-
-.status-dot--live::after {
-  background: rgba(34, 197, 94, 0.3);
-}
-
-.status-dot--alert {
-  background: var(--accent-red);
-}
-
-.status-dot--alert::after {
-  background: rgba(239, 68, 68, 0.3);
-}
-
-/* ===== Leaflet Dark Theme Override ===== */
-.leaflet-container {
-  background: var(--bg-secondary) !important;
-}
-
-.leaflet-tile-pane {
-  filter: brightness(0.7) contrast(1.1) saturate(0.8);
-}
-
-.leaflet-control-zoom a {
-  background: var(--bg-secondary) !important;
-  color: var(--text-primary) !important;
-  border-color: var(--border-subtle) !important;
-}
-
-/* ===== Number Counter ===== */
-.counter-value {
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-
-/* ===== Panic Button Ring ===== */
-.panic-ring {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  border: 2px solid var(--accent-red);
-  animation: ripple 1.5s ease-out infinite;
-}
-
-.panic-ring:nth-child(2) {
-  animation-delay: 0.5s;
-}
-
-.panic-ring:nth-child(3) {
-  animation-delay: 1s;
+  background-color: var(--accent-green);
+  box-shadow: 0 0 8px var(--accent-green);
+  animation: pulse-subtle 2s infinite;
 }

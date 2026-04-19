@@ -7,6 +7,7 @@ declare global {
         userId: number;
         role: string;
         propertyId: number;
+        organizationId: number;
       };
       io?: SocketIOServer;
     }

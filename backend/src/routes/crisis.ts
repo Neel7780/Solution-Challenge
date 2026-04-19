@@ -11,7 +11,10 @@ import {
   reviewPublicCrisisReport,
   resolveIncident,
   updateIncidentStatus,
+  updatePropertyStatus,
+  getSafetyRoster,
 } from '../controllers/crisisController';
+
 import { authenticate, requireRole } from '../middleware/auth';
 
 const router = Router();
@@ -50,10 +53,13 @@ router.patch('/public-reports/:id', authenticate, requireRole(['admin', 'securit
   body('severity').optional().isIn(['low', 'medium', 'high', 'critical']),
 ], reviewPublicCrisisReport);
 
-router.get('/active', getActiveIncidents);
-router.get('/:id', getIncident);
+router.get('/active', authenticate, getActiveIncidents);
+router.get('/:id', authenticate, getIncident);
 router.patch('/:id/status', authenticate, [body('status').isIn(['active', 'contained', 'resolved', 'false_alarm'])], updateIncidentStatus);
 router.get('/:id/full', authenticate, getIncidentDetails);
 router.post('/:id/resolve', authenticate, resolveIncident);
+
+router.post('/property/:propertyId/status', authenticate, requireRole(['admin', 'security', 'org_admin']), updatePropertyStatus);
+router.get('/property/:propertyId/safety-roster', authenticate, requireRole(['admin', 'security']), getSafetyRoster);
 
 export default router;

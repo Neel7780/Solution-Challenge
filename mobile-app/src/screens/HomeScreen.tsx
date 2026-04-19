@@ -158,11 +158,17 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
           <Icon name="map" size={32} color="#1976d2" />
           <Text style={styles.actionText}>Evacuation Map</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.actionCard}>
+        <TouchableOpacity 
+          style={styles.actionCard}
+          onPress={() => navigation.navigate('EmergencyContacts')}
+        >
           <Icon name="phone" size={32} color="#388e3c" />
           <Text style={styles.actionText}>Emergency Contacts</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.actionCard}>
+        <TouchableOpacity 
+          style={styles.actionCard}
+          onPress={() => navigation.navigate('SafetyGuide')}
+        >
           <Icon name="info" size={32} color="#f57c00" />
           <Text style={styles.actionText}>Safety Guide</Text>
         </TouchableOpacity>

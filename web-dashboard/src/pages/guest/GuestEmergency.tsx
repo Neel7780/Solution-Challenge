@@ -41,11 +41,13 @@ export default function GuestEmergency() {
 
   useGSAP(() => {
     gsap.from('.em-card', {
-      scale: 0.8,
+      scale: 0.9,
       opacity: 0,
       duration: 0.5,
       stagger: 0.1,
-      ease: 'back.out(1.5)',
+      ease: 'back.out(1.2)',
+      clearProps: 'all',
+      force3D: false,
     });
   }, { scope: containerRef });
 

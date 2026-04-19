@@ -1,13 +1,19 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { pool } from '../database/connection';
+import { pool, queryWithContext } from '../database/connection';
 import logger from '../utils/logger';
 import type { Request, Response } from 'express';
 import type { SignOptions } from 'jsonwebtoken';
+import { notifyNearbyUsers } from './crisisController';
 
-const signUserToken = (user: { id: number; role: string; property_id: number }) => {
+const signUserToken = (user: { id: number; role: string; property_id: number; organization_id: number }) => {
   return jwt.sign(
-    { userId: user.id, role: user.role, propertyId: user.property_id },
+    {
+      userId: user.id,
+      role: user.role,
+      propertyId: user.property_id,
+      organizationId: user.organization_id,
+    },
     process.env.JWT_SECRET || 'dev-secret',
     { expiresIn: (process.env.JWT_EXPIRES_IN || '24h') as SignOptions['expiresIn'] }
   );
@@ -17,22 +23,37 @@ export const createGuestAccount = async (req: Request, res: Response) => {
   const { name, email, phone, propertyId, roomNumber, password } = req.body;
   const role = 'guest';
   const resolvedPropertyId = propertyId ? Number(propertyId) : req.user!.propertyId;
+  let organizationId = req.user!.organizationId;
 
   if (!email && !phone) {
     return res.status(400).json({ error: 'Either email or phone is required to create a guest account' });
   }
 
   try {
+    // If organizationId is missing from context (e.g. super_admin), fetch it from property
+    if (!organizationId && resolvedPropertyId) {
+      const propResult = await pool.query('SELECT organization_id FROM properties WHERE id = $1', [resolvedPropertyId]);
+      if (propResult.rows.length > 0) {
+        organizationId = propResult.rows[0].organization_id;
+      }
+    }
+
     const passwordHash = await bcrypt.hash(password, 10);
 
     const result = await pool.query(
-      `INSERT INTO users (property_id, name, email, phone, role, room_number, password_hash)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-      [resolvedPropertyId, name, email, phone, role, roomNumber, passwordHash]
+      `INSERT INTO users (property_id, organization_id, name, email, phone, role, room_number, password_hash)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+      [resolvedPropertyId, organizationId, name, email, phone, role, roomNumber, passwordHash]
     );
 
     const user = result.rows[0];
     delete user.password_hash;
+
+    // Also link to user_properties for consistency
+    await pool.query(
+      `INSERT INTO user_properties (user_id, property_id, role) VALUES ($1, $2, $3)`,
+      [user.id, resolvedPropertyId, role]
+    );
 
     logger.info(`Guest account created by user ${req.user!.userId}: ${email || phone}`);
 
@@ -46,6 +67,154 @@ export const createGuestAccount = async (req: Request, res: Response) => {
   }
 };
 
+export const createUser = async (req: Request, res: Response) => {
+  const { name, email, phone, role, propertyId, organizationId, password } = req.body;
+  const userContext = req.user!;
+
+  // Validation
+  if (!name || !role || !password) {
+    return res.status(400).json({ error: 'Name, role, and password are required' });
+  }
+
+  // Scoping
+  const finalOrgId = userContext.role === 'super_admin' ? (organizationId || userContext.organizationId) : userContext.organizationId;
+  const finalPropertyId = propertyId || null;
+
+  try {
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    const result = await pool.query(
+      `INSERT INTO users (organization_id, property_id, name, email, phone, role, password_hash)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, name, email, role, organization_id, property_id`,
+      [finalOrgId, finalPropertyId, name, email, phone, role, passwordHash]
+    );
+
+    const newUser = result.rows[0];
+
+    // If a property was specified, also create a mapping in user_properties
+    if (finalPropertyId) {
+      await pool.query(
+        `INSERT INTO user_properties (user_id, property_id, role)
+         VALUES ($1, $2, $3)`,
+        [newUser.id, finalPropertyId, role]
+      );
+    }
+
+    logger.info(`User ${newUser.id} (${newUser.role}) created by Admin ${userContext.userId}`);
+
+    res.status(201).json({
+      success: true,
+      user: newUser,
+      message: `User ${name} onboarded successfully as ${role}`
+    });
+  } catch (error: any) {
+    logger.error('Error onboarding user:', error);
+    if (error.code === '23505') {
+      return res.status(409).json({ error: 'Email already registered' });
+    }
+    res.status(500).json({ error: 'Failed to onboard user' });
+  }
+};
+
+export const updateUser = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { name, email, phone, role, propertyId, status } = req.body;
+  const userContext = req.user!;
+
+  try {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Check permissions and existence
+      const checkResult = await client.query(
+        `SELECT organization_id FROM users WHERE id = $1`,
+        [id]
+      );
+
+      if (checkResult.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      if (userContext.role !== 'super_admin' && checkResult.rows[0].organization_id !== userContext.organizationId) {
+        await client.query('ROLLBACK');
+        return res.status(403).json({ error: 'Permission denied' });
+      }
+
+      // Update user
+      const result = await client.query(
+        `UPDATE users 
+         SET name = COALESCE($1, name),
+             email = COALESCE($2, email),
+             phone = COALESCE($3, phone),
+             role = COALESCE($4, role),
+             property_id = COALESCE($5, property_id),
+             status = COALESCE($6, status),
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = $7
+         RETURNING id, name, email, role, property_id, status`,
+        [name, email, phone, role, propertyId, status, id]
+      );
+
+      const updatedUser = result.rows[0];
+
+      // Update user_properties mapping if property changed
+      if (propertyId) {
+        await client.query(
+          `DELETE FROM user_properties WHERE user_id = $1`,
+          [id]
+        );
+        await client.query(
+          `INSERT INTO user_properties (user_id, property_id, role)
+           VALUES ($1, $2, $3)`,
+          [id, propertyId, role || updatedUser.role]
+        );
+      }
+
+      await client.query('COMMIT');
+      res.json({ success: true, user: updatedUser, message: 'User updated successfully' });
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  } catch (error: any) {
+    logger.error('Error updating user:', error);
+    res.status(500).json({ error: 'Failed to update user' });
+  }
+};
+
+export const deleteUser = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const userContext = req.user!;
+
+  try {
+    const checkResult = await pool.query(
+      `SELECT organization_id FROM users WHERE id = $1`,
+      [id]
+    );
+
+    if (checkResult.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    if (userContext.role !== 'super_admin' && checkResult.rows[0].organization_id !== userContext.organizationId) {
+      return res.status(403).json({ error: 'Permission denied' });
+    }
+
+    await pool.query(`DELETE FROM users WHERE id = $1`, [id]);
+    
+    res.json({ success: true, message: 'User deleted successfully' });
+  } catch (error: any) {
+    logger.error('Error deleting user:', error);
+    res.status(500).json({ error: 'Failed to delete user' });
+  }
+};
+
+
+
 export const register = async (req: Request, res: Response) => {
   return res.status(403).json({
     error: 'Self-signup is disabled. Please request an account from hotel staff.',
@@ -53,7 +222,7 @@ export const register = async (req: Request, res: Response) => {
 };
 
 export const login = async (req: Request, res: Response) => {
-  const { identifier, email, password } = req.body;
+  const { identifier, email, password, propertyId } = req.body;
   const resolvedIdentifier = identifier || email;
 
   if (!resolvedIdentifier) {
@@ -76,23 +245,146 @@ export const login = async (req: Request, res: Response) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    const token = signUserToken(user);
+    // Fetch available property contexts
+    const contextResult = await pool.query(
+      `SELECT up.property_id, up.role, p.name as property_name, p.organization_id
+       FROM user_properties up
+       JOIN properties p ON up.property_id = p.id
+       WHERE up.user_id = $1`,
+      [user.id]
+    );
+
+    const contexts = contextResult.rows;
+
+    if (contexts.length === 0 && user.role !== 'super_admin') {
+      return res.status(403).json({ error: 'No property access assigned to this account' });
+    }
+
+    // If propertyId is provided, use it. Otherwise, default to user's last_property_id or default property or first available context.
+    let selectedPropertyId = propertyId || user.last_property_id || user.property_id;
+    let selectedRole = user.role;
+    let selectedOrgId = user.organization_id;
+
+    if (propertyId) {
+      const selectedContext = contexts.find(c => c.property_id === Number(propertyId));
+      if (!selectedContext && user.role !== 'super_admin' && user.role !== 'org_admin') {
+        return res.status(403).json({ error: 'Access denied for the requested property' });
+      }
+      if (selectedContext) {
+        selectedRole = selectedContext.role;
+        selectedOrgId = selectedContext.organization_id;
+      }
+    } else if (contexts.length > 1 && !user.last_property_id && !user.property_id) {
+      // User must select a context
+      return res.json({
+        success: true,
+        requiresContextSelection: true,
+        contexts: contexts.map(c => ({
+          propertyId: c.property_id,
+          propertyName: c.property_name,
+          role: c.role
+        })),
+        message: 'Multiple contexts available. Please select one.'
+      });
+    } else if (contexts.length > 0 && !selectedPropertyId) {
+       selectedPropertyId = contexts[0].property_id;
+       selectedRole = contexts[0].role;
+       selectedOrgId = contexts[0].organization_id;
+    }
+
+    // Update last_property_id
+    if (selectedPropertyId) {
+      await pool.query(`UPDATE users SET last_property_id = $1 WHERE id = $2`, [selectedPropertyId, user.id]);
+    }
+
+    const token = signUserToken({
+      id: user.id,
+      role: selectedRole,
+      property_id: selectedPropertyId,
+      organization_id: selectedOrgId
+    });
 
     delete user.password_hash;
+    user.role = selectedRole;
+    user.property_id = selectedPropertyId;
+    user.organization_id = selectedOrgId;
 
-    logger.info(`User logged in: ${resolvedIdentifier}`);
+    logger.info(`User logged in: ${resolvedIdentifier} to property ${selectedPropertyId}`);
 
-    res.json({ success: true, token, user, message: 'Login successful' });
+    res.json({
+      success: true,
+      token,
+      user,
+      contexts: contexts.length > 1 ? contexts : undefined,
+      message: 'Login successful'
+    });
   } catch (error: any) {
     logger.error('Error logging in:', error);
     res.status(500).json({ error: 'Failed to login' });
   }
 };
 
+export const switchContext = async (req: Request, res: Response) => {
+  const { propertyId } = req.body;
+  const userId = req.user!.userId;
+
+  try {
+    const contextResult = await pool.query(
+      `SELECT up.property_id, up.role, p.organization_id
+       FROM user_properties up
+       JOIN properties p ON up.property_id = p.id
+       WHERE up.user_id = $1 AND up.property_id = $2`,
+      [userId, propertyId]
+    );
+
+    if (contextResult.rows.length === 0) {
+      // Check if user is super_admin or org_admin for this property
+      const userResult = await pool.query(`SELECT id, role, organization_id FROM users WHERE id = $1`, [userId]);
+      const user = userResult.rows[0];
+
+      if (user.role === 'super_admin' || (user.role === 'org_admin' && user.organization_id)) {
+         const propResult = await pool.query(`SELECT id, organization_id FROM properties WHERE id = $1`, [propertyId]);
+         if (propResult.rows.length === 0) return res.status(404).json({ error: 'Property not found' });
+         
+         if (user.role === 'org_admin' && propResult.rows[0].organization_id !== user.organization_id) {
+           return res.status(403).json({ error: 'Access denied for this property' });
+         }
+
+         await pool.query(`UPDATE users SET last_property_id = $1 WHERE id = $2`, [propertyId, userId]);
+
+         const newToken = signUserToken({
+           id: userId,
+           role: user.role,
+           property_id: propertyId,
+           organization_id: propResult.rows[0].organization_id
+         });
+         return res.json({ success: true, token: newToken, message: 'Context switched' });
+      }
+
+      return res.status(403).json({ error: 'Access denied for the requested property' });
+    }
+
+    const context = contextResult.rows[0];
+    await pool.query(`UPDATE users SET last_property_id = $1 WHERE id = $2`, [propertyId, userId]);
+
+    const newToken = signUserToken({
+      id: userId,
+      role: context.role,
+      property_id: context.property_id,
+      organization_id: context.organization_id
+    });
+
+    res.json({ success: true, token: newToken, message: 'Context switched' });
+  } catch (error: any) {
+    logger.error('Error switching context:', error);
+    res.status(500).json({ error: 'Failed to switch context' });
+  }
+};
+
 export const getProfile = async (req: Request, res: Response) => {
   try {
     const result = await pool.query(
-      `SELECT id, property_id, name, email, phone, role, room_number, status, created_at
+      `SELECT id, property_id, organization_id, last_property_id, name, email, phone, role, room_number, status, created_at
        FROM users WHERE id = $1`,
       [req.user!.userId]
     );
@@ -165,30 +457,37 @@ export const changePassword = async (req: Request, res: Response) => {
 };
 
 export const getAllUsers = async (req: Request, res: Response) => {
-  const { propertyId, role } = req.query;
+  const { role } = req.query;
+  const userContext = req.user!;
 
   try {
-    let query = `SELECT id, property_id, name, email, phone, role, room_number, status FROM users WHERE 1=1`;
+    let baseQuery = `
+      SELECT u.id, u.property_id, u.organization_id, u.name, u.email, u.phone, 
+             u.role, u.room_number, u.status,
+             o.name as organization_name,
+             p.name as property_name
+      FROM users u
+      LEFT JOIN organizations o ON u.organization_id = o.id
+      LEFT JOIN properties p ON u.property_id = p.id
+    `;
     const params: any[] = [];
-
-    if (propertyId) {
-      params.push(propertyId);
-      query += ` AND property_id = $${params.length}`;
-    }
 
     if (role) {
       params.push(role);
-      query += ` AND role = $${params.length}`;
+      baseQuery += ` WHERE u.role = $1`;
     }
 
-    query += ` ORDER BY created_at DESC`;
+    baseQuery += ` ORDER BY u.created_at DESC`;
 
-    const result = await pool.query(query, params);
+    // Use queryWithContext to automatically append property/org filters based on user role
+    const result = await queryWithContext(userContext, baseQuery, params, 'u');
+
+    logger.info(`Personnel fetch: User ${userContext.userId} (${userContext.role}) retrieved ${result.rows.length} records`);
 
     res.json({ success: true, count: result.rows.length, users: result.rows });
   } catch (error: any) {
-    logger.error('Error fetching users:', error);
-    res.status(500).json({ error: 'Failed to fetch users' });
+    logger.error('Error fetching users:', { error: error.message, user: req.user });
+    res.status(500).json({ error: 'Failed to fetch personnel directory' });
   }
 };
 
@@ -265,10 +564,22 @@ export const triggerPanic = async (req: Request, res: Response) => {
         timestamp: new Date().toISOString(),
       });
 
-      req.io.to('role_security').to('role_responder').to('role_admin').emit('new_crisis', {
-        incident: incidentResult.rows[0],
-        timestamp: new Date().toISOString(),
-      });
+      // Broadcast to specific roles and the whole organization
+      req.io.to('role_security')
+        .to('role_responder')
+        .to('role_admin')
+        .to('role_org_admin')
+        .to('role_super_admin')
+        .to(`organization_${user.organization_id}`)
+        .emit('new_crisis', {
+          incident: incidentResult.rows[0],
+          timestamp: new Date().toISOString(),
+        });
+
+      // Proximity-based notification
+      if (latitude && longitude) {
+        notifyNearbyUsers(req.io, latitude, longitude, incidentResult.rows[0]);
+      }
     }
 
     logger.info(`Panic button triggered by user ${userId}`);

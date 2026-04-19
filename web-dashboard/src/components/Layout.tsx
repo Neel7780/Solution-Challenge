@@ -27,7 +27,16 @@ import {
   Settings as SettingsIcon,
   Logout as LogoutIcon,
   Notifications as NotificationsIcon,
+  Business as BusinessIcon,
+  ExpandMore as ExpandMoreIcon,
+  CorporateFare as OrgIcon,
+  AdminPanelSettings as PlatformIcon,
 } from '@mui/icons-material';
+import {
+  Menu,
+  MenuItem,
+  Chip,
+} from '@mui/material';
 
 import { useAuthStore } from '../store/authStore';
 import { useSocketStore } from '../store/socketStore';
@@ -35,21 +44,13 @@ import { useNotificationStore } from '../store/notificationStore';
 
 const drawerWidth = 260;
 
-const menuItems = [
-  { text: 'Command Center', icon: DashboardIcon, path: '/dashboard' },
-  { text: 'Incidents', icon: WarningIcon, path: '/dashboard/incidents' },
-  { text: 'Triage & Safety', icon: HealingIcon, path: '/dashboard/triage' },
-  { text: 'Live Map', icon: MapIcon, path: '/dashboard/locations' },
-  { text: 'Personnel', icon: PeopleIcon, path: '/dashboard/users' },
-  { text: 'Notifications', icon: NotificationsIcon, path: '/dashboard/notifications' },
-  { text: 'Settings', icon: SettingsIcon, path: '/dashboard/settings' },
-];
-
 export default function Layout() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [contextAnchorEl, setContextAnchorEl] = useState<null | HTMLElement>(null);
+
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, logout } = useAuthStore();
+  const { user, logout, contexts, switchContext } = useAuthStore();
   const { connected } = useSocketStore();
   const { unreadCount } = useNotificationStore();
 
@@ -61,6 +62,47 @@ export default function Layout() {
     logout();
     navigate('/login');
   };
+
+  const handleContextOpen = (event: React.MouseEvent<HTMLElement>) => {
+    setContextAnchorEl(event.currentTarget);
+  };
+
+  const handleContextClose = () => {
+    setContextAnchorEl(null);
+  };
+
+  const handleContextSwitch = async (propertyId: number) => {
+    handleContextClose();
+    await switchContext(propertyId);
+  };
+
+  const currentContextName = contexts.find(c => c.propertyId === user?.property_id)?.propertyName || 'Primary Property';
+
+  const getMenuItems = () => {
+    const baseItems = [
+      { text: 'Command Center', icon: DashboardIcon, path: '/dashboard' },
+      { text: 'Incidents', icon: WarningIcon, path: '/dashboard/incidents' },
+      { text: 'Triage & Safety', icon: HealingIcon, path: '/dashboard/triage' },
+      { text: 'Live Map', icon: MapIcon, path: '/dashboard/locations' },
+      { text: 'Personnel', icon: PeopleIcon, path: '/dashboard/users' },
+      { text: 'Notifications', icon: NotificationsIcon, path: '/dashboard/notifications' },
+    ];
+
+    const menu = [...baseItems];
+
+    if (user?.role === 'org_admin') {
+      menu.push({ text: 'My Organization', icon: OrgIcon, path: '/dashboard/organization' });
+    }
+
+    if (user?.role === 'super_admin') {
+      menu.push({ text: 'Platform Admin', icon: PlatformIcon, path: '/dashboard/platform' });
+    }
+
+    menu.push({ text: 'Settings', icon: SettingsIcon, path: '/dashboard/settings' });
+    return menu;
+  };
+
+  const menuItems = getMenuItems();
 
   const drawer = (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -163,9 +205,53 @@ export default function Layout() {
           >
             <MenuIcon />
           </IconButton>
-          <Typography component="h1" variant="h6" color="inherit" noWrap sx={{ flexGrow: 1 }}>
-            {menuItems.find(m => m.path === location.pathname)?.text || 'Dashboard'}
-          </Typography>
+          <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Typography component="h1" variant="h6" color="inherit" noWrap>
+              {menuItems.find(m => m.path === location.pathname)?.text || 'Dashboard'}
+            </Typography>
+            
+            {contexts.length > 1 && (
+              <>
+                <Divider orientation="vertical" flexItem sx={{ my: 2, borderColor: 'rgba(255,255,255,0.1)' }} />
+                <Chip
+                  icon={<BusinessIcon sx={{ color: 'inherit !important', fontSize: '1.1rem !important' }} />}
+                  label={currentContextName}
+                  onClick={handleContextOpen}
+                  onDelete={handleContextOpen}
+                  deleteIcon={<ExpandMoreIcon sx={{ color: 'inherit !important' }} />}
+                  sx={{ 
+                    backgroundColor: 'rgba(255,255,255,0.05)', 
+                    color: 'rgba(255,255,255,0.8)',
+                    fontWeight: 600,
+                    '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)' }
+                  }}
+                />
+                <Menu
+                  anchorEl={contextAnchorEl}
+                  open={Boolean(contextAnchorEl)}
+                  onClose={handleContextClose}
+                  slotProps={{ paper: { className: 'glass-strong', sx: { minWidth: 200, mt: 1 } } }}
+                >
+                  <Typography variant="overline" sx={{ px: 2, py: 1, display: 'block', color: 'text.secondary' }}>
+                    Switch Property
+                  </Typography>
+                  {contexts.map((ctx) => (
+                    <MenuItem 
+                      key={ctx.propertyId} 
+                      selected={ctx.propertyId === user?.property_id}
+                      onClick={() => handleContextSwitch(ctx.propertyId)}
+                      sx={{ py: 1.5 }}
+                    >
+                      <Box>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>{ctx.propertyName}</Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'capitalize' }}>{ctx.role}</Typography>
+                      </Box>
+                    </MenuItem>
+                  ))}
+                </Menu>
+              </>
+            )}
+          </Box>
           
           <IconButton color="inherit" onClick={() => navigate('/dashboard/notifications')}>
             <Badge badgeContent={unreadCount} color="error">

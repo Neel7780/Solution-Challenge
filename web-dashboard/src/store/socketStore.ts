@@ -3,18 +3,27 @@ import { io, Socket } from 'socket.io-client';
 import { useNotificationStore } from './notificationStore';
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
-
 interface SocketState {
   socket: Socket | null;
   connected: boolean;
   connect: () => void;
   disconnect: () => void;
   joinProperty: (propertyId: number) => void;
+  joinOrganization: (organizationId: number) => void;
   joinRole: (role: string) => void;
 }
 
 export const useSocketStore = create<SocketState>((set, get) => ({
-  socket: null,
+...
+  joinOrganization: (organizationId: number) => {
+    const { socket } = get();
+    if (socket) {
+      socket.emit('join_organization', organizationId);
+    }
+  },
+
+  joinRole: (role: string) => {
+
   connected: false,
 
   connect: () => {
@@ -39,8 +48,10 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       if (userStr) {
         try {
           const user = JSON.parse(userStr);
-          socket.emit('join_property', user.property_id || 1);
-          socket.emit('join_role', user.role || 'guest');
+          if (user.id) socket.emit('join_user', user.id);
+          if (user.property_id) socket.emit('join_property', user.property_id);
+          if (user.organization_id) socket.emit('join_organization', user.organization_id);
+          if (user.role) socket.emit('join_role', user.role);
         } catch {
           socket.emit('join_property', 1);
         }
@@ -91,6 +102,15 @@ export const useSocketStore = create<SocketState>((set, get) => ({
         title: 'Mass Notification',
         message: data.message,
         severity: 'high',
+      });
+    });
+
+    socket.on('nearby_crisis', (data) => {
+      addNotif({
+        type: 'crisis',
+        title: 'CRISIS NEAR YOU!',
+        message: data.message,
+        severity: 'critical',
       });
     });
 

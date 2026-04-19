@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   Alert,
   Box,
@@ -23,13 +23,16 @@ import {
   Stack,
   Tabs,
   Tab,
+  Divider,
 } from '@mui/material';
-import { Add as AddIcon, MoreVert as MoreIcon } from '@mui/icons-material';
+import { Add as AddIcon, MoreVert as MoreIcon, Check as CheckIcon, Visibility as ViewIcon } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
 import { useAuthStore } from '../store/authStore';
+import { useSocketStore } from '../store/socketStore';
+
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
@@ -59,24 +62,77 @@ interface PublicReport {
 
 export default function Incidents() {
   const [open, setOpen] = useState(false);
+  const [openManage, setOpenManage] = useState(false);
+  const [selectedIncident, setSelectedIncident] = useState<Incident | null>(null);
   const [activeTab, setActiveTab] = useState<'incidents' | 'public-reports'>('incidents');
   const { user } = useAuthStore();
+  const { socket } = useSocketStore();
   const queryClient = useQueryClient();
   const containerRef = useRef(null);
   const canReviewPublicReports = ['admin', 'security', 'responder'].includes(user?.role || '');
 
+  // Real-time updates
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleUpdate = () => {
+      queryClient.invalidateQueries({ queryKey: ['incidents'] });
+    };
+
+    socket.on('new_crisis', handleUpdate);
+    socket.on('incident_status_update', handleUpdate);
+    socket.on('panic_triggered', handleUpdate);
+
+    return () => {
+      socket.off('new_crisis', handleUpdate);
+      socket.off('incident_status_update', handleUpdate);
+      socket.off('panic_triggered', handleUpdate);
+    };
+  }, [socket, queryClient]);
+
+  // Form State
+  const [incidentType, setIncidentType] = useState('fire');
+  const [severity, setSeverity] = useState('high');
+  const [description, setDescription] = useState('');
+  const [zoneId, setZoneId] = useState<number | string>('');
+
   const { data: incidents, isLoading } = useQuery<Incident[]>({
     queryKey: ['incidents'],
     queryFn: async () => {
-      try {
-        const res = await axios.get(`${API_URL}/crisis/active`);
-        return res.data.incidents;
-      } catch {
-        return [
-          { id: 101, incident_type: 'fire', severity: 'critical', status: 'active', created_at: new Date().toISOString(), description: 'Kitchen fire on floor 1', reported_by_name: 'John Doe', zone_name: 'Kitchen' },
-          { id: 102, incident_type: 'medical', severity: 'high', status: 'contained', created_at: new Date(Date.now() - 3600000).toISOString(), description: 'Guest fainted in lobby', reported_by_name: 'Jane Smith', zone_name: 'Lobby' }
-        ];
-      }
+      const res = await axios.get(`${API_URL}/crisis/active`);
+      return res.data.incidents;
+    },
+  });
+
+  const { data: zones = [] } = useQuery({
+    queryKey: ['zones', user?.property_id],
+    queryFn: async () => {
+      const res = await axios.get(`${API_URL}/locations/zones/${user?.property_id || 1}`);
+      return res.data.zones;
+    },
+    enabled: open,
+  });
+
+  const reportMutation = useMutation({
+    mutationFn: (data: any) => axios.post(`${API_URL}/crisis/report`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['incidents'] });
+      setOpen(false);
+      // Reset form
+      setIncidentType('fire');
+      setSeverity('high');
+      setDescription('');
+      setZoneId('');
+    },
+  });
+
+  const updateStatusMutation = useMutation({
+    mutationFn: ({ id, status }: { id: number; status: string }) => 
+      axios.patch(`${API_URL}/crisis/${id}/status`, { status }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['incidents'] });
+      setOpenManage(false);
+      setSelectedIncident(null);
     },
   });
 
@@ -105,45 +161,71 @@ export default function Incidents() {
     },
   });
 
+  const handleReport = () => {
+    reportMutation.mutate({
+      propertyId: user?.property_id || 1,
+      type: incidentType,
+      severity,
+      description,
+      zoneId: zoneId || null,
+      latitude: 40.7128, // Default property location if not specified
+      longitude: -74.006,
+    });
+  };
+
   useGSAP(() => {
     gsap.from('.table-row', {
-      x: -20,
+      x: -15,
       opacity: 0,
       duration: 0.4,
       stagger: 0.05,
       ease: 'power2.out',
+      clearProps: 'all',
+      force3D: false,
     });
   }, { scope: containerRef, dependencies: [incidents?.length] });
 
   const getSeverityStyle = (severity: string) => {
     switch (severity) {
-      case 'critical': return { color: '#ef4444', bg: 'rgba(239, 68, 68, 0.1)' };
-      case 'high': return { color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.1)' };
-      case 'medium': return { color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.1)' };
-      default: return { color: '#94a3b8', bg: 'rgba(148, 163, 184, 0.1)' };
+      case 'critical': return { color: 'var(--accent-red)', bg: 'rgba(255, 62, 62, 0.05)', border: 'rgba(255, 62, 62, 0.2)' };
+      case 'high': return { color: 'var(--accent-orange)', bg: 'rgba(251, 146, 60, 0.05)', border: 'rgba(251, 146, 60, 0.2)' };
+      case 'medium': return { color: 'var(--accent-blue)', bg: 'rgba(59, 130, 246, 0.05)', border: 'rgba(59, 130, 246, 0.2)' };
+      default: return { color: 'var(--text-muted)', bg: 'rgba(255, 255, 255, 0.02)', border: 'rgba(255, 255, 255, 0.1)' };
     }
   };
 
   const getStatusStyle = (status: string) => {
     switch (status) {
-      case 'active': return { color: '#ef4444', borderColor: '#ef4444' };
-      case 'contained': return { color: '#f59e0b', borderColor: '#f59e0b' };
-      case 'resolved': return { color: '#22c55e', borderColor: '#22c55e' };
-      default: return { color: '#94a3b8', borderColor: '#94a3b8' };
+      case 'active': return { color: 'var(--accent-red)' };
+      case 'contained': return { color: 'var(--accent-orange)' };
+      case 'resolved': return { color: 'var(--accent-green)' };
+      default: return { color: 'var(--text-muted)' };
     }
   };
 
   return (
     <Box ref={containerRef}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 4, alignItems: 'center' }}>
-        <Typography variant="h2" sx={{ fontSize: '2rem' }}>
-          Incident Management
-        </Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 4, alignItems: 'flex-end' }}>
+        <Box>
+          <Typography variant="h2" sx={{ fontSize: '1.5rem', fontWeight: 400 }}>
+            Incident Management
+          </Typography>
+          <Typography variant="caption" sx={{ color: 'var(--text-muted)' }}>
+            Real-time tracking and tactical resolution of active threats
+          </Typography>
+        </Box>
         <Button
           variant="contained"
-          startIcon={<AddIcon />}
+          size="small"
+          startIcon={<AddIcon fontSize="small" />}
           onClick={() => setOpen(true)}
-          sx={{ background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)' }}
+          sx={{ 
+            background: 'var(--accent-red)', 
+            px: 3, 
+            borderRadius: 1, 
+            fontSize: '0.75rem',
+            '&:hover': { background: '#dc2626' }
+          }}
         >
           Report Incident
         </Button>
@@ -152,86 +234,116 @@ export default function Incidents() {
       <Tabs
         value={activeTab}
         onChange={(_, value) => setActiveTab(value)}
-        sx={{ mb: 2 }}
+        sx={{ 
+          mb: 3, 
+          minHeight: 40,
+          '& .MuiTab-root': { fontSize: '0.75rem', minHeight: 40, textTransform: 'none', fontWeight: 400, color: 'var(--text-muted)' },
+          '& .Mui-selected': { color: '#fff !important' },
+          '& .MuiTabs-indicator': { backgroundColor: 'var(--accent-red)', height: 1 }
+        }}
       >
         <Tab value="incidents" label="Active Incidents" />
-        {canReviewPublicReports && <Tab value="public-reports" label="Public Reports Queue" />}
+        {canReviewPublicReports && <Tab value="public-reports" label="Public Review Queue" />}
       </Tabs>
 
       {activeTab === 'incidents' && (
       <Paper
         sx={{
-          backgroundColor: 'rgba(18, 18, 26, 0.98)',
-          border: '1px solid var(--border-medium)',
-          boxShadow: 'var(--shadow-card)',
+          backgroundColor: 'transparent',
+          border: '1px solid rgba(255, 255, 255, 0.04)',
+          borderRadius: 1,
         }}
       >
         <TableContainer>
-          <Table>
+          <Table size="small">
             <TableHead>
               <TableRow>
-                <TableCell>ID</TableCell>
-                <TableCell>Type / Zone</TableCell>
-                <TableCell>Severity</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell>Time Reported</TableCell>
-                <TableCell align="right">Actions</TableCell>
+                <TableCell sx={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>ID</TableCell>
+                <TableCell sx={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>TYPE / ZONE</TableCell>
+                <TableCell sx={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>SEVERITY</TableCell>
+                <TableCell sx={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>STATUS</TableCell>
+                <TableCell sx={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>REPORTED</TableCell>
+                <TableCell align="right" sx={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>ACTIONS</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {incidents?.map((incident: Incident) => {
+              {isLoading ? (
+                <TableRow><TableCell colSpan={6} align="center" sx={{ py: 4 }}>Loading...</TableCell></TableRow>
+              ) : incidents?.map((incident: Incident) => {
                 const sevStyle = getSeverityStyle(incident.severity);
                 const statStyle = getStatusStyle(incident.status);
                 return (
-                  <TableRow key={incident.id} className="table-row" hover sx={{ '&:hover': { backgroundColor: 'rgba(255,255,255,0.02)' } }}>
-                    <TableCell sx={{ fontWeight: 'mono', color: 'text.secondary' }}>#{incident.id}</TableCell>
+                  <TableRow key={incident.id} className="table-row" hover sx={{ '&:hover': { backgroundColor: 'rgba(255,255,255,0.01) !important' } }}>
+                    <TableCell sx={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>#{incident.id}</TableCell>
                     <TableCell>
-                      <Typography sx={{ fontWeight: 'bold', textTransform: 'capitalize' }}>
-                        {incident.incident_type}
+                      <Typography sx={{ fontWeight: 400, fontSize: '0.85rem' }}>
+                        {incident.incident_type.toUpperCase()}
                       </Typography>
-                      <Typography variant="caption" color="text.secondary">
+                      <Typography variant="caption" sx={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>
                         {incident.zone_name || 'General Area'}
                       </Typography>
                     </TableCell>
                     <TableCell>
-                      <Chip
-                        label={incident.severity}
-                        size="small"
-                        sx={{ color: sevStyle.color, backgroundColor: sevStyle.bg, fontWeight: 700, textTransform: 'uppercase' }}
-                      />
+                      <Box sx={{ 
+                        display: 'inline-flex', 
+                        px: 1, 
+                        py: 0.25, 
+                        borderRadius: '2px', 
+                        backgroundColor: sevStyle.bg, 
+                        border: `1px solid ${sevStyle.border}`,
+                        color: sevStyle.color,
+                        fontSize: '0.65rem',
+                        fontWeight: 600
+                      }}>
+                        {incident.severity.toUpperCase()}
+                      </Box>
                     </TableCell>
                     <TableCell>
-                      <Chip
-                        label={incident.status}
-                        size="small"
-                        variant="outlined"
-                        sx={{ color: statStyle.color, borderColor: statStyle.borderColor, fontWeight: 600, textTransform: 'uppercase' }}
-                      />
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Box sx={{ width: 4, height: 4, borderRadius: '50%', backgroundColor: statStyle.color }} />
+                        <Typography variant="caption" sx={{ color: statStyle.color, fontWeight: 500, fontSize: '0.7rem' }}>
+                          {incident.status.toUpperCase()}
+                        </Typography>
+                      </Box>
                     </TableCell>
                     <TableCell>
-                      <Typography variant="body2">
+                      <Typography variant="caption" sx={{ color: 'var(--text-muted)' }}>
                         {new Date(incident.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </Typography>
                     </TableCell>
                     <TableCell align="right">
-                      {incident.status === 'active' && (
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          color="success"
-                          onClick={() => resolveMutation.mutate(incident.id)}
-                          sx={{ mr: 1 }}
+                      <Stack direction="row" spacing={1} justifyContent="flex-end">
+                        {incident.status === 'active' && (
+                          <Button
+                            size="small"
+                            variant="contained"
+                            color="info"
+                            startIcon={<CheckIcon sx={{ fontSize: '12px !important' }} />}
+                            onClick={() => updateStatusMutation.mutate({ id: incident.id, status: 'acknowledged' })}
+                            sx={{ fontSize: '0.65rem', py: 0, height: 24, borderRadius: 0.5, backgroundColor: 'var(--accent-blue)' }}
+                          >
+                            Acknowledge
+                          </Button>
+                        )}
+                        <IconButton 
+                          size="small" 
+                          sx={{ color: 'var(--text-muted)' }}
+                          onClick={() => {
+                            setSelectedIncident(incident);
+                            setOpenManage(true);
+                          }}
                         >
-                          Resolve
-                        </Button>
-                      )}
-                      <IconButton size="small" color="inherit">
-                        <MoreIcon />
-                      </IconButton>
+                          <MoreIcon sx={{ fontSize: 16 }} />
+                        </IconButton>
+                      </Stack>
                     </TableCell>
+
                   </TableRow>
                 );
               })}
+              {!isLoading && incidents?.length === 0 && (
+                <TableRow><TableCell colSpan={6} align="center" sx={{ py: 8, color: 'var(--text-muted)' }}>No active incidents.</TableCell></TableRow>
+              )}
             </TableBody>
           </Table>
         </TableContainer>
@@ -241,87 +353,99 @@ export default function Incidents() {
       {activeTab === 'public-reports' && canReviewPublicReports && (
         <Paper
           sx={{
-            backgroundColor: 'rgba(18, 18, 26, 0.98)',
-            border: '1px solid var(--border-medium)',
-            boxShadow: 'var(--shadow-card)',
+            backgroundColor: 'transparent',
+            border: '1px solid rgba(255, 255, 255, 0.04)',
+            borderRadius: 1,
           }}
         >
           {publicReportsError && (
-            <Alert severity="error" sx={{ m: 2 }}>
+            <Alert severity="error" sx={{ m: 2, borderRadius: 1 }}>
               Failed to load public reports.
             </Alert>
           )}
           <TableContainer>
-            <Table>
+            <Table size="small">
               <TableHead>
                 <TableRow>
-                  <TableCell>Report ID</TableCell>
-                  <TableCell>Type / Severity</TableCell>
-                  <TableCell>Reporter</TableCell>
-                  <TableCell>Source</TableCell>
-                  <TableCell>Submitted</TableCell>
-                  <TableCell align="right">Review</TableCell>
+                  <TableCell sx={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>ID</TableCell>
+                  <TableCell sx={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>TYPE / SEVERITY</TableCell>
+                  <TableCell sx={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>REPORTER</TableCell>
+                  <TableCell sx={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>SOURCE IP</TableCell>
+                  <TableCell sx={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>SUBMITTED</TableCell>
+                  <TableCell align="right" sx={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>REVIEW</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {publicReports.map((report) => (
-                  <TableRow key={report.id} hover>
-                    <TableCell>#{report.id}</TableCell>
-                    <TableCell>
-                      <Stack spacing={0.5}>
-                        <Typography sx={{ textTransform: 'capitalize', fontWeight: 600 }}>
-                          {report.incident_type}
-                        </Typography>
-                        <Chip label={report.severity} size="small" variant="outlined" sx={{ width: 'fit-content', textTransform: 'uppercase' }} />
-                        {report.description && (
-                          <Typography variant="caption" color="text.secondary">
-                            {report.description}
+                {publicReports.map((report) => {
+                  const sevStyle = getSeverityStyle(report.severity);
+                  return (
+                    <TableRow key={report.id} hover sx={{ '&:hover': { backgroundColor: 'rgba(255,255,255,0.01) !important' } }}>
+                      <TableCell sx={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>#{report.id}</TableCell>
+                      <TableCell>
+                        <Stack spacing={0.5}>
+                          <Typography sx={{ textTransform: 'capitalize', fontWeight: 400, fontSize: '0.85rem' }}>
+                            {report.incident_type}
                           </Typography>
-                        )}
-                      </Stack>
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2">{report.reporter_name || 'Anonymous'}</Typography>
-                      <Typography variant="caption" color="text.secondary">{report.reporter_contact || 'No contact'}</Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2">IP: {report.source_ip}</Typography>
-                      <Typography variant="caption" color="text.secondary">Property {report.property_id}</Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2">{new Date(report.created_at).toLocaleString()}</Typography>
-                    </TableCell>
-                    <TableCell align="right">
-                      <Button
-                        size="small"
-                        color="error"
-                        variant="contained"
-                        sx={{ mr: 1 }}
-                        disabled={reviewPublicReportMutation.isPending}
-                        onClick={() => reviewPublicReportMutation.mutate({ id: report.id, action: 'escalate' })}
-                      >
-                        Escalate
-                      </Button>
-                      <Button
-                        size="small"
-                        color="inherit"
-                        variant="outlined"
-                        disabled={reviewPublicReportMutation.isPending}
-                        onClick={() => reviewPublicReportMutation.mutate({ id: report.id, action: 'dismiss' })}
-                      >
-                        Dismiss
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                          <Box sx={{ 
+                            display: 'inline-flex', 
+                            width: 'fit-content',
+                            px: 1, 
+                            py: 0.15, 
+                            borderRadius: '2px', 
+                            backgroundColor: sevStyle.bg, 
+                            border: `1px solid ${sevStyle.border}`,
+                            color: sevStyle.color,
+                            fontSize: '0.6rem',
+                            fontWeight: 600
+                          }}>
+                            {report.severity.toUpperCase()}
+                          </Box>
+                        </Stack>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2" sx={{ fontSize: '0.8rem' }}>{report.reporter_name || 'Anonymous'}</Typography>
+                        <Typography variant="caption" sx={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>{report.reporter_contact || 'No contact'}</Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="caption" sx={{ color: 'var(--text-muted)', fontFamily: 'monospace' }}>{report.source_ip}</Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="caption" sx={{ color: 'var(--text-muted)' }}>{new Date(report.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</Typography>
+                      </TableCell>
+                      <TableCell align="right">
+                        <Stack direction="row" spacing={1} justifyContent="flex-end">
+                          <Button
+                            size="small"
+                            variant="contained"
+                            color="error"
+                            disabled={reviewPublicReportMutation.isPending}
+                            onClick={() => reviewPublicReportMutation.mutate({ id: report.id, action: 'escalate' })}
+                            sx={{ fontSize: '0.65rem', py: 0, height: 24, borderRadius: 0.5 }}
+                          >
+                            Escalate
+                          </Button>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            disabled={reviewPublicReportMutation.isPending}
+                            onClick={() => reviewPublicReportMutation.mutate({ id: report.id, action: 'dismiss' })}
+                            sx={{ fontSize: '0.65rem', py: 0, height: 24, borderRadius: 0.5, color: 'var(--text-muted)', borderColor: 'rgba(255,255,255,0.1)' }}
+                          >
+                            Dismiss
+                          </Button>
+                        </Stack>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
                 {loadingPublicReports && (
                   <TableRow>
-                    <TableCell colSpan={6}>Loading public reports...</TableCell>
+                    <TableCell colSpan={6} align="center" sx={{ py: 4, color: 'var(--text-muted)' }}>Loading review queue...</TableCell>
                   </TableRow>
                 )}
                 {!loadingPublicReports && publicReports.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={6}>No public reports pending review.</TableCell>
+                    <TableCell colSpan={6} align="center" sx={{ py: 8, color: 'var(--text-muted)' }}>Review queue is empty.</TableCell>
                   </TableRow>
                 )}
               </TableBody>
@@ -349,15 +473,29 @@ export default function Incidents() {
         <DialogContent>
           <Grid container spacing={3} sx={{ mt: 1 }}>
             <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField select fullWidth label="Incident Type" defaultValue="fire">
+              <TextField 
+                select 
+                fullWidth 
+                label="Incident Type" 
+                value={incidentType}
+                onChange={(e) => setIncidentType(e.target.value)}
+              >
                 <MenuItem value="fire">Fire</MenuItem>
                 <MenuItem value="medical">Medical</MenuItem>
                 <MenuItem value="security">Security</MenuItem>
+                <MenuItem value="natural_disaster">Natural Disaster</MenuItem>
+                <MenuItem value="evacuation">Evacuation</MenuItem>
                 <MenuItem value="other">Other</MenuItem>
               </TextField>
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField select fullWidth label="Severity" defaultValue="high">
+              <TextField 
+                select 
+                fullWidth 
+                label="Severity" 
+                value={severity}
+                onChange={(e) => setSeverity(e.target.value)}
+              >
                 <MenuItem value="critical">Critical</MenuItem>
                 <MenuItem value="high">High</MenuItem>
                 <MenuItem value="medium">Medium</MenuItem>
@@ -365,15 +503,126 @@ export default function Incidents() {
               </TextField>
             </Grid>
             <Grid size={{ xs: 12 }}>
-              <TextField fullWidth multiline rows={4} label="Description" placeholder="Provide details about the incident..." />
+              <TextField 
+                select 
+                fullWidth 
+                label="Affected Zone" 
+                value={zoneId}
+                onChange={(e) => setZoneId(e.target.value)}
+              >
+                <MenuItem value="">General / Unknown</MenuItem>
+                {zones.map((zone: any) => (
+                  <MenuItem key={zone.id} value={zone.id}>{zone.name} (Floor {zone.floor_number})</MenuItem>
+                ))}
+              </TextField>
+            </Grid>
+            <Grid size={{ xs: 12 }}>
+              <TextField 
+                fullWidth 
+                multiline 
+                rows={4} 
+                label="Description" 
+                placeholder="Provide details about the incident..." 
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+              />
             </Grid>
           </Grid>
         </DialogContent>
         <DialogActions sx={{ p: 3 }}>
           <Button onClick={() => setOpen(false)} color="inherit">Cancel</Button>
-          <Button variant="contained" color="error">Report Incident</Button>
+          <Button 
+            variant="contained" 
+            color="error" 
+            onClick={handleReport}
+            disabled={reportMutation.isPending}
+          >
+            {reportMutation.isPending ? 'Reporting...' : 'Report Incident'}
+          </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Manage Incident Dialog */}
+      <Dialog
+        open={openManage}
+        onClose={() => setOpenManage(false)}
+        maxWidth="xs"
+        fullWidth
+        slotProps={{
+          paper: {
+            sx: {
+              backgroundColor: 'rgba(18, 18, 26, 0.98)',
+              border: '1px solid var(--border-medium)',
+              boxShadow: 'var(--shadow-card)',
+            },
+          },
+        }}
+      >
+        <DialogTitle sx={{ fontWeight: 'bold' }}>Manage Incident #{selectedIncident?.id}</DialogTitle>
+        <DialogContent>
+          {selectedIncident && (
+            <Stack spacing={2.5} sx={{ mt: 1 }}>
+              <Box>
+                <Typography variant="overline" color="text.secondary" sx={{ fontSize: '0.6rem' }}>Details</Typography>
+                <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                  {selectedIncident.incident_type.toUpperCase()} - {selectedIncident.severity.toUpperCase()}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {selectedIncident.description}
+                </Typography>
+              </Box>
+              
+              <Divider sx={{ opacity: 0.1 }} />
+              
+              <Box>
+                <Typography variant="overline" color="text.secondary" sx={{ fontSize: '0.6rem', mb: 1, display: 'block' }}>
+                  Strategic Actions
+                </Typography>
+                <Stack spacing={1}>
+                  {selectedIncident.status === 'active' && (
+                    <Button 
+                      fullWidth 
+                      variant="outlined" 
+                      color="info"
+                      onClick={() => updateStatusMutation.mutate({ id: selectedIncident.id, status: 'acknowledged' })}
+                      disabled={updateStatusMutation.isPending}
+                      sx={{ justifyContent: 'flex-start', textTransform: 'none' }}
+                    >
+                      Acknowledge Incident
+                    </Button>
+                  )}
+                  {selectedIncident.status !== 'contained' && selectedIncident.status !== 'resolved' && (
+                    <Button 
+                      fullWidth 
+                      variant="outlined" 
+                      color="warning"
+                      onClick={() => updateStatusMutation.mutate({ id: selectedIncident.id, status: 'contained' })}
+                      disabled={updateStatusMutation.isPending}
+                      sx={{ justifyContent: 'flex-start', textTransform: 'none' }}
+                    >
+                      Mark as Contained
+                    </Button>
+                  )}
+                  <Button 
+                    fullWidth 
+                    variant="contained" 
+                    color="success"
+                    onClick={() => updateStatusMutation.mutate({ id: selectedIncident.id, status: 'resolved' })}
+                    disabled={updateStatusMutation.isPending}
+                    sx={{ justifyContent: 'flex-start', textTransform: 'none' }}
+                  >
+                    Resolve Incident
+                  </Button>
+                </Stack>
+              </Box>
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          <Button onClick={() => setOpenManage(false)} color="inherit" size="small">Close</Button>
+        </DialogActions>
+      </Dialog>
+
     </Box>
   );
 }

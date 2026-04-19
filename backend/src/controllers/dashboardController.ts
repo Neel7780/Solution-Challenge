@@ -1,9 +1,9 @@
-import { pool } from '../database/connection';
+import { pool, queryWithContext } from '../database/connection';
 import logger from '../utils/logger';
 import type { Request, Response } from 'express';
 
 export const getPropertySettings = async (req: Request, res: Response) => {
-  const { propertyId } = req.params;
+  const propertyId = req.user!.propertyId;
 
   try {
     const result = await pool.query(
@@ -24,7 +24,7 @@ export const getPropertySettings = async (req: Request, res: Response) => {
 };
 
 export const updatePropertySettings = async (req: Request, res: Response) => {
-  const { propertyId } = req.params;
+  const propertyId = req.user!.propertyId;
   const { name, address, floorPlanData } = req.body;
 
   try {
@@ -51,7 +51,7 @@ export const updatePropertySettings = async (req: Request, res: Response) => {
 };
 
 export const getOverview = async (req: Request, res: Response) => {
-  const { propertyId } = req.params;
+  const propertyId = req.user!.propertyId;
   try {
     const client = await pool.connect();
     try {
@@ -102,7 +102,7 @@ export const getOverview = async (req: Request, res: Response) => {
 };
 
 export const getTriageData = async (req: Request, res: Response) => {
-  const { propertyId } = req.params;
+  const propertyId = req.user!.propertyId;
   try {
     const client = await pool.connect();
     try {
@@ -153,7 +153,7 @@ export const getTriageData = async (req: Request, res: Response) => {
 };
 
 export const getStats = async (req: Request, res: Response) => {
-  const { propertyId } = req.params;
+  const propertyId = req.user!.propertyId;
   const { period = '24h' } = req.query;
 
   try {
@@ -198,7 +198,7 @@ export const getStats = async (req: Request, res: Response) => {
 };
 
 export const getTimeline = async (req: Request, res: Response) => {
-  const { propertyId } = req.params;
+  const propertyId = req.user!.propertyId;
   const { limit = 50 } = req.query;
 
   try {
@@ -220,7 +220,7 @@ export const getTimeline = async (req: Request, res: Response) => {
 };
 
 export const getHeatmap = async (req: Request, res: Response) => {
-  const { propertyId } = req.params;
+  const propertyId = req.user!.propertyId;
   try {
     const result = await pool.query(
       `SELECT z.id, z.name, z.current_occupancy, z.capacity, z.zone_type,
@@ -239,3 +239,66 @@ export const getHeatmap = async (req: Request, res: Response) => {
     res.status(500).json({ error: 'Failed to fetch heatmap' });
   }
 };
+
+export const getOrganizationProperties = async (req: Request, res: Response) => {
+  const organizationId = req.user!.organizationId;
+
+  try {
+    const result = await pool.query(
+      `SELECT p.*, 
+       (SELECT COUNT(*) FROM incidents i WHERE i.property_id = p.id AND i.status = 'active') as active_incidents,
+       (SELECT COUNT(*) FROM users u WHERE u.property_id = p.id AND u.role != 'guest') as staff_count
+       FROM properties p
+       WHERE p.organization_id = $1
+       ORDER BY p.name ASC`,
+      [organizationId]
+    );
+
+    res.json({ success: true, properties: result.rows });
+  } catch (error: any) {
+    logger.error('Error fetching organization properties:', error);
+    res.status(500).json({ error: 'Failed to fetch properties' });
+  }
+};
+
+export const createProperty = async (req: Request, res: Response) => {
+  const { name, address } = req.body;
+  const organizationId = req.user!.organizationId;
+  const userId = req.user!.userId;
+
+  if (!name) {
+    return res.status(400).json({ error: 'Property name is required' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const result = await client.query(
+      `INSERT INTO properties (organization_id, name, address)
+       VALUES ($1, $2, $3)
+       RETURNING *`,
+      [organizationId, name, address]
+    );
+
+    const property = result.rows[0];
+
+    // Automatically give the creator (org_admin) access to this property
+    await client.query(
+      `INSERT INTO user_properties (user_id, property_id, role)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (user_id, property_id) DO NOTHING`,
+      [userId, property.id, 'admin']
+    );
+
+    await client.query('COMMIT');
+    res.status(201).json({ success: true, property, message: 'Property created successfully' });
+  } catch (error: any) {
+    await client.query('ROLLBACK');
+    logger.error('Error creating property:', error);
+    res.status(500).json({ error: 'Failed to create property' });
+  } finally {
+    client.release();
+  }
+};
+

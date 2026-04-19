@@ -9,17 +9,25 @@ import {
   Alert,
   IconButton,
   InputAdornment,
+  List,
+  ListItem,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
+  Divider,
 } from '@mui/material';
 import {
   Visibility,
   VisibilityOff,
   Security as SecurityIcon,
+  Business as BusinessIcon,
+  ArrowForward as ArrowForwardIcon,
 } from '@mui/icons-material';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
 import axios from 'axios';
 
-import { useAuthStore } from '../store/authStore';
+import { useAuthStore, UserContext } from '../store/authStore';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
@@ -28,11 +36,17 @@ export default function Login() {
   const { login } = useAuthStore();
   const containerRef = useRef(null);
 
-  const [identifier, setIdentifier] = useState('admin@hotel.com');
+  const [identifier, setIdentifier] = useState('admin@enterprise.com');
   const [password, setPassword] = useState('password');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  
+  // Context selection state
+  const [showContextSelection, setShowContextSelection] = useState(false);
+  const [availableContexts, setAvailableContexts] = useState<UserContext[]>([]);
+  const [tempToken, setTempToken] = useState('');
+  const [tempUser, setTempUser] = useState<any>(null);
 
   useGSAP(() => {
     gsap.fromTo('.login-elem', 
@@ -48,12 +62,20 @@ export default function Login() {
 
     try {
       const response = await axios.post(`${API_URL}/users/login`, { identifier, password });
-      login(response.data.token, response.data.user);
       
-      if (response.data.user.role === 'guest') {
-        navigate('/guest');
+      if (response.data.requiresContextSelection) {
+        setAvailableContexts(response.data.contexts);
+        setTempToken(response.data.token);
+        setTempUser(response.data.user);
+        setShowContextSelection(true);
       } else {
-        navigate('/dashboard');
+        login(response.data.token, response.data.user, response.data.contexts);
+        
+        if (response.data.user.role === 'guest') {
+          navigate('/guest');
+        } else {
+          navigate('/dashboard');
+        }
       }
     } catch (err: unknown) {
       console.error(err);
@@ -66,6 +88,30 @@ export default function Login() {
       } else {
         setError('An unexpected error occurred.');
       }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSelectContext = async (context: UserContext) => {
+    setLoading(true);
+    try {
+      // Re-login with specific propertyId
+      const response = await axios.post(`${API_URL}/users/login`, { 
+        identifier, 
+        password,
+        propertyId: context.propertyId 
+      });
+      
+      login(response.data.token, response.data.user, availableContexts);
+      
+      if (response.data.user.role === 'guest') {
+        navigate('/guest');
+      } else {
+        navigate('/dashboard');
+      }
+    } catch (err) {
+      setError('Failed to select context. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -116,91 +162,130 @@ export default function Login() {
           boxShadow: 'var(--shadow-card)',
         }}
       >
-        <Box sx={{ textAlign: 'center', mb: 5 }} className="login-elem">
-          <Box 
-            sx={{ 
-              display: 'inline-flex', 
-              p: 2, 
-              borderRadius: '24px',
-              background: 'rgba(239, 68, 68, 0.1)',
-              mb: 2,
-            }}
-          >
-            <SecurityIcon sx={{ fontSize: 40, color: 'primary.main' }} />
+        {!showContextSelection ? (
+          <>
+            <Box sx={{ textAlign: 'center', mb: 5 }} className="login-elem">
+              <Box 
+                sx={{ 
+                  display: 'inline-flex', 
+                  p: 2, 
+                  borderRadius: '24px',
+                  background: 'rgba(239, 68, 68, 0.1)',
+                  mb: 2,
+                }}
+              >
+                <SecurityIcon sx={{ fontSize: 40, color: 'primary.main' }} />
+              </Box>
+              <Typography variant="h1" sx={{ fontSize: '2rem', mb: 1, color: '#f1f5f9' }}>
+                CRISIS<span style={{ color: '#ef4444' }}>RESPOND</span>
+              </Typography>
+              <Typography variant="body1" color="text.secondary">
+                Enterprise Command Center
+              </Typography>
+            </Box>
+
+            {error && (
+              <Alert severity="error" sx={{ mb: 3 }} className="login-elem">
+                {error}
+              </Alert>
+            )}
+
+            <Box component="form" onSubmit={handleLogin} className="login-elem">
+              <TextField
+                fullWidth
+                label="Email Address or Mobile Number"
+                variant="outlined"
+                margin="normal"
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
+                required
+                autoComplete="username"
+                sx={{ mb: 2 }}
+              />
+
+              <TextField
+                fullWidth
+                label="Password"
+                variant="outlined"
+                margin="normal"
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                autoComplete="current-password"
+                sx={{ mb: 4 }}
+                slotProps={{
+                  input: {
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        <IconButton
+                          onClick={() => setShowPassword(!showPassword)}
+                          edge="end"
+                        >
+                          {showPassword ? <VisibilityOff /> : <Visibility />}
+                        </IconButton>
+                      </InputAdornment>
+                    ),
+                  },
+                }}
+              />
+
+              <Button
+                type="submit"
+                fullWidth
+                variant="contained"
+                color="primary"
+                size="large"
+                disabled={loading}
+                sx={{ py: 1.5, fontSize: '1.1rem' }}
+              >
+                {loading ? 'Authenticating...' : 'Sign In'}
+              </Button>
+            </Box>
+          </>
+        ) : (
+          <Box className="login-elem">
+            <Box sx={{ mb: 4, textAlign: 'center' }}>
+               <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 1 }}>Select Property</Typography>
+               <Typography variant="body2" color="text.secondary">
+                 Your account has access to multiple locations. Please select one to continue.
+               </Typography>
+            </Box>
+            
+            <List sx={{ backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: 2, border: '1px solid var(--border-subtle)' }}>
+              {availableContexts.map((ctx, index) => (
+                <React.Fragment key={ctx.propertyId}>
+                  <ListItem disablePadding>
+                    <ListItemButton onClick={() => handleSelectContext(ctx)} sx={{ py: 2 }}>
+                      <ListItemIcon>
+                        <BusinessIcon color="primary" />
+                      </ListItemIcon>
+                      <ListItemText 
+                        primary={<Typography sx={{ fontWeight: 600 }}>{ctx.propertyName}</Typography>}
+                        secondary={<Typography variant="caption" sx={{ textTransform: 'capitalize' }}>{ctx.role}</Typography>}
+                      />
+                      <ArrowForwardIcon fontSize="small" sx={{ opacity: 0.3 }} />
+                    </ListItemButton>
+                  </ListItem>
+                  {index < availableContexts.length - 1 && <Divider sx={{ borderColor: 'var(--border-subtle)' }} />}
+                </React.Fragment>
+              ))}
+            </List>
+            
+            <Button 
+              fullWidth 
+              color="inherit" 
+              onClick={() => setShowContextSelection(false)} 
+              sx={{ mt: 3, opacity: 0.7 }}
+            >
+              Back to Login
+            </Button>
           </Box>
-          <Typography variant="h1" sx={{ fontSize: '2rem', mb: 1, color: '#f1f5f9' }}>
-            CRISIS<span style={{ color: '#ef4444' }}>RESPOND</span>
-          </Typography>
-          <Typography variant="body1" color="text.secondary">
-            Command Center Access
-          </Typography>
-        </Box>
-
-        {error && (
-          <Alert severity="error" sx={{ mb: 3 }} className="login-elem">
-            {error}
-          </Alert>
         )}
-
-        <Box component="form" onSubmit={handleLogin} className="login-elem">
-          <TextField
-            fullWidth
-            label="Email Address or Mobile Number"
-            variant="outlined"
-            margin="normal"
-            value={identifier}
-            onChange={(e) => setIdentifier(e.target.value)}
-            required
-            autoComplete="username"
-            sx={{ mb: 2 }}
-          />
-
-          <TextField
-            fullWidth
-            label="Password"
-            variant="outlined"
-            margin="normal"
-            type={showPassword ? 'text' : 'password'}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            autoComplete="current-password"
-            sx={{ mb: 4 }}
-            slotProps={{
-              input: {
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <IconButton
-                      onClick={() => setShowPassword(!showPassword)}
-                      edge="end"
-                    >
-                      {showPassword ? <VisibilityOff /> : <Visibility />}
-                    </IconButton>
-                  </InputAdornment>
-                ),
-              },
-            }}
-          />
-
-          <Button
-            type="submit"
-            fullWidth
-            variant="contained"
-            color="primary"
-            size="large"
-            disabled={loading}
-            sx={{ py: 1.5, fontSize: '1.1rem' }}
-          >
-            {loading ? 'Authenticating...' : 'Sign In'}
-          </Button>
-        </Box>
 
         <Box sx={{ mt: 4, textAlign: 'center' }} className="login-elem">
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-            <strong>Demo Admin:</strong> admin@hotel.com / password
-          </Typography>
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-            <strong>Demo Guest:</strong> guest@hotel.com / password
+            <strong>Enterprise Multi-Tenant:</strong> Access multiple locations with one account.
           </Typography>
         </Box>
       </Paper>

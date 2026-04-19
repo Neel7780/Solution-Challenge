@@ -12,12 +12,20 @@ const setAxiosAuthHeader = (token: string | null) => {
   delete axios.defaults.headers.common.Authorization;
 };
 
+export interface UserContext {
+  propertyId: number;
+  propertyName: string;
+  role: string;
+  organizationId?: number;
+}
+
 interface User {
   id: number;
   name: string;
   email: string;
-  role: 'guest' | 'staff' | 'security' | 'admin' | 'responder';
+  role: 'guest' | 'staff' | 'security' | 'admin' | 'responder' | 'super_admin' | 'org_admin';
   property_id: number;
+  organization_id?: number;
   room_number?: string;
 }
 
@@ -26,9 +34,13 @@ interface AuthState {
   token: string | null;
   isAuthenticated: boolean;
   isAuthChecking: boolean;
-  login: (token: string, user: User) => void;
+  contexts: UserContext[];
+  login: (token: string, user: User, contexts?: UserContext[]) => void;
   logout: () => void;
+  switchContext: (propertyId: number) => Promise<void>;
   isAdmin: () => boolean;
+  isSuperAdmin: () => boolean;
+  isOrgAdmin: () => boolean;
   isStaff: () => boolean;
   isGuest: () => boolean;
   loadFromStorage: () => Promise<void>;
@@ -39,29 +51,65 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   token: null,
   isAuthenticated: false,
   isAuthChecking: true,
+  contexts: [],
 
-  login: (token: string, user: User) => {
+  login: (token: string, user: User, contexts: UserContext[] = []) => {
     localStorage.setItem('token', token);
     localStorage.setItem('user', JSON.stringify(user));
+    if (contexts.length > 0) localStorage.setItem('contexts', JSON.stringify(contexts));
     setAxiosAuthHeader(token);
-    set({ user, token, isAuthenticated: true, isAuthChecking: false });
+    set({ user, token, contexts, isAuthenticated: true, isAuthChecking: false });
   },
 
   logout: () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    localStorage.removeItem('contexts');
     setAxiosAuthHeader(null);
-    set({ user: null, token: null, isAuthenticated: false, isAuthChecking: false });
+    set({ user: null, token: null, contexts: [], isAuthenticated: false, isAuthChecking: false });
+  },
+
+  switchContext: async (propertyId: number) => {
+    try {
+      const response = await axios.post(`${API_URL}/users/switch-context`, { propertyId });
+      const { token } = response.data;
+      
+      localStorage.setItem('token', token);
+      setAxiosAuthHeader(token);
+      
+      // Re-fetch profile to get updated context (role, etc.)
+      const profileRes = await axios.get(`${API_URL}/users/me`);
+      const updatedUser = profileRes.data.user;
+      
+      localStorage.setItem('user', JSON.stringify(updatedUser));
+      set({ user: updatedUser, token, isAuthenticated: true });
+      
+      // Optional: reload page to clear all other stores/states
+      window.location.reload();
+    } catch (error) {
+      console.error('Failed to switch context:', error);
+      throw error;
+    }
   },
 
   isAdmin: () => {
     const { user } = get();
-    return user?.role === 'admin';
+    return user?.role === 'admin' || user?.role === 'super_admin' || user?.role === 'org_admin';
+  },
+
+  isSuperAdmin: () => {
+    const { user } = get();
+    return user?.role === 'super_admin';
+  },
+
+  isOrgAdmin: () => {
+    const { user } = get();
+    return user?.role === 'org_admin';
   },
 
   isStaff: () => {
     const { user } = get();
-    return ['admin', 'staff', 'security', 'responder'].includes(user?.role || '');
+    return ['admin', 'staff', 'security', 'responder', 'super_admin', 'org_admin'].includes(user?.role || '');
   },
 
   isGuest: () => {
@@ -74,6 +122,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     const token = localStorage.getItem('token');
     const userStr = localStorage.getItem('user');
+    const contextsStr = localStorage.getItem('contexts');
 
     if (!token || !userStr) {
       setAxiosAuthHeader(null);
@@ -82,18 +131,21 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
 
     let parsedUser: User;
+    let parsedContexts: UserContext[] = [];
     try {
       parsedUser = JSON.parse(userStr) as User;
+      if (contextsStr) parsedContexts = JSON.parse(contextsStr);
     } catch {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
+      localStorage.removeItem('contexts');
       setAxiosAuthHeader(null);
       set({ user: null, token: null, isAuthenticated: false, isAuthChecking: false });
       return;
     }
 
     setAxiosAuthHeader(token);
-    set({ user: parsedUser, token, isAuthenticated: false });
+    set({ user: parsedUser, token, contexts: parsedContexts, isAuthenticated: false });
 
     try {
       const response = await axios.get(`${API_URL}/users/me`, {
@@ -106,6 +158,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     } catch {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
+      localStorage.removeItem('contexts');
       setAxiosAuthHeader(null);
       set({ user: null, token: null, isAuthenticated: false, isAuthChecking: false });
     }

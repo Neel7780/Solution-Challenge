@@ -100,20 +100,24 @@ export default function Triage() {
 
   useGSAP(() => {
     gsap.from('.triage-card', {
-      scale: 0.9,
-      y: 30,
+      scale: 0.95,
+      y: 15,
       opacity: 0,
       duration: 0.5,
       stagger: 0.1,
-      ease: 'back.out(1.5)',
+      ease: 'back.out(1.2)',
+      clearProps: 'all',
+      force3D: false,
     });
     gsap.from('.table-row', {
-      x: -20,
+      x: -15,
       opacity: 0,
       duration: 0.4,
       delay: 0.4,
       stagger: 0.05,
       ease: 'power2.out',
+      clearProps: 'all',
+      force3D: false,
     });
   }, { scope: containerRef });
 
@@ -137,6 +141,32 @@ export default function Triage() {
     }));
   }, [activeUsers]);
 
+  const exportToCSV = () => {
+    const headers = ['Name', 'Location/Room', 'Role', 'Safety Status', 'Last Updated', 'Latitude', 'Longitude'];
+    const csvContent = [
+      headers.join(','),
+      ...users.map(u => [
+        `"${u.name}"`,
+        `"${u.room}"`,
+        `"${u.role}"`,
+        `"${u.status.toUpperCase()}"`,
+        `"${u.time}"`,
+        u.latitude || '',
+        u.longitude || ''
+      ].join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `triage_roster_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const getStatusChip = (status: string) => {
     const config: Record<string, { color: 'success' | 'warning' | 'error' | 'default'; label: string }> = {
       safe: { color: 'success', label: 'SAFE' },
@@ -152,7 +182,14 @@ export default function Triage() {
     <Box ref={containerRef}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 4, alignItems: 'center' }}>
         <Typography variant="h2" sx={{ fontSize: '2rem' }}>Triage & Safety Tracking</Typography>
-        <Button variant="outlined" color="primary">Export List</Button>
+        <Button 
+          variant="outlined" 
+          color="primary" 
+          onClick={exportToCSV}
+          disabled={users.length === 0}
+        >
+          Export List
+        </Button>
       </Box>
 
       <Grid container spacing={3} sx={{ mb: 4 }}>

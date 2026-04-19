@@ -12,6 +12,8 @@ import { LocationProvider } from './src/context/LocationContext';
 import LoginScreen from './src/screens/LoginScreen';
 import MainTabNavigator from './src/navigation/MainTabNavigator';
 import PanicScreen from './src/screens/PanicScreen';
+import ContactsScreen from './src/screens/ContactsScreen';
+import SafetyGuideScreen from './src/screens/SafetyGuideScreen';
 
 const Stack = createStackNavigator<RootStackParamList>();
 
@@ -32,6 +34,26 @@ export default function App() {
                     presentation: 'modal',
                     animationTypeForReplace: 'pop'
                   }}
+                />
+                <Stack.Screen 
+                  name="EmergencyContacts" 
+                  component={ContactsScreen as any} 
+                  options={{ 
+                    headerShown: true, 
+                    title: 'Emergency Contacts',
+                    headerStyle: { backgroundColor: '#d32f2f' },
+                    headerTintColor: '#fff'
+                  }} 
+                />
+                <Stack.Screen 
+                  name="SafetyGuide" 
+                  component={SafetyGuideScreen as any} 
+                  options={{ 
+                    headerShown: true, 
+                    title: 'Safety Guide',
+                    headerStyle: { backgroundColor: '#d32f2f' },
+                    headerTintColor: '#fff'
+                  }} 
                 />
               </Stack.Navigator>
               <StatusBar style="auto" />

@@ -11,10 +11,24 @@ import {
   triggerPanic,
   updateLocation,
   updateProfile,
+  switchContext,
+  createUser,
+  updateUser,
+  deleteUser,
 } from '../controllers/userController';
 import { authenticate, requireRole } from '../middleware/auth';
 
 const router = Router();
+
+router.post('/', authenticate, requireRole(['org_admin', 'super_admin']), [
+  body('name').notEmpty(),
+  body('email').optional().isEmail(),
+  body('role').isIn(['staff', 'security', 'admin', 'responder', 'org_admin']),
+  body('password').isLength({ min: 8 }),
+], createUser);
+
+router.patch('/:id', authenticate, requireRole(['org_admin', 'super_admin']), updateUser);
+router.delete('/:id', authenticate, requireRole(['org_admin', 'super_admin']), deleteUser);
 
 router.post('/register', [
   body('name').notEmpty(),
@@ -38,7 +52,12 @@ router.post('/login', [
   body('identifier').optional().isString(),
   body('email').optional().isEmail(),
   body('password').notEmpty(),
+  body('propertyId').optional().isInt(),
 ], login);
+
+router.post('/switch-context', authenticate, [
+  body('propertyId').isInt(),
+], switchContext);
 
 router.get('/me', authenticate, getProfile);
 router.patch('/me', authenticate, updateProfile);
@@ -46,7 +65,8 @@ router.patch('/me/password', authenticate, [
   body('currentPassword').notEmpty(),
   body('newPassword').isLength({ min: 8 }),
 ], changePassword);
-router.get('/', authenticate, requireRole(['admin', 'security', 'staff']), getAllUsers);
+router.get('/', authenticate, requireRole(['admin', 'security', 'staff', 'org_admin', 'super_admin']), getAllUsers);
+
 
 router.post('/location', authenticate, [
   body('latitude').isFloat(),

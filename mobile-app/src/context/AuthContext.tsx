@@ -35,9 +35,22 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     }
   };
 
-  const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
+  const login = async (identifier: string, password: string, propertyId?: number): Promise<{ success: boolean; error?: string; requiresContextSelection?: boolean; contexts?: any[] }> => {
     try {
-      const response = await axios.post(`${API_URL}/users/login`, { email, password });
+      const response = await axios.post(`${API_URL}/users/login`, { 
+        identifier, 
+        password,
+        propertyId
+      });
+      
+      if (response.data.requiresContextSelection) {
+        return { 
+          success: true, 
+          requiresContextSelection: true, 
+          contexts: response.data.contexts 
+        };
+      }
+
       const { token, user } = response.data;
 
       await AsyncStorage.setItem('token', token);

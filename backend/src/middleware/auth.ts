@@ -16,6 +16,7 @@ export const authenticate = (req: Request, res: Response, next: NextFunction) =>
       userId: number;
       role: string;
       propertyId: number;
+      organizationId: number;
     };
     req.user = decoded;
     next();

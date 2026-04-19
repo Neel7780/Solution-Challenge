@@ -44,11 +44,13 @@ export default function GuestCheckIn() {
 
   useGSAP(() => {
     gsap.from('.anim-item', {
-      y: 20,
+      y: 15,
       opacity: 0,
       duration: 0.5,
       stagger: 0.1,
       ease: 'power2.out',
+      clearProps: 'all',
+      force3D: false,
     });
   }, { scope: containerRef });
 
@@ -74,50 +76,74 @@ export default function GuestCheckIn() {
   };
 
   return (
-    <Box ref={containerRef} sx={{ maxWidth: 600, mx: 'auto' }}>
-      <Typography variant="h2" sx={{ fontSize: '1.75rem', mb: 1 }} className="anim-item">
+    <Box ref={containerRef} sx={{ maxWidth: 600, mx: 'auto', py: 4 }}>
+      <Typography variant="h2" sx={{ fontSize: '2rem', mb: 1, fontWeight: 'bold', color: '#fff' }} className="anim-item">
         Safety Check-In
       </Typography>
-      <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }} className="anim-item">
+      <Typography variant="body1" sx={{ mb: 4, color: 'rgba(255,255,255,0.7)', lineHeight: 1.6 }} className="anim-item">
         During an emergency, please use this page to report your status to the command center.
       </Typography>
 
       {lastStatus && (
         <Alert 
           severity={lastStatus === 'safe' ? 'success' : 'error'} 
-          sx={{ mb: 4 }}
+          variant="filled"
+          sx={{ mb: 4, borderRadius: 2 }}
           className="anim-item"
         >
           Your last reported status: <strong>{lastStatus === 'safe' ? 'SAFE' : 'NEEDS HELP'}</strong>
         </Alert>
       )}
 
-      <Card className="glass anim-item" sx={{ mb: 4 }}>
-        <CardContent sx={{ p: 3 }}>
-          <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 2 }}>
+      <Card 
+        className="anim-item" 
+        sx={{ 
+          mb: 4, 
+          backgroundColor: 'rgba(255, 255, 255, 0.05)', 
+          border: '1px solid rgba(255, 255, 255, 0.1)',
+          borderRadius: 3,
+          boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+          backdropFilter: 'blur(10px)'
+        }}
+      >
+        <CardContent sx={{ p: 4 }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2, color: '#fff' }}>
             Provide Details (Optional)
           </Typography>
           <TextField
             fullWidth
             multiline
-            rows={3}
+            rows={4}
             placeholder="E.g., I am trapped in the stairwell on floor 2..."
             value={message}
             onChange={(e) => setMessage(e.target.value)}
-            sx={{ mb: 2 }}
+            sx={{ 
+              mb: 3,
+              '& .MuiOutlinedInput-root': {
+                backgroundColor: 'rgba(0, 0, 0, 0.2)',
+                color: '#fff',
+                '& fieldset': { borderColor: 'rgba(255, 255, 255, 0.2)' },
+                '&:hover fieldset': { borderColor: 'rgba(255, 255, 255, 0.3)' },
+                '&.Mui-focused fieldset': { borderColor: '#3b82f6' },
+              },
+              '& .MuiInputBase-input::placeholder': {
+                color: 'rgba(255, 255, 255, 0.4)',
+                opacity: 1
+              }
+            }}
           />
           <FormControlLabel
             control={
               <Switch 
                 checked={shareLocation} 
                 onChange={(e) => setShareLocation(e.target.checked)} 
-                color="secondary"
+                color="primary"
               />
             }
             label={
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <LocationIcon fontSize="small" />
-                <Typography variant="body2">Share precise location</Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, ml: 1 }}>
+                <LocationIcon fontSize="small" sx={{ color: '#3b82f6' }} />
+                <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.8)' }}>Share precise location</Typography>
               </Box>
             }
           />
@@ -132,7 +158,15 @@ export default function GuestCheckIn() {
           startIcon={<SafeIcon />}
           onClick={() => handleCheckIn('safe')}
           disabled={isSubmitting}
-          sx={{ py: 2, fontSize: '1.1rem', backgroundColor: '#22c55e', '&:hover': { backgroundColor: '#16a34a' } }}
+          sx={{ 
+            py: 2.5, 
+            fontSize: '1.1rem', 
+            fontWeight: 'bold',
+            borderRadius: 2,
+            backgroundColor: '#22c55e', 
+            boxShadow: '0 4px 14px rgba(34, 197, 94, 0.3)',
+            '&:hover': { backgroundColor: '#16a34a', boxShadow: '0 6px 20px rgba(34, 197, 94, 0.4)' } 
+          }}
         >
           I AM SAFE
         </Button>
@@ -143,7 +177,15 @@ export default function GuestCheckIn() {
           startIcon={<HelpIcon />}
           onClick={() => handleCheckIn('needs_help')}
           disabled={isSubmitting}
-          sx={{ py: 2, fontSize: '1.1rem', backgroundColor: '#f97316', '&:hover': { backgroundColor: '#ea580c' } }}
+          sx={{ 
+            py: 2.5, 
+            fontSize: '1.1rem', 
+            fontWeight: 'bold',
+            borderRadius: 2,
+            backgroundColor: '#f97316', 
+            boxShadow: '0 4px 14px rgba(249, 115, 22, 0.3)',
+            '&:hover': { backgroundColor: '#ea580c', boxShadow: '0 6px 20px rgba(249, 115, 22, 0.4)' } 
+          }}
         >
           I NEED HELP
         </Button>

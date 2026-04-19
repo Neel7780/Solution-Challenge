@@ -11,6 +11,7 @@ import dashboardRoutes from './routes/dashboard';
 import locationRoutes from './routes/locations';
 import notificationRoutes from './routes/notifications';
 import userRoutes from './routes/users';
+import platformRoutes from './routes/platform';
 import logger from './utils/logger';
 
 dotenv.config();
@@ -52,6 +53,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/locations', locationRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/platform', platformRoutes);
 
 app.get('/health', (req: any, res: any) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -67,6 +69,7 @@ app.get('/', (req: any, res: any) => {
       locations: '/api/locations',
       notifications: '/api/notifications',
       dashboard: '/api/dashboard',
+      platform: '/api/platform',
       health: '/health',
     },
   });
@@ -80,9 +83,19 @@ io.on('connection', (socket: any) => {
     logger.info(`Socket ${socket.id} joined property_${propertyId}`);
   });
 
+  socket.on('join_organization', (organizationId: number) => {
+    socket.join(`organization_${organizationId}`);
+    logger.info(`Socket ${socket.id} joined organization_${organizationId}`);
+  });
+
   socket.on('join_role', (role: string) => {
     socket.join(`role_${role}`);
     logger.info(`Socket ${socket.id} joined role_${role}`);
+  });
+
+  socket.on('join_user', (userId: number) => {
+    socket.join(`user_${userId}`);
+    logger.info(`Socket ${socket.id} joined user_${userId}`);
   });
 
   socket.on('location_update', async (data: any) => {
