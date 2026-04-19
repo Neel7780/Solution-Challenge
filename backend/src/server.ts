@@ -189,7 +189,7 @@ app.use((req: any, res: any) => {
   res.status(404).json({ error: 'Endpoint not found' });
 });
 
-const PORT = process.env.PORT || 3001;
+const PORT = Number(process.env.PORT) || 3001;
 
 async function startServer() {
   try {
