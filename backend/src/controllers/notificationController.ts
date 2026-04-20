@@ -11,6 +11,29 @@ if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
 export const sendMassNotification = async (req: Request, res: Response) => {
   const propertyId = req.user!.propertyId;
   const { message, channels = ['push'], zones } = req.body;
+  const requestedChannels: string[] = Array.isArray(channels) ? channels : ['push'];
+  const normalizedChannels = Array.from(new Set(
+    requestedChannels
+      .map((c) => String(c).trim().toLowerCase())
+      .map((c) => (c === 'inapp' ? 'push' : c))
+      .filter((c) => ['push', 'sms', 'email'].includes(c))
+  ));
+
+  const effectiveChannels = normalizedChannels.length > 0 ? normalizedChannels : ['push'];
+  const warnings: string[] = [];
+
+  const unsupportedChannels = requestedChannels.filter((raw) => {
+    const c = String(raw).trim().toLowerCase();
+    return c !== 'inapp' && !['push', 'sms', 'email'].includes(c);
+  });
+  if (unsupportedChannels.length > 0) {
+    warnings.push(`Ignored unsupported channels: ${unsupportedChannels.join(', ')}`);
+  }
+
+  if (effectiveChannels.includes('sms') && (!twilioClient || !process.env.TWILIO_PHONE_NUMBER)) {
+    warnings.push('SMS requested, but Twilio is not fully configured. Skipped SMS delivery.');
+  }
+
   try {
     const client = await pool.connect();
     const notifications: any[] = [];
@@ -29,7 +52,7 @@ export const sendMassNotification = async (req: Request, res: Response) => {
       const usersResult = await client.query(userQuery, params);
 
       for (const user of usersResult.rows) {
-        for (const channel of channels) {
+        for (const channel of effectiveChannels) {
           const notifResult = await client.query(
             `INSERT INTO notifications (recipient_type, recipient_id, channel, message, status)
              VALUES ($1, $2, $3, $4, $5) RETURNING *`,
@@ -41,12 +64,12 @@ export const sendMassNotification = async (req: Request, res: Response) => {
 
       await client.query('COMMIT');
 
-      if (channels.includes('push') && req.io) {
+      if (effectiveChannels.includes('push') && req.io) {
         req.io.to(`property_${propertyId}`).emit('mass_notification', { message, timestamp: new Date().toISOString() });
       }
 
       const smsClient = twilioClient;
-      if (channels.includes('sms') && smsClient) {
+      if (effectiveChannels.includes('sms') && smsClient && process.env.TWILIO_PHONE_NUMBER) {
         const smsPromises = usersResult.rows
           .filter((u: any) => u.phone)
           .map((user: any) =>
@@ -54,14 +77,22 @@ export const sendMassNotification = async (req: Request, res: Response) => {
               body: message,
               from: process.env.TWILIO_PHONE_NUMBER,
               to: user.phone,
-            }).catch((err: any) => logger.error('SMS send failed:', err))
+            }).catch((err: any) => {
+              logger.error('SMS send failed:', err);
+              warnings.push(`SMS failed for user ${user.id}`);
+            })
           );
         await Promise.allSettled(smsPromises);
       }
 
       logger.info(`Mass notification sent to property ${propertyId}`);
 
-      res.json({ success: true, message: `Notification sent to ${usersResult.rows.length} users`, notifications });
+      res.json({
+        success: true,
+        message: `Notification sent to ${usersResult.rows.length} users`,
+        notifications,
+        warnings: warnings.length > 0 ? warnings : undefined,
+      });
     } catch (error: any) {
       await client.query('ROLLBACK');
       throw error;

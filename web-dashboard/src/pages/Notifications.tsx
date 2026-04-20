@@ -60,7 +60,7 @@ export default function Notifications() {
 
   const [channels, setChannels] = useState<{ [key: string]: boolean }>({
     push: true,
-    sms: true,
+    sms: false,
     email: false,
     inApp: true
   });
@@ -104,11 +104,17 @@ export default function Notifications() {
   const handleSend = async () => {
     setIsSubmitting(true);
     try {
-      await sendMutation.mutateAsync();
-      alert('Notification broadcast sent successfully.');
-    } catch (err) {
+      const result = await sendMutation.mutateAsync();
+      const warnings = result?.data?.warnings;
+      if (Array.isArray(warnings) && warnings.length > 0) {
+        alert(`Broadcast sent with warnings:\n- ${warnings.join('\n- ')}`);
+      } else {
+        alert('Notification broadcast sent successfully.');
+      }
+    } catch (err: any) {
       console.error(err);
-      alert('Unable to send broadcast. Please check the backend connection and try again.');
+      const serverError = err?.response?.data?.error;
+      alert(serverError ? `Unable to send broadcast: ${serverError}` : 'Unable to send broadcast. Please check the backend connection and try again.');
     } finally {
       setIsSubmitting(false);
       setOpenConfirm(false);

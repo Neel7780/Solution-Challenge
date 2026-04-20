@@ -1,4 +1,4 @@
-import { pool, queryWithContext } from '../database/connection';
+import { pool } from '../database/connection';
 import logger from '../utils/logger';
 import type { Request, Response } from 'express';
 import { enrichIncident } from '../services/intelligenceService';
@@ -108,9 +108,10 @@ export const reportCrisis = async (req: Request, res: Response) => {
 
       await client.query('COMMIT');
 
-      // Fetch organization ID to notify org admins
-      const orgResult = await client.query('SELECT organization_id FROM properties WHERE id = $1', [resolvedPropertyId]);
-      const orgId = orgResult.rows[0]?.organization_id;
+      // Fetch organization ID and Property data for enrichment
+      const propertyResult = await client.query('SELECT organization_id, floor_plan_data FROM properties WHERE id = $1', [resolvedPropertyId]);
+      const orgId = propertyResult.rows[0]?.organization_id;
+      const floorPlanData = propertyResult.rows[0]?.floor_plan_data;
 
       if (req.io) {
         req.io.to(`property_${resolvedPropertyId}`).emit('crisis_reported', { incident, timestamp: new Date().toISOString() });
@@ -129,9 +130,28 @@ export const reportCrisis = async (req: Request, res: Response) => {
         }
       }
 
+      // SLOW PATH: Asynchronous LLM Enrichment for Manual Reports
+      const activeUsersResult = await pool.query('SELECT COUNT(*) FROM users WHERE property_id = $1 AND status = $2', [resolvedPropertyId, 'active']);
+      const aggregatedState = {
+        propertyContext: floorPlanData,
+        activeUsersCount: parseInt(activeUsersResult.rows[0]?.count || '0'),
+        lastEvents: [{ type, description, latitude, longitude }],
+        description: description || `Manual report of ${type}`
+      };
+
+      enrichIncident(incident.id, aggregatedState).then((enrichment) => {
+        if (enrichment && req.io) {
+          req.io.to(`property_${resolvedPropertyId}`).emit('incident_enriched', { 
+            incidentId: incident.id, 
+            enrichment, 
+            timestamp: new Date().toISOString() 
+          });
+        }
+      });
+
       logger.info(`Crisis reported: ${type} at property ${resolvedPropertyId}, incident ID: ${incident.id}`);
 
-      res.status(201).json({ success: true, incident, message: 'Crisis reported successfully. Emergency services have been notified.' });
+      res.status(201).json({ success: true, incident, message: 'Crisis reported successfully. AI is generating an evacuation plan.' });
     } catch (error: any) {
       await client.query('ROLLBACK');
       throw error;
@@ -369,14 +389,28 @@ export const getActiveIncidents = async (req: Request, res: Response) => {
     `;
     const params: any[] = [];
 
+    // Scope by access context without requiring incidents.organization_id,
+    // because many prototype incidents were created before that field was populated.
+    if (userContext.role !== 'super_admin') {
+      if (userContext.role === 'org_admin') {
+        params.push(userContext.organizationId);
+        baseQuery += ` AND (
+          i.organization_id = $${params.length}
+          OR i.property_id IN (SELECT id FROM properties WHERE organization_id = $${params.length})
+        )`;
+      } else {
+        params.push(userContext.propertyId);
+        baseQuery += ` AND i.property_id = $${params.length}`;
+      }
+    }
+
     if (type) {
       params.push(type);
       baseQuery += ` AND i.incident_type = $${params.length}`;
     }
 
     baseQuery += ` ORDER BY i.created_at DESC`;
-
-    const result = await queryWithContext(userContext, baseQuery, params, 'i');
+    const result = await pool.query(baseQuery, params);
 
     res.json({ success: true, count: result.rows.length, incidents: result.rows });
   } catch (error: any) {
@@ -472,8 +506,17 @@ export const getIncidentDetails = async (req: Request, res: Response) => {
 
 export const updateIncidentStatus = async (req: Request, res: Response) => {
   const { id } = req.params;
-  const { status } = req.body;
-  const propertyId = req.user!.propertyId;
+  const { status, resolutionReportText } = req.body;
+  const user = req.user!;
+  const propertyId = user.propertyId;
+
+  if (status === 'resolved' && user.role !== 'org_admin') {
+    return res.status(403).json({ error: 'Only org admins can mark incidents as resolved.' });
+  }
+
+  if (status === 'resolved' && (!resolutionReportText || String(resolutionReportText).trim().length < 10)) {
+    return res.status(400).json({ error: 'A resolution report (minimum 10 characters) is required to resolve an incident.' });
+  }
 
   try {
     const client = await pool.connect();
@@ -490,6 +533,25 @@ export const updateIncidentStatus = async (req: Request, res: Response) => {
       if (result.rows.length === 0) {
         await client.query('ROLLBACK');
         return res.status(404).json({ error: 'Incident not found or access denied' });
+      }
+
+      if (status === 'resolved') {
+        const incident = result.rows[0];
+        const propertyResult = await client.query('SELECT organization_id FROM properties WHERE id = $1', [incident.property_id]);
+        const organizationId = propertyResult.rows[0]?.organization_id || null;
+
+        await client.query(
+          `INSERT INTO incident_resolution_reports (
+             incident_id, property_id, organization_id, created_by, report_text, published, published_at
+           ) VALUES ($1, $2, $3, $4, $5, TRUE, CURRENT_TIMESTAMP)
+           ON CONFLICT (incident_id)
+           DO UPDATE SET
+             report_text = EXCLUDED.report_text,
+             created_by = EXCLUDED.created_by,
+             published = TRUE,
+             published_at = CURRENT_TIMESTAMP`,
+          [incident.id, incident.property_id, organizationId, user.userId, String(resolutionReportText).trim()]
+        );
       }
 
       await client.query('COMMIT');
@@ -526,6 +588,38 @@ export const updateIncidentStatus = async (req: Request, res: Response) => {
   } catch (error: any) {
     logger.error('Error updating incident status:', error);
     res.status(500).json({ error: 'Failed to update incident status' });
+  }
+};
+
+export const getPublishedResolutionReports = async (req: Request, res: Response) => {
+  const limit = Math.min(Number(req.query.limit) || 50, 200);
+
+  try {
+    const result = await pool.query(
+      `SELECT
+         rr.id,
+         rr.incident_id,
+         rr.report_text,
+         rr.published_at,
+         i.incident_type,
+         i.severity,
+         i.created_at AS incident_created_at,
+         p.name AS property_name,
+         o.name AS organization_name
+       FROM incident_resolution_reports rr
+       JOIN incidents i ON rr.incident_id = i.id
+       LEFT JOIN properties p ON rr.property_id = p.id
+       LEFT JOIN organizations o ON rr.organization_id = o.id
+       WHERE rr.published = TRUE
+       ORDER BY rr.published_at DESC
+       LIMIT $1`,
+      [limit]
+    );
+
+    res.json({ success: true, count: result.rows.length, reports: result.rows });
+  } catch (error: any) {
+    logger.error('Error fetching published resolution reports:', error);
+    res.status(500).json({ error: 'Failed to fetch published reports' });
   }
 };
 
@@ -566,11 +660,26 @@ export const updatePropertyStatus = async (req: Request, res: Response) => {
   }
 
   try {
-    const result = await pool.query(
-      `UPDATE properties SET status = $1, updated_at = CURRENT_TIMESTAMP 
-       WHERE id = $2 RETURNING *`,
-      [status, propertyId]
+    const statusColumnCheck = await pool.query(
+      `SELECT 1
+       FROM information_schema.columns
+       WHERE table_name = 'properties' AND column_name = 'status'
+       LIMIT 1`
     );
+
+    const hasStatusColumn = statusColumnCheck.rows.length > 0;
+
+    const result = hasStatusColumn
+      ? await pool.query(
+          `UPDATE properties SET status = $1, updated_at = CURRENT_TIMESTAMP
+           WHERE id = $2 RETURNING *`,
+          [status, propertyId]
+        )
+      : await pool.query(
+          `UPDATE properties SET updated_at = CURRENT_TIMESTAMP
+           WHERE id = $1 RETURNING *`,
+          [propertyId]
+        );
 
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Property not found' });
@@ -592,7 +701,15 @@ export const updatePropertyStatus = async (req: Request, res: Response) => {
       }
     }
 
-    res.json({ success: true, property: result.rows[0] });
+    const propertyPayload = hasStatusColumn
+      ? result.rows[0]
+      : { ...result.rows[0], status };
+
+    res.json({
+      success: true,
+      property: propertyPayload,
+      warning: hasStatusColumn ? undefined : 'properties.status column is missing in DB; status change was broadcast in real time but not persisted.',
+    });
   } catch (error: any) {
     logger.error('Error updating property status:', error);
     res.status(500).json({ error: 'Failed to update property status' });
@@ -654,23 +771,12 @@ export const createAutomatedIncident = async (io: any, data: any) => {
 
       const incident = incidentResult.rows[0];
 
-      // 2. Deterministic Logic: Evacuation Routes (Placeholder for A* algorithm)
-      const evacuationRoutes = {
-        primary: "Exit via North Stairwell",
-        secondary: "Exit via Main Lobby",
-        blocked: zoneId ? [zoneId] : []
-      };
-
-      await client.query(
-        `UPDATE incidents SET evacuation_routes = $1 WHERE id = $2`,
-        [JSON.stringify(evacuationRoutes), incident.id]
-      );
-
       await client.query('COMMIT');
 
       // 3. FAST PATH: Immediate Broadcast
-      const orgResult = await client.query('SELECT organization_id FROM properties WHERE id = $1', [propertyId]);
-      const orgId = orgResult.rows[0]?.organization_id;
+      const propertyResult = await client.query('SELECT organization_id, floor_plan_data FROM properties WHERE id = $1', [propertyId]);
+      const orgId = propertyResult.rows[0]?.organization_id;
+      const floorPlanData = propertyResult.rows[0]?.floor_plan_data;
 
       if (io) {
         io.to(`property_${propertyId}`).emit('crisis_reported', { incident, timestamp: new Date().toISOString() });
@@ -686,11 +792,10 @@ export const createAutomatedIncident = async (io: any, data: any) => {
       logger.info(`Automated incident created for property ${propertyId}, ID: ${incident.id} (Confidence: ${confidence})`);
 
       // 4. SLOW PATH: Asynchronous LLM Enrichment
-      const propertyResult = await client.query('SELECT floor_plan_data FROM properties WHERE id = $1', [propertyId]);
-      const activeUsersResult = await client.query('SELECT COUNT(*) FROM users WHERE property_id = $1 AND status = $2', [propertyId, 'active']);
+      const activeUsersResult = await pool.query('SELECT COUNT(*) FROM users WHERE property_id = $1 AND status = $2', [propertyId, 'active']);
 
       const aggregatedState = {
-        propertyContext: propertyResult.rows[0]?.floor_plan_data,
+        propertyContext: floorPlanData,
         activeUsersCount: parseInt(activeUsersResult.rows[0]?.count || '0'),
         lastEvents: [data],
         description: description

@@ -35,17 +35,20 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       console.log('Socket connected');
       set({ connected: true });
 
-      // Join default rooms
+      // Always join the simulation property room (prototype hardcode)
+      socket.emit('join_property', 2);
+
+      // Join default rooms based on user context
       const userStr = localStorage.getItem('user');
       if (userStr) {
         try {
           const user = JSON.parse(userStr);
           if (user.id) socket.emit('join_user', user.id);
-          if (user.property_id) socket.emit('join_property', user.property_id);
+          if (user.property_id && user.property_id !== 2) socket.emit('join_property', user.property_id);
           if (user.organization_id) socket.emit('join_organization', user.organization_id);
           if (user.role) socket.emit('join_role', user.role);
         } catch {
-          socket.emit('join_property', 1);
+          // Already joined property_2 above
         }
       }
     });
@@ -130,6 +133,39 @@ export const useSocketStore = create<SocketState>((set, get) => ({
 
     socket.on('user_location_update', (data) => {
       // Silently handle — no notification needed
+    });
+
+    // ═══ Simulation Crisis Sync Events ═══
+
+    socket.on('staff_auto_assigned', (data) => {
+      const coords = data?.fireCoordinates;
+      const coordText = coords ? ` Fire location: (${coords.x}, ${coords.y}).` : '';
+      addNotif({
+        type: 'crisis',
+        title: '🚨 Staff Auto-Assigned',
+        message: (data.message || `${data.assignedStaff?.length || 0} staff members assigned to fire emergency`) + coordText,
+        severity: 'critical',
+      });
+    });
+
+    socket.on('task_assigned', (data) => {
+      const coords = data?.fireCoordinates;
+      const coordText = coords ? ` Fire location: (${coords.x}, ${coords.y}).` : '';
+      addNotif({
+        type: 'crisis',
+        title: '🚨 URGENT Task Assigned',
+        message: (data.message || data.task || 'Urgent emergency assignment received.') + coordText,
+        severity: 'critical',
+      });
+    });
+
+    socket.on('evacuation_triggered', (data) => {
+      addNotif({
+        type: 'crisis',
+        title: '🚨 EVACUATION ORDER',
+        message: data.message || 'Immediate evacuation ordered. Proceed to nearest exit.',
+        severity: 'critical',
+      });
     });
 
     set({ socket });

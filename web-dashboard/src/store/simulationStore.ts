@@ -3,7 +3,7 @@ import { create } from 'zustand';
 /* ─── Types ─── */
 
 export type SimTool = 'select' | 'fire' | 'agent' | 'extinguish';
-export type AgentStatus = 'idle' | 'evacuating' | 'trapped' | 'safe' | 'dead';
+export type AgentStatus = 'idle' | 'evacuating' | 'responding' | 'extinguishing' | 'trapped' | 'safe' | 'dead';
 export type AgentMode = 'manual' | 'ai';
 
 export interface SimAgent {
@@ -96,6 +96,13 @@ interface SimulationState {
   resetLocal: () => void;
   godotConnected: boolean;
   setGodotConnected: (connected: boolean) => void;
+
+  // Crisis sync state
+  crisisActive: boolean;
+  crisisIncidentId: number | null;
+  assignedStaff: { id: number; name: string; role: string; task: string }[];
+  setCrisisActive: (active: boolean, incidentId?: number | null) => void;
+  setAssignedStaff: (staff: { id: number; name: string; role: string; task: string }[]) => void;
 }
 
 const DEFAULT_METRICS: SimMetrics = {
@@ -218,5 +225,15 @@ export const useSimulationStore = create<SimulationState>((set, get) => ({
     isRunning: false,
     startTime: null,
     metrics: DEFAULT_METRICS,
+    crisisActive: false,
+    crisisIncidentId: null,
+    assignedStaff: [],
   }),
+
+  // Crisis sync
+  crisisActive: false,
+  crisisIncidentId: null,
+  assignedStaff: [],
+  setCrisisActive: (active, incidentId = null) => set({ crisisActive: active, crisisIncidentId: incidentId }),
+  setAssignedStaff: (staff) => set({ assignedStaff: staff }),
 }));

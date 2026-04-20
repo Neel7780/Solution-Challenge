@@ -266,6 +266,20 @@ export async function initDatabase() {
       )
     `);
 
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS incident_resolution_reports (
+        id SERIAL PRIMARY KEY,
+        incident_id INTEGER UNIQUE REFERENCES incidents(id) ON DELETE CASCADE,
+        property_id INTEGER REFERENCES properties(id),
+        organization_id INTEGER REFERENCES organizations(id),
+        created_by INTEGER REFERENCES users(id),
+        report_text TEXT NOT NULL,
+        published BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        published_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
     await client.query('CREATE INDEX IF NOT EXISTS idx_properties_org ON properties(organization_id)');
     await client.query('CREATE INDEX IF NOT EXISTS idx_incidents_status ON incidents(status)');
     await client.query('CREATE INDEX IF NOT EXISTS idx_incidents_property ON incidents(property_id)');
@@ -283,6 +297,8 @@ export async function initDatabase() {
     await client.query('CREATE INDEX IF NOT EXISTS idx_public_reports_created ON public_crisis_reports(created_at)');
     await client.query('CREATE INDEX IF NOT EXISTS idx_simulation_runs_property ON simulation_runs(property_id)');
     await client.query('CREATE INDEX IF NOT EXISTS idx_simulation_runs_started ON simulation_runs(started_at)');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_resolution_reports_published ON incident_resolution_reports(published, published_at)');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_resolution_reports_incident ON incident_resolution_reports(incident_id)');
 
     logger.info('Database initialized successfully');
   } finally {

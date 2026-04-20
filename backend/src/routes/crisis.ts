@@ -5,6 +5,7 @@ import {
   getActiveIncidents,
   getIncident,
   getIncidentDetails,
+  getPublishedResolutionReports,
   getPublicCrisisReports,
   reportPublicCrisis,
   reportCrisis,
@@ -47,6 +48,9 @@ router.post('/public-report', publicReportLimiter, [
   body('reporterContact').optional().isString(),
 ], reportPublicCrisis);
 
+// Public endpoint (no auth) for published post-incident org-admin reports
+router.get('/public-resolution-reports', getPublishedResolutionReports);
+
 router.get('/public-reports', authenticate, requireRole(['admin', 'security', 'responder']), getPublicCrisisReports);
 router.patch('/public-reports/:id', authenticate, requireRole(['admin', 'security', 'responder']), [
   body('action').isIn(['escalate', 'dismiss']),
@@ -60,6 +64,6 @@ router.get('/:id/full', authenticate, getIncidentDetails);
 router.post('/:id/resolve', authenticate, resolveIncident);
 
 router.post('/property/:propertyId/status', authenticate, requireRole(['admin', 'security', 'org_admin']), updatePropertyStatus);
-router.get('/property/:propertyId/safety-roster', authenticate, requireRole(['admin', 'security']), getSafetyRoster);
+router.get('/property/:propertyId/safety-roster', authenticate, requireRole(['admin', 'security', 'org_admin', 'super_admin', 'responder']), getSafetyRoster);
 
 export default router;

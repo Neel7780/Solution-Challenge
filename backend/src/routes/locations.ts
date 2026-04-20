@@ -15,7 +15,7 @@ router.get('/zones/:propertyId', authenticate, getZones);
 router.get('/zones/detail/:zoneId', authenticate, getZoneDetails);
 router.get('/occupancy/:propertyId', authenticate, getOccupancy);
 router.get('/history/:userId', authenticate, getUserLocationHistory);
-router.get('/zone-users/:zoneId', authenticate, requireRole(['admin', 'security', 'staff', 'responder']), getUsersInZone);
-router.get('/active-users/:propertyId', authenticate, requireRole(['admin', 'security', 'staff', 'responder']), getAllActiveLocations);
+router.get('/zone-users/:zoneId', authenticate, requireRole(['admin', 'security', 'staff', 'responder', 'org_admin', 'super_admin']), getUsersInZone);
+router.get('/active-users/:propertyId', authenticate, requireRole(['admin', 'security', 'staff', 'responder', 'org_admin', 'super_admin']), getAllActiveLocations);
 
 export default router;

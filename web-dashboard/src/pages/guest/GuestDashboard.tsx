@@ -9,6 +9,12 @@ import {
   Grid,
   Alert,
   IconButton,
+  Snackbar,
+  Alert as MuiAlert,
+  List,
+  ListItem,
+  ListItemIcon,
+  ListItemText,
 } from '@mui/material';
 import {
   WarningAmber as WarningIcon,
@@ -16,11 +22,16 @@ import {
   Security as SecurityIcon,
   CheckCircle as CheckCircleIcon,
   ReportProblem as ReportIcon,
+  DirectionsRun as RunIcon,
+  Info as InfoIcon,
+  TipsAndUpdates as TipIcon,
+  Shield as ShieldIcon,
 } from '@mui/icons-material';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
 import { useAuthStore } from '../../store/authStore';
 import { useNotificationStore } from '../../store/notificationStore';
+import { useSocketStore } from '../../store/socketStore';
 import axios from 'axios';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
@@ -29,22 +40,74 @@ export default function GuestDashboard() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const { notifications } = useNotificationStore();
+  const { socket } = useSocketStore();
   const containerRef = useRef(null);
   const panicRef = useRef<HTMLButtonElement>(null);
 
-  const [activeIncident, setActiveIncident] = useState(false);
+  const [activeIncident, setActiveIncident] = useState<any>(null);
   const [isSendingSOS, setIsSendingSOS] = useState(false);
+  const [assignedStaff, setAssignedStaff] = useState<any[]>([]);
+  
+  // Toast notifications
+  const [toastOpen, setToastOpen] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const [toastSeverity, setToastSeverity] = useState<'success' | 'info' | 'warning' | 'error'>('info');
+
+  const showToast = (message: string, severity: 'success' | 'info' | 'warning' | 'error' = 'info') => {
+    setToastMessage(message);
+    setToastSeverity(severity);
+    setToastOpen(true);
+  };
+
+  const fetchActiveIncident = async () => {
+    try {
+      const res = await axios.get(`${API_URL}/crisis/active?propertyId=${user?.property_id || 1}`);
+      if (res.data.incidents && res.data.incidents.length > 0) {
+        // Fetch full details for the first active incident
+        const detailsRes = await axios.get(`${API_URL}/crisis/${res.data.incidents[0].id}`);
+        setActiveIncident(detailsRes.data.incident);
+      } else {
+        setActiveIncident(null);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   // Check for active incidents
   useEffect(() => {
-    axios.get(`${API_URL}/crisis/active?propertyId=${user?.property_id || 1}`)
-      .then(res => {
-        if (res.data.incidents && res.data.incidents.length > 0) {
-          setActiveIncident(true);
-        }
-      })
-      .catch(console.error);
+    fetchActiveIncident();
   }, [user]);
+
+  // Listen for real-time updates
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleCrisis = () => fetchActiveIncident();
+    const handleEnrichment = (data: any) => {
+      if (activeIncident && data.incidentId === activeIncident.id) {
+        fetchActiveIncident();
+      }
+    };
+
+    socket.on('crisis_reported', handleCrisis);
+    socket.on('incident_enriched', handleEnrichment);
+    socket.on('incident_status_update', handleCrisis);
+
+    // Listen for staff assignments
+    const handleStaffAssigned = (data: any) => {
+      setAssignedStaff(data.assignedStaff || []);
+      showToast('Help is on the way! Staff has been assigned.', 'success');
+    };
+    socket.on('staff_auto_assigned', handleStaffAssigned);
+
+    return () => {
+      socket.off('crisis_reported', handleCrisis);
+      socket.off('incident_enriched', handleEnrichment);
+      socket.off('incident_status_update', handleCrisis);
+      socket.off('staff_auto_assigned', handleStaffAssigned);
+    };
+  }, [socket, activeIncident]);
 
   const triggerPanic = async () => {
     if (isSendingSOS) {
@@ -101,22 +164,102 @@ export default function GuestDashboard() {
         Your safety is our top priority.
       </Typography>
 
-      {/* Status Banner */}
+      {/* Status Banner & AI Plan */}
       {activeIncident ? (
-        <Alert
-          icon={<WarningIcon fontSize="inherit" />}
-          severity="error"
-          sx={{ mb: 4, borderRadius: 3 }}
-          className="stagger-item glow-red"
-          action={
-            <Button color="inherit" size="small" onClick={() => navigate('/guest/check-in')}>
-              Check-In NOW
-            </Button>
-          }
-        >
-          <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>Active Emergency</Typography>
-          Please check the Alerts tab for instructions.
-        </Alert>
+        <Box sx={{ mb: 4 }} className="stagger-item">
+          <Alert
+            icon={<WarningIcon fontSize="inherit" />}
+            severity="error"
+            sx={{ mb: 2, borderRadius: 3 }}
+            className="glow-red"
+            action={
+              <Button color="inherit" size="small" onClick={() => navigate('/guest/check-in')}>
+                Check-In NOW
+              </Button>
+            }
+          >
+            <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>Active {activeIncident.incident_type.toUpperCase()} Emergency</Typography>
+            <Typography variant="body2" sx={{ mt: 1, mb: 1, fontWeight: 500, opacity: 0.9 }}>
+              {activeIncident.description || 'A fire has been detected.'}
+            </Typography>
+            <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+              {activeIncident.mass_alert_message || 'Please follow the emergency instructions below.'}
+            </Typography>
+          </Alert>
+
+          {/* Real-time Responders List */}
+          {assignedStaff.length > 0 && (
+            <Card className="glass" sx={{ mb: 3, border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: 3, background: 'rgba(59, 130, 246, 0.05)' }}>
+              <CardContent sx={{ pb: '16px !important' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                  <SecurityIcon sx={{ mr: 1, color: '#3b82f6' }} />
+                  <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: '#60a5fa' }}>
+                    Responders Dispatched
+                  </Typography>
+                </Box>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                  The following personnel are currently en route to assist you:
+                </Typography>
+                <List dense sx={{ p: 0 }}>
+                  {assignedStaff.map((staff, idx) => (
+                    <ListItem key={idx} sx={{ px: 0, py: 0.5 }}>
+                      <ListItemIcon sx={{ minWidth: 32 }}>
+                        <ShieldIcon sx={{ fontSize: 18, color: '#3b82f6' }} />
+                      </ListItemIcon>
+                      <ListItemText 
+                        primary={staff.name} 
+                        secondary={<span style={{ textTransform: 'capitalize', color: 'rgba(255,255,255,0.5)' }}>{staff.role}</span>}
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+              </CardContent>
+            </Card>
+          )}
+
+          {activeIncident.evacuation_routes && (
+            <Card className="glass-strong" sx={{ border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: 3 }}>
+              <CardContent>
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                  <RunIcon sx={{ mr: 1, color: '#ef4444' }} />
+                  <Typography variant="h6" sx={{ fontWeight: 'bold' }}>Safe Exit Plan (AI Generated)</Typography>
+                </Box>
+                
+                {activeIncident.evacuation_routes.guestEmergencyPlan && (
+                  <Box sx={{ mb: 3 }}>
+                    <Typography variant="subtitle2" color="primary" sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                      <InfoIcon sx={{ fontSize: 16, mr: 0.5 }} /> YOUR STEPS:
+                    </Typography>
+                    {activeIncident.evacuation_routes.guestEmergencyPlan.map((step: string, i: number) => (
+                      <Typography key={i} variant="body2" sx={{ mb: 0.5 }}>• {step}</Typography>
+                    ))}
+                  </Box>
+                )}
+
+                <Grid container spacing={2}>
+                  {activeIncident.evacuation_routes.safeExits && (
+                    <Grid size={{ xs: 6 }}>
+                      <Typography variant="subtitle2" color="success.main" sx={{ mb: 1 }}>RECOMMENDED EXITS:</Typography>
+                      {activeIncident.evacuation_routes.safeExits.map((exit: string, i: number) => (
+                        <Typography key={i} variant="caption" sx={{ display: 'block', fontWeight: 'bold' }}>- {exit}</Typography>
+                      ))}
+                    </Grid>
+                  )}
+                  {activeIncident.evacuation_routes.tips && (
+                    <Grid size={{ xs: 6 }}>
+                      <Typography variant="subtitle2" color="warning.main" sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                        <TipIcon sx={{ fontSize: 16, mr: 0.5 }} /> SAFETY TIPS:
+                      </Typography>
+                      {activeIncident.evacuation_routes.tips.map((tip: string, i: number) => (
+                        <Typography key={i} variant="caption" sx={{ display: 'block' }}>• {tip}</Typography>
+                      ))}
+                    </Grid>
+                  )}
+                </Grid>
+              </CardContent>
+            </Card>
+          )}
+        </Box>
       ) : (
         <Alert
           icon={<CheckCircleIcon fontSize="inherit" />}
@@ -192,6 +335,23 @@ export default function GuestDashboard() {
           </Card>
         </Grid>
       </Grid>
+
+      {/* Snackbar for Popups */}
+      <Snackbar
+        open={toastOpen}
+        autoHideDuration={6000}
+        onClose={() => setToastOpen(false)}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+      >
+        <MuiAlert 
+          onClose={() => setToastOpen(false)} 
+          severity={toastSeverity} 
+          sx={{ width: '100%', borderRadius: 2, boxShadow: '0 8px 32px rgba(0,0,0,0.4)' }}
+          variant="filled"
+        >
+          {toastMessage}
+        </MuiAlert>
+      </Snackbar>
     </Box>
   );
 }

@@ -5,12 +5,37 @@ export interface EnrichmentData {
   severity: 'low' | 'medium' | 'high' | 'critical';
   massAlertMessage: string;
   responderActionPlan: string;
+  evacuationRoutes?: {
+    guestEmergencyPlan: string[];
+    staffEvacuationPlan: string[];
+    safeExits: string[];
+    tips: string[];
+  };
 }
 
 const FALLBACK_ENRICHMENT: EnrichmentData = {
   severity: 'high',
   massAlertMessage: "EMERGENCY DETECTED. Please evacuate immediately via the nearest safe exit and follow all staff instructions.",
-  responderActionPlan: "1. Dispatch emergency teams to the affected area. 2. Begin full property evacuation protocols. 3. Verify all zones are clear."
+  responderActionPlan: "1. Dispatch emergency teams to the affected area. 2. Begin full property evacuation protocols. 3. Verify all zones are clear.",
+  evacuationRoutes: {
+    guestEmergencyPlan: [
+      "Stay calm and alert.",
+      "Follow the illuminated exit signs.",
+      "Do not use elevators.",
+      "Once outside, proceed to the designated assembly point."
+    ],
+    staffEvacuationPlan: [
+      "Security: Clear the North wing and assist elderly occupants.",
+      "Staff: Proceed to assembly point and conduct headcount.",
+      "Responders: Deploy fire suppression systems in Zone 2."
+    ],
+    safeExits: ["Main Entrance", "North Stairwell", "South Fire Escape"],
+    tips: [
+      "Stay low to the ground if there is smoke.",
+      "Touch doors with the back of your hand before opening.",
+      "If you are trapped, seal the door with wet cloths."
+    ]
+  }
 };
 
 export const enrichIncident = async (incidentId: number, aggregatedState: any): Promise<EnrichmentData> => {
@@ -33,25 +58,32 @@ export const enrichIncident = async (incidentId: number, aggregatedState: any): 
     3. SEVERITY MUST be one of: "low", "medium", "high", "critical".
     4. massAlertMessage should be concise and instructional for occupants.
     5. responderActionPlan should be clear, bulleted steps for security teams.
+    6. evacuationRoutes MUST be based on the provided floor_plan_data (if available).
     
     JSON STRUCTURE:
     {
       "severity": "low" | "medium" | "high" | "critical",
       "massAlertMessage": "string",
-      "responderActionPlan": "string"
+      "responderActionPlan": "string",
+      "evacuationRoutes": {
+        "guestEmergencyPlan": ["string"],
+        "staffEvacuationPlan": ["string"],
+        "safeExits": ["string"],
+        "tips": ["string"]
+      }
     }
   `;
 
   const userPrompt = `
     CONTEXT:
-    Property Context: ${JSON.stringify(aggregatedState.propertyContext || {})}
+    Property Context (Floor Plan Data): ${JSON.stringify(aggregatedState.propertyContext || {})}
     Active Users: ${aggregatedState.activeUsersCount || 0}
     Detections: ${JSON.stringify(aggregatedState.lastEvents || [])}
     Incident Description: ${aggregatedState.description || 'Fire detected'}
   `;
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 1500); // 1.5s timeout for ultra-low latency
+  const timeoutId = setTimeout(() => controller.abort(), 2000); // 2s timeout for enrichment
 
   try {
     const response = await fetch(`${baseUrl}/chat/completions`, {
@@ -92,9 +124,16 @@ export const enrichIncident = async (incidentId: number, aggregatedState: any): 
       `UPDATE incidents 
        SET severity = $1, 
            mass_alert_message = $2, 
-           responder_action_plan = $3 
-       WHERE id = $4`,
-      [enrichment.severity, enrichment.massAlertMessage, enrichment.responderActionPlan, incidentId]
+           responder_action_plan = $3,
+           evacuation_routes = $4
+       WHERE id = $5`,
+      [
+        enrichment.severity, 
+        enrichment.massAlertMessage, 
+        enrichment.responderActionPlan, 
+        enrichment.evacuationRoutes ? JSON.stringify(enrichment.evacuationRoutes) : null,
+        incidentId
+      ]
     );
 
     logger.info(`Incident ${incidentId} enriched by ${model}. Severity: ${enrichment.severity}`);
@@ -113,9 +152,16 @@ export const enrichIncident = async (incidentId: number, aggregatedState: any): 
       `UPDATE incidents 
        SET severity = $1, 
            mass_alert_message = $2, 
-           responder_action_plan = $3 
-       WHERE id = $4`,
-      [FALLBACK_ENRICHMENT.severity, FALLBACK_ENRICHMENT.massAlertMessage, FALLBACK_ENRICHMENT.responderActionPlan, incidentId]
+           responder_action_plan = $3,
+           evacuation_routes = $4
+       WHERE id = $5`,
+      [
+        FALLBACK_ENRICHMENT.severity, 
+        FALLBACK_ENRICHMENT.massAlertMessage, 
+        FALLBACK_ENRICHMENT.responderActionPlan, 
+        JSON.stringify(FALLBACK_ENRICHMENT.evacuationRoutes),
+        incidentId
+      ]
     );
 
     return FALLBACK_ENRICHMENT;

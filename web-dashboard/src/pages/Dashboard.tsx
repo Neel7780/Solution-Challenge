@@ -103,12 +103,13 @@ export default function Dashboard() {
   const { user } = useAuthStore();
   const queryClient = useQueryClient();
   const [showEvacConfirm, setShowEvacConfirm] = React.useState(false);
+  const propertyId = user?.property_id || 2;
 
   const { data: overview } = useQuery<OverviewData>({
     queryKey: ['dashboardOverview'],
     queryFn: async () => {
       try {
-        const res = await axios.get(`${API_URL}/dashboard/overview`);
+        const res = await axios.get(`${API_URL}/dashboard/overview/${propertyId}`);
         return res.data.overview;
       } catch {
         return {
@@ -148,7 +149,7 @@ export default function Dashboard() {
     queryKey: ['triageData'],
     queryFn: async () => {
       try {
-        const res = await axios.get(`${API_URL}/dashboard/triage`);
+        const res = await axios.get(`${API_URL}/dashboard/triage/${propertyId}`);
         return res.data.triage;
       } catch {
         return {

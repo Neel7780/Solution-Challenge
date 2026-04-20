@@ -18,7 +18,9 @@ import userRoutes from './routes/users';
 import platformRoutes from './routes/platform';
 import simulationRoutes from './routes/simulation';
 import logger from './utils/logger';
+import { analyzeSimulation } from './services/simulationAnalysisService';
 import { createAutomatedIncident } from './controllers/crisisController';
+import { enrichIncident } from './services/intelligenceService';
 
 process.on('unhandledRejection', (reason, promise) => {
   console.error('Unhandled Rejection at:', promise, 'reason:', reason);
@@ -43,6 +45,7 @@ const io = new Server(server, {
 // Track active simulation incidents to avoid duplicates and allow state updates
 const activeSimulationIncidents = new Map<string, { id: number, lastUpdate: number }>();
 const INCIDENT_DEDUPLICATION_WINDOW = 30000; // 30 seconds for idempotency
+const SIMULATION_PROPERTY_ID = 2;
 
 app.use(helmet());
 app.use(cors());
@@ -162,7 +165,6 @@ io.on('connection', (socket: any) => {
 
   socket.on('simulation:state_update', (data: any) => {
     const { propertyId, incidentId, update } = data;
-    // Broadcast state updates (like fire spread) to all property clients instantly
     io.to(`property_${propertyId}`).emit('simulation:state_update', { 
       incidentId, 
       update, 
@@ -170,22 +172,269 @@ io.on('connection', (socket: any) => {
     });
   });
 
+  // ═══════════════════════════════════════════════════
+  // SIMULATION FIRE CRISIS → Full Stack Integration
+  // ═══════════════════════════════════════════════════
+  socket.on('simulation:fire_crisis', async (data: any) => {
+    const { propertyId, fireX, fireY, agentCount, userId } = data;
+    logger.info(`🔥 Simulation fire crisis received for property ${propertyId} at (${fireX}, ${fireY})`);
+
+    if (!propertyId) {
+      socket.emit('simulation:crisis_error', { error: 'Property ID is required' });
+      return;
+    }
+    if (Number(propertyId) !== SIMULATION_PROPERTY_ID) {
+      socket.emit('simulation:crisis_error', {
+        error: `Simulation prototype only supports property ${SIMULATION_PROPERTY_ID} right now.`,
+      });
+      return;
+    }
+
+    const crisisKey = `sim_fire_${propertyId}`;
+    const now = Date.now();
+
+    // Deduplicate: don't create duplicate incidents within 30s
+    if (activeSimulationIncidents.has(crisisKey)) {
+      const existing = activeSimulationIncidents.get(crisisKey)!;
+      if (now - existing.lastUpdate < INCIDENT_DEDUPLICATION_WINDOW) {
+        logger.info(`Fire crisis deduplicated for property ${propertyId} (incident ${existing.id})`);
+        socket.emit('simulation:crisis_ack', { 
+          incidentId: existing.id, 
+          deduplicated: true 
+        });
+        return;
+      }
+    }
+
+    try {
+      const { pool } = await import('./database/connection.js');
+      const client = await pool.connect();
+
+      try {
+        await client.query('BEGIN');
+        const simulationCoordinates = {
+          x: Math.round(Number(fireX) || 0),
+          y: Math.round(Number(fireY) || 0),
+        };
+
+        // 1. Create the incident
+        const incidentResult = await client.query(
+          `INSERT INTO incidents (
+            property_id, reported_by, incident_type, severity, status,
+            description, mass_alert_message, responder_action_plan
+          ) VALUES ($1, $2, 'fire', 'critical', 'active',
+            $3, $4, $5
+          ) RETURNING *`,
+          [
+            propertyId,
+            userId || null,
+            `[SIMULATION] Fire detected at simulation coordinates (${simulationCoordinates.x}, ${simulationCoordinates.y}). ${agentCount || 0} guests in the building.`,
+            `🚨 FIRE EMERGENCY: A fire has been detected. Please proceed to the nearest exit immediately. Follow staff instructions.`,
+            'Security and responders: secure evacuation corridors, prioritize high-risk zones, and complete room-by-room sweep.',
+          ]
+        );
+        const incident = incidentResult.rows[0];
+
+        // 2. Set property status to 'evacuating' when the column exists.
+        // Some deployed prototype DBs were created before this column was added.
+        const statusColumnCheck = await client.query(
+          `SELECT 1
+           FROM information_schema.columns
+           WHERE table_name = 'properties' AND column_name = 'status'
+           LIMIT 1`
+        );
+        const hasPropertyStatusColumn = statusColumnCheck.rows.length > 0;
+        if (hasPropertyStatusColumn) {
+          await client.query(
+            `UPDATE properties SET status = 'evacuating', updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
+            [propertyId]
+          );
+        } else {
+          await client.query(
+            `UPDATE properties SET updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
+            [propertyId]
+          );
+          logger.warn(`properties.status column missing; continuing fire-crisis flow for property ${propertyId}`);
+        }
+
+        // 3. Auto-assign available staff/security/responders
+        const staffResult = await client.query(
+          `SELECT id, name, role FROM users
+           WHERE property_id = $1 AND role IN ('security', 'staff', 'responder') AND status = 'active'
+           ORDER BY role ASC`,
+          [propertyId]
+        );
+
+        const assignedStaff: any[] = [];
+        for (const staff of staffResult.rows) {
+          const taskDesc = staff.role === 'security'
+            ? `Report to fire location (${simulationCoordinates.x}, ${simulationCoordinates.y}) and secure evacuation routes. Ensure all guests evacuate safely.`
+            : staff.role === 'responder'
+            ? `Respond to fire emergency at (${simulationCoordinates.x}, ${simulationCoordinates.y}). Coordinate with fire department. Assist trapped guests.`
+            : `Assist guest evacuation and move toward fire sector (${simulationCoordinates.x}, ${simulationCoordinates.y}). Check all rooms on your assigned floor. Guide guests to nearest exit.`;
+
+          await client.query(
+            `INSERT INTO tasks (incident_id, property_id, assigned_to, task_type, priority, status, description)
+             VALUES ($1, $2, $3, 'evacuation_response', 'urgent', 'pending', $4)`,
+            [incident.id, propertyId, staff.id, taskDesc]
+          );
+
+          assignedStaff.push({
+            id: staff.id,
+            name: staff.name,
+            role: staff.role,
+            task: taskDesc,
+            fireCoordinates: simulationCoordinates,
+          });
+        }
+
+        // 4. Create mass notification record
+        await client.query(
+          `INSERT INTO notifications (incident_id, property_id, recipient_type, recipient_id, channel, message, status)
+           VALUES ($1, $2, 'property', $3, 'websocket', $4, 'sent')`,
+          [incident.id, propertyId, String(propertyId), incident.mass_alert_message]
+        );
+
+        await client.query('COMMIT');
+
+        // Track for deduplication
+        activeSimulationIncidents.set(crisisKey, { id: incident.id, lastUpdate: now });
+
+        // ─── Broadcast to ALL connected clients ───
+
+        // Get org ID for org-level broadcast
+        const orgResult = await client.query('SELECT organization_id FROM properties WHERE id = $1', [propertyId]);
+        const orgId = orgResult.rows[0]?.organization_id;
+
+        // A. Crisis notification to entire property (guests see this)
+        io.to(`property_${propertyId}`).emit('crisis_reported', {
+          incident,
+          fromSimulation: true,
+          timestamp: new Date().toISOString(),
+        });
+
+        // B. Mass alert to all guests at property
+        io.to(`property_${propertyId}`).emit('mass_notification', {
+          incidentId: incident.id,
+          type: 'fire',
+          title: '🚨 FIRE EMERGENCY',
+          message: incident.mass_alert_message,
+          severity: 'critical',
+          timestamp: new Date().toISOString(),
+        });
+
+        // C. Staff assignment notification to everyone at property so guests know help is coming
+        io.to(`property_${propertyId}`).emit('staff_auto_assigned', {
+          incidentId: incident.id,
+          propertyId,
+          assignedStaff,
+          fireCoordinates: simulationCoordinates,
+          message: `Help is on the way: ${assignedStaff.length} emergency personnel have been dispatched to the fire.`,
+          timestamp: new Date().toISOString(),
+        });
+
+        // D. Notify each staff member individually
+        for (const staff of assignedStaff) {
+          io.to(`user_${staff.id}`).emit('task_assigned', {
+            incidentId: incident.id,
+            task: staff.task,
+            fireCoordinates: simulationCoordinates,
+            priority: 'urgent',
+            message: `🚨 URGENT: ${staff.task} Fire coordinates: (${simulationCoordinates.x}, ${simulationCoordinates.y})`,
+            timestamp: new Date().toISOString(),
+          });
+        }
+
+        // E. Admin/org notification
+        io.to('role_admin').to('role_org_admin').to('role_super_admin')
+          .to(`organization_${orgId}`)
+          .emit('new_crisis', {
+            incident,
+            assignedStaff,
+            fromSimulation: true,
+            timestamp: new Date().toISOString(),
+          });
+
+        // F. Evacuation trigger
+        io.to(`property_${propertyId}`).emit('evacuation_triggered', {
+          propertyId,
+          incidentId: incident.id,
+          message: 'EMERGENCY: Immediate evacuation ordered. Proceed to nearest exit.',
+          timestamp: new Date().toISOString(),
+        });
+
+        // Acknowledge back to simulation
+        socket.emit('simulation:crisis_ack', {
+          incidentId: incident.id,
+          assignedStaffCount: assignedStaff.length,
+          assignedStaff,
+          deduplicated: false,
+        });
+
+        logger.info(`🔥 Fire crisis pipeline complete: incident=${incident.id}, staff_assigned=${assignedStaff.length}`);
+
+        // Generate and broadcast AI evacuation guidance for guest + staff dashboards.
+        const floorPlanData = await client.query('SELECT floor_plan_data FROM properties WHERE id = $1', [propertyId]);
+        const activeUsersResult = await client.query(
+          'SELECT COUNT(*) FROM users WHERE property_id = $1 AND status = $2',
+          [propertyId, 'active']
+        );
+        const aggregatedState = {
+          propertyContext: floorPlanData.rows[0]?.floor_plan_data,
+          activeUsersCount: parseInt(activeUsersResult.rows[0]?.count || '0'),
+          lastEvents: [
+            {
+              type: 'fire',
+              description: `Simulation fire at (${Math.round(fireX)}, ${Math.round(fireY)})`,
+              confidence: 1.0,
+            },
+          ],
+          description: `[SIMULATION] Fire emergency with ${agentCount || 0} active agents`,
+        };
+
+        enrichIncident(incident.id, aggregatedState).then((enrichment) => {
+          if (!enrichment) return;
+          io.to(`property_${propertyId}`).emit('incident_enriched', {
+            incidentId: incident.id,
+            enrichment,
+            timestamp: new Date().toISOString(),
+          });
+        });
+
+      } catch (error: any) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
+    } catch (error: any) {
+      logger.error('Simulation fire crisis pipeline failed:', error);
+      socket.emit('simulation:crisis_error', { error: 'Failed to process fire crisis' });
+    }
+  });
+
   // Real-time simulation analysis via Socket.io
   socket.on('simulation:request_analysis', async (data: any) => {
     const { snapshot, propertyId, simulationDuration = 0 } = data;
+    logger.info(`Received simulation analysis request for property ${propertyId}`);
+    
     if (!snapshot || !propertyId) {
+      logger.warn(`Invalid simulation analysis request: snapshot=${!!snapshot}, propertyId=${propertyId}`);
       socket.emit('simulation:analysis_error', { error: 'Missing snapshot or propertyId' });
       return;
     }
+    
     try {
-      const { analyzeSimulation } = await import('./services/simulationAnalysisService.js');
+      logger.info(`Processing simulation analysis for property ${propertyId}...`);
       const analysis = await analyzeSimulation({ snapshot, propertyId, simulationDuration });
+      
+      logger.info(`Sending simulation analysis result to property_${propertyId}`);
       io.to(`property_${propertyId}`).emit('simulation:analysis_result', {
         analysis,
         timestamp: new Date().toISOString(),
       });
-    } catch (error) {
-      logger.error('Socket simulation analysis failed:', error);
+    } catch (error: any) {
+      logger.error(`Socket simulation analysis failed for property ${propertyId}:`, error);
       socket.emit('simulation:analysis_error', { error: 'Analysis failed' });
     }
   });

@@ -21,6 +21,7 @@ var spawned_agents: Array[CharacterBody3D] = []
 var spawned_fires: Array[Node3D] = []
 var _frame_counter: int = 0
 var _next_agent_number: int = 1
+var _responder_assign_counter: int = 0
 
 ## ─── Agent name pool ───
 const AGENT_NAMES: Array[String] = [
@@ -64,11 +65,13 @@ func _ready() -> void:
 	# Register the initial agent that already exists in the scene
 	var existing_agent = get_node_or_null("Agent")
 	if existing_agent:
+		_configure_agent_collision(existing_agent)
 		spawned_agents.append(existing_agent)
 	
 	# Register the initial fire
 	var existing_fire = get_node_or_null("Fire")
 	if existing_fire:
+		existing_fire.add_to_group("fire_hazards")
 		spawned_fires.append(existing_fire)
 
 
@@ -78,6 +81,12 @@ func _physics_process(_delta: float) -> void:
 	if _frame_counter >= 30:
 		_frame_counter = 0
 		_sync_state_to_bridge()
+	
+	# Assign responder staff/security to active fire targets (~3 times per second)
+	_responder_assign_counter += 1
+	if _responder_assign_counter >= 20:
+		_responder_assign_counter = 0
+		_assign_responders_to_fires()
 
 
 ## ═══════════════════════════════════════════════════════
@@ -122,7 +131,7 @@ func pixel_to_world(pixel_x: float, pixel_y: float) -> Vector3:
 
 func _on_fire_spawn(pixel_pos: Vector2) -> void:
 	if fire_scene == null:
-		push_warning("[SimManager] Cannot spawn fire — fire_prefab.tscn not loaded")
+		push_warning("[SimManager] Cannot spawn fire — fire.tscn not loaded")
 		return
 	
 	var world_pos = pixel_to_world(pixel_pos.x, pixel_pos.y)
@@ -130,6 +139,7 @@ func _on_fire_spawn(pixel_pos: Vector2) -> void:
 	var new_fire = fire_scene.instantiate()
 	new_fire.global_position = world_pos
 	add_child(new_fire)
+	new_fire.add_to_group("fire_hazards")
 	spawned_fires.append(new_fire)
 	
 	print("[SimManager] Fire spawned at world pos: ", world_pos)
@@ -181,6 +191,7 @@ func _on_agent_spawn(pixel_pos: Vector2, agent_name_from_dashboard: String) -> v
 	
 	# Then set position
 	new_agent.global_position = Vector3(world_pos.x, 0.2, world_pos.z)
+	_configure_agent_collision(new_agent)
 	
 	spawned_agents.append(new_agent)
 	
@@ -284,3 +295,52 @@ func _sync_state_to_bridge() -> void:
 		"blocked_exits": [],
 		"total_agents": spawned_agents.size(),
 	})
+
+
+func _assign_responders_to_fires() -> void:
+	var live_fires: Array[Node3D] = []
+	for fire in spawned_fires:
+		if is_instance_valid(fire):
+			live_fires.append(fire)
+	
+	if live_fires.is_empty():
+		for agent in spawned_agents:
+			if not is_instance_valid(agent):
+				continue
+			if agent.has_method("_is_fire_responder") and agent._is_fire_responder():
+				if agent.has_method("clear_fire_response_target"):
+					agent.clear_fire_response_target()
+		return
+	
+	for agent in spawned_agents:
+		if not is_instance_valid(agent):
+			continue
+		if not agent.has_method("_is_fire_responder") or not agent._is_fire_responder():
+			continue
+		if not agent.has_method("assign_fire_response_target"):
+			continue
+		
+		var nearest_fire: Node3D = null
+		var nearest_dist := INF
+		for fire in live_fires:
+			var dist = agent.global_position.distance_to(fire.global_position)
+			if dist < nearest_dist:
+				nearest_dist = dist
+				nearest_fire = fire
+		
+		if nearest_fire:
+			agent.assign_fire_response_target(nearest_fire)
+
+
+func _configure_agent_collision(new_agent: CharacterBody3D) -> void:
+	if not is_instance_valid(new_agent):
+		return
+	
+	for other in spawned_agents:
+		if not is_instance_valid(other):
+			continue
+		if other == new_agent:
+			continue
+		# Prevent responder jams by letting agents pass through each other.
+		new_agent.add_collision_exception_with(other)
+		other.add_collision_exception_with(new_agent)

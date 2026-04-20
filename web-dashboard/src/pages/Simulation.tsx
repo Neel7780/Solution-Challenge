@@ -47,6 +47,7 @@ import { useAuthStore } from '../store/authStore';
 
 const SIMULATION_URL = '/simulation/hotel_fire_simulation.html';
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const SIMULATION_PROPERTY_ID = 2; // Hardcoded for prototype — matches "Grand Horizon Hotel" in DB
 
 /* ─── Tool Config ─── */
 const TOOLS: { id: SimTool; label: string; icon: React.ElementType; color: string; hint: string }[] = [
@@ -73,9 +74,28 @@ const statusEmoji = (s: string) => {
   switch (s) {
     case 'safe': return '✅';
     case 'evacuating': return '🏃';
+    case 'responding': return '🛡️';
+    case 'extinguishing': return '🧯';
     case 'trapped': return '⚠️';
     case 'dead': return '❌';
     default: return '🟢';
+  }
+};
+
+const statusBadgeStyle = (s: string) => {
+  switch (s) {
+    case 'responding':
+      return { bg: 'rgba(59,130,246,0.12)', color: '#60a5fa', border: 'rgba(59,130,246,0.3)' };
+    case 'extinguishing':
+      return { bg: 'rgba(34,211,238,0.12)', color: '#22d3ee', border: 'rgba(34,211,238,0.3)' };
+    case 'evacuating':
+      return { bg: 'rgba(251,146,60,0.12)', color: '#fb923c', border: 'rgba(251,146,60,0.3)' };
+    case 'trapped':
+      return { bg: 'rgba(255,62,62,0.12)', color: '#ff3e3e', border: 'rgba(255,62,62,0.3)' };
+    case 'safe':
+      return { bg: 'rgba(0,245,140,0.12)', color: '#00f58c', border: 'rgba(0,245,140,0.3)' };
+    default:
+      return { bg: 'rgba(255,255,255,0.08)', color: '#9ca3af', border: 'rgba(255,255,255,0.15)' };
   }
 };
 
@@ -166,6 +186,8 @@ function AgentMarker({ agent, selected, onClick }: { agent: any; selected: boole
         width: 20, height: 20, borderRadius: '50%',
         backgroundColor: agent.status === 'dead' ? '#444'
           : agent.status === 'trapped' ? '#ff3e3e'
+          : agent.status === 'responding' ? '#60a5fa'
+          : agent.status === 'extinguishing' ? '#22d3ee'
           : agent.status === 'evacuating' ? '#fb923c'
           : agent.status === 'safe' ? '#00f58c'
           : '#00f58c',
@@ -196,11 +218,34 @@ export default function Simulation() {
   const containerRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const syncedOccupantIdsRef = useRef<Set<number>>(new Set());
 
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [simLoaded, setSimLoaded] = useState(false);
   const [simError, setSimError] = useState(false);
   const [iframeKey, setIframeKey] = useState(0);
+  
+  // Real DB users for simulation
+  const [dbOccupants, setDbOccupants] = useState<any[]>([]);
+  const [spawnIndex, setSpawnIndex] = useState(0);
+
+  useEffect(() => {
+    const fetchOccupants = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const res = await axios.get(`${API_URL}/users`, { headers: { Authorization: `Bearer ${token}` } });
+        if (res.data.users) {
+          // Filter out users strictly meant for SIMULATION_PROPERTY_ID
+          const propertyUsers = res.data.users.filter((u: any) => u.property_id === SIMULATION_PROPERTY_ID);
+          // Shuffle or sort if needed, here we just keep them
+          setDbOccupants(propertyUsers);
+        }
+      } catch (err) {
+        console.error('Failed to fetch DB occupants for simulation', err);
+      }
+    };
+    fetchOccupants();
+  }, []);
 
   const {
     activeTool, setActiveTool,
@@ -212,6 +257,8 @@ export default function Simulation() {
     analysis, analysisLoading, setAnalysis, setAnalysisLoading, analysisHistory,
     isRunning, setRunning,
     resetLocal,
+    crisisActive, crisisIncidentId, assignedStaff,
+    setCrisisActive, setAssignedStaff,
   } = useSimulationStore();
 
   const { socket } = useSocketStore();
@@ -233,6 +280,19 @@ export default function Simulation() {
     socket.on('simulation:analysis_result', handler);
     return () => { socket.off('simulation:analysis_result', handler); };
   }, [socket, setAnalysis]);
+
+  // Listen for crisis acknowledgment from backend
+  useEffect(() => {
+    if (!socket) return;
+    const ackHandler = (data: any) => {
+      if (data?.incidentId && !data.deduplicated) {
+        setCrisisActive(true, data.incidentId);
+        if (data.assignedStaff) setAssignedStaff(data.assignedStaff);
+      }
+    };
+    socket.on('simulation:crisis_ack', ackHandler);
+    return () => { socket.off('simulation:crisis_ack', ackHandler); };
+  }, [socket, setCrisisActive, setAssignedStaff]);
 
   // Listen to Godot messages
   const { updateFromSnapshot, agents, fires, metrics, setGodotConnected } = useSimulationStore();
@@ -270,6 +330,7 @@ export default function Simulation() {
   const handleReload = () => {
     setSimLoaded(false);
     setSimError(false);
+    syncedOccupantIdsRef.current.clear();
     setIframeKey((p) => p + 1);
   };
 
@@ -281,6 +342,25 @@ export default function Simulation() {
     );
   }, []);
 
+  // Automatically materialize all Neon users (property #2) in simulation for prototype sync.
+  useEffect(() => {
+    if (!simLoaded || dbOccupants.length === 0) return;
+
+    const currentSynced = syncedOccupantIdsRef.current;
+    const unsynced = dbOccupants.filter((u) => !currentSynced.has(u.id));
+    if (unsynced.length === 0) return;
+
+    unsynced.forEach((occupant, index) => {
+      const roleTag = occupant.role ? `[${String(occupant.role).toUpperCase()}] ` : '';
+      const displayName = `${roleTag}${occupant.name}`;
+      // Spread new users over the lobby area to avoid stacking.
+      const x = 120 + ((index * 47) % 560);
+      const y = 110 + (Math.floor(index / 12) * 42);
+      sendToGodot('spawn_agent', { x, y, name: displayName });
+      currentSynced.add(occupant.id);
+    });
+  }, [simLoaded, dbOccupants, sendToGodot]);
+
   // ═══ Viewport Click Handler ═══
   const handleOverlayClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if (!wrapperRef.current) return;
@@ -291,14 +371,34 @@ export default function Simulation() {
     switch (activeTool) {
       case 'fire':
         if (singleFireMode) {
-          fires.forEach(f => sendToGodot('remove_fire', { x: -f.x, y: -f.y })); // remove_fire normally expects pixels, but Godot uses pixel_to_world. We can't easily clear all fires using remove_fire with world coords. Wait, if we send 'reset_simulation' it removes agents too. I'll just rely on a new 'clear_all_fires' command or similar if possible. Actually, let's just clear the localFires and send a remove_fire for the last clicked pos if we want, but since we're using Godot, let's just add a temporary hack: click again and it adds more. To clear fires, use the Extinguish tool.
+          fires.forEach(f => sendToGodot('remove_fire', { x: -f.x, y: -f.y }));
         }
         addLocalFire(x, y);
         sendToGodot('spawn_fire', { x, y });
+
+        // ─── Emit fire crisis to backend for full-stack sync ───
+        if (socket) {
+          socket.emit('simulation:fire_crisis', {
+            propertyId: SIMULATION_PROPERTY_ID,
+            fireX: x,
+            fireY: y,
+            agentCount: agents.length || localAgents.length,
+            userId: user?.id || null,
+          });
+          console.log('[Simulation] Fire crisis emitted to backend for property', SIMULATION_PROPERTY_ID);
+        }
         break;
       case 'agent':
         addLocalAgent(x, y);
-        sendToGodot('spawn_agent', { x, y, name: `Agent ${useSimulationStore.getState().nextAgentId}` });
+        let agentName = `Agent ${useSimulationStore.getState().nextAgentId}`;
+        if (dbOccupants.length > 0) {
+          const occupant = dbOccupants[spawnIndex % dbOccupants.length];
+          agentName = occupant.role === 'guest' 
+            ? occupant.name 
+            : `[${occupant.role.toUpperCase()}] ${occupant.name}`;
+          setSpawnIndex(prev => prev + 1);
+        }
+        sendToGodot('spawn_agent', { x, y, name: agentName });
         break;
       case 'extinguish':
         removeLocalFire(x, y);
@@ -339,15 +439,23 @@ export default function Simulation() {
     try {
       if (socket && user) {
         // Send via Socket.io for persistent analysis pipeline
-        socket.emit('simulation:analyze', {
-          organizationId: user.organization_id,
+        socket.emit('simulation:request_analysis', {
+          propertyId: SIMULATION_PROPERTY_ID,
           snapshot,
+          simulationDuration: 0,
+        });
+
+        // Listen for socket errors specifically for this request
+        socket.once('simulation:analysis_error', (err: any) => {
+          console.error('AI Analysis Socket Error:', err);
+          setAnalysisLoading(false);
+          alert('AI Analysis failed. Please try again.');
         });
       } else {
         // Fallback to direct API
         const token = localStorage.getItem('token');
         const res = await axios.post(`${API_URL}/simulation/analyze`, {
-          organizationId: user?.organization_id || 'demo_org',
+          propertyId: SIMULATION_PROPERTY_ID,
           snapshot,
         }, { headers: { Authorization: `Bearer ${token}` } });
         if (res.data?.analysis) setAnalysis(res.data.analysis);
@@ -360,6 +468,7 @@ export default function Simulation() {
 
   const handleReset = () => {
     resetLocal();
+    syncedOccupantIdsRef.current.clear();
     sendToGodot('reset_simulation');
   };
 
@@ -369,6 +478,9 @@ export default function Simulation() {
   };
 
   const currentTool = TOOLS.find((t) => t.id === activeTool)!;
+  const respondingCount = agents.filter((a) => a.status === 'responding').length;
+  const extinguishingCount = agents.filter((a) => a.status === 'extinguishing').length;
+  const evacuatingCount = agents.filter((a) => a.status === 'evacuating').length;
 
   return (
     <Box ref={containerRef} sx={{ display: 'flex', gap: 2, height: 'calc(100vh - 100px)' }}>
@@ -419,6 +531,18 @@ export default function Simulation() {
                     {agent.name}
                   </Typography>
                   <Chip
+                    label={agent.status.toUpperCase()}
+                    size="small"
+                    sx={{
+                      height: 18,
+                      fontSize: '0.5rem',
+                      fontWeight: 700,
+                      backgroundColor: statusBadgeStyle(agent.status).bg,
+                      color: statusBadgeStyle(agent.status).color,
+                      border: `1px solid ${statusBadgeStyle(agent.status).border}`,
+                    }}
+                  />
+                  <Chip
                     label={agent.mode.toUpperCase()}
                     size="small"
                     onClick={(e) => { e.stopPropagation(); toggleAgentMode(agent.id); }}
@@ -437,6 +561,42 @@ export default function Simulation() {
             ))
           )}
         </Box>
+
+        {/* Crisis Status Panel */}
+        {crisisActive && (
+          <Box sx={{ p: 1.5, borderTop: '1px solid rgba(255,62,62,0.3)', backgroundColor: 'rgba(255,62,62,0.04)' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+              <Box sx={{
+                width: 8, height: 8, borderRadius: '50%', backgroundColor: '#ff3e3e',
+                animation: 'crisisPulse 1s ease-in-out infinite alternate',
+                '@keyframes crisisPulse': { '0%': { opacity: 0.4 }, '100%': { opacity: 1 } },
+              }} />
+              <Typography variant="caption" sx={{ color: '#ff3e3e', fontSize: '0.6rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em' }}>
+                🚨 Crisis Active · #{crisisIncidentId}
+              </Typography>
+            </Box>
+            {assignedStaff.length > 0 && (
+              <Box>
+                <Typography variant="caption" sx={{ color: 'var(--text-muted)', fontSize: '0.55rem', textTransform: 'uppercase', letterSpacing: '0.1em', mb: 0.5, display: 'block' }}>
+                  Auto-Assigned Staff ({assignedStaff.length})
+                </Typography>
+                {assignedStaff.map((s) => (
+                  <Box key={s.id} sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 0.5 }}>
+                    <ShieldIcon sx={{ fontSize: 12, color: s.role === 'security' ? '#fb923c' : s.role === 'responder' ? '#ff3e3e' : '#3b82f6' }} />
+                    <Box>
+                      <Typography variant="caption" sx={{ color: '#fff', fontSize: '0.65rem', fontWeight: 600, display: 'block' }}>
+                        {s.name}
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: 'var(--text-muted)', fontSize: '0.5rem', textTransform: 'uppercase' }}>
+                        {s.role}
+                      </Typography>
+                    </Box>
+                  </Box>
+                ))}
+              </Box>
+            )}
+          </Box>
+        )}
 
         {/* Quick Stats */}
         <Box sx={{ p: 1.5, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
@@ -570,6 +730,71 @@ export default function Simulation() {
             sx={{
               backgroundColor: 'rgba(255,255,255,0.03)', color: 'var(--text-muted)',
               border: '1px solid rgba(255,255,255,0.06)', fontSize: '0.65rem', fontWeight: 600,
+            }}
+          />
+        </Paper>
+
+        {/* Live responder strip for demos */}
+        <Paper
+          sx={{
+            px: 1.25,
+            py: 0.75,
+            mb: 1.5,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1,
+            flexWrap: 'wrap',
+            backgroundColor: 'rgba(255,255,255,0.012)',
+            border: '1px solid rgba(255,255,255,0.05)',
+            borderRadius: '8px',
+          }}
+        >
+          <Typography
+            variant="caption"
+            sx={{
+              color: 'var(--text-muted)',
+              fontSize: '0.58rem',
+              fontWeight: 700,
+              letterSpacing: '0.12em',
+              textTransform: 'uppercase',
+            }}
+          >
+            Live Ops
+          </Typography>
+          <Chip
+            label={`🛡️ Responding: ${respondingCount}`}
+            size="small"
+            sx={{
+              height: 20,
+              fontSize: '0.6rem',
+              fontWeight: 700,
+              backgroundColor: 'rgba(59,130,246,0.12)',
+              color: '#60a5fa',
+              border: '1px solid rgba(59,130,246,0.35)',
+            }}
+          />
+          <Chip
+            label={`🧯 Extinguishing: ${extinguishingCount}`}
+            size="small"
+            sx={{
+              height: 20,
+              fontSize: '0.6rem',
+              fontWeight: 700,
+              backgroundColor: 'rgba(34,211,238,0.12)',
+              color: '#22d3ee',
+              border: '1px solid rgba(34,211,238,0.35)',
+            }}
+          />
+          <Chip
+            label={`🏃 Evacuating: ${evacuatingCount}`}
+            size="small"
+            sx={{
+              height: 20,
+              fontSize: '0.6rem',
+              fontWeight: 700,
+              backgroundColor: 'rgba(251,146,60,0.12)',
+              color: '#fb923c',
+              border: '1px solid rgba(251,146,60,0.35)',
             }}
           />
         </Paper>

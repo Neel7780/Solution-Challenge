@@ -58,6 +58,13 @@ export const SocketProvider = ({ children }: SocketProviderProps) => {
       showNotification('Crisis Alert', `Emergency: ${data.incident.incident_type}`);
     });
 
+    // Listen for AI enrichment
+    newSocket.on('incident_enriched', (data: any) => {
+      if (data.enrichment?.massAlertMessage) {
+        showNotification('Emergency Update', data.enrichment.massAlertMessage);
+      }
+    });
+
     // Listen for mass notifications
     newSocket.on('mass_notification', (data: any) => {
       showNotification('Emergency Notice', data.message);

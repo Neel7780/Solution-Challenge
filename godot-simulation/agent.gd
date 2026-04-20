@@ -4,8 +4,16 @@ extends CharacterBody3D
 @export var agent_name: String = "Guest"
 
 ## ─── Node references (resolved at runtime) ───
-@onready var main_exit: Marker3D = $"../MainExit"
-@onready var fire_exit: Marker3D = $"../FireExit"
+@onready var nav_agent: NavigationAgent3D = $NavigationAgent3D
+
+
+var inside_room: bool = true
+var assigned_door: Marker3D = null
+var ai_state: String = "wander"   # wander, evacuate, escape_room
+var last_door: Marker3D = null
+var wander_timer: float = 0.0
+var wander_wait: float = 0.0
+var wander_target: Vector3 = Vector3.ZERO
 
 ## ─── State ───
 var agent_id: String = ""
@@ -17,6 +25,10 @@ var health: int = 100
 var mode: String = "ai"           # ai, manual
 var _manual_target: Vector3 = Vector3.ZERO
 var _has_manual_target: bool = false
+var _fire_response_target: Node3D = null
+var _extinguish_cooldown: float = 0.0
+var _fire_response_state: bool = false
+var _extinguishing_in_progress: bool = false
 
 
 func _ready() -> void:
@@ -36,13 +48,26 @@ func _ready() -> void:
 			bridge.simulation_reset_requested.connect(_on_bridge_reset)
 	
 	# Default behavior: walk to main exit
-	set_target(main_exit)
-	status = "evacuating"
+	ai_state = "wander"
+	status = "idle"
 
 
 func _physics_process(delta: float) -> void:
 	if status == "dead" or status == "safe":
 		return
+	
+	if _extinguish_cooldown > 0.0:
+		_extinguish_cooldown = maxf(0.0, _extinguish_cooldown - delta)
+		if _extinguishing_in_progress and _extinguish_cooldown <= 0.0:
+			_extinguishing_in_progress = false
+			if status != "dead" and status != "safe":
+				status = "idle"
+	
+	# Global fire check: if a fire spawned anywhere, force AI into evacuation mode
+	if Global.fire_active and not fire_detected:
+		trigger_fire()
+	elif not Global.fire_active and fire_detected:
+		clear_fire()
 	
 	# Choose movement based on mode
 	match mode:
@@ -54,22 +79,83 @@ func _physics_process(delta: float) -> void:
 	# Update bridge state
 	_update_bridge()
 
-
-## ─── AI Movement (original behavior) ───
+func find_nearest_door() -> Marker3D:
+	var doors = get_tree().get_nodes_in_group("doors")
+	var closest: Marker3D = null
+	var min_dist = INF
+	
+	for d in doors:
+		var dist = global_position.distance_to(d.global_position)
+		if dist < min_dist:
+			min_dist = dist
+			closest = d
+	
+	return closest
+	
+	
+func find_random_point() -> Marker3D:
+	var doors = get_tree().get_nodes_in_group("doors")
+	if doors.size() == 0:
+		return null
+	return doors.pick_random()
+	
+## ─── AI Movement (using NavigationAgent3D) ───
 
 func _ai_move(_delta: float) -> void:
-	if current_target == null:
+	if _fire_response_state:
+		_fire_response_move(_delta)
 		return
 	
-	var direction = current_target.global_position - global_position
-	direction.y = 0
+	match ai_state:
+		
+		"wander":
+			wander_timer -= _delta
+			if wander_timer <= 0:
+				wander_wait = randf_range(1.0, 3.0)
+				wander_timer = wander_wait
+				var offset = Vector3(randf_range(-5, 5), 0, randf_range(-5, 5))
+				nav_agent.target_position = global_position + offset
+		
+		"escape_room":
+			if last_door != null:
+				nav_agent.target_position = last_door.global_position
+			
+			if not inside_room:
+				ai_state = "evacuate"
+				status = "evacuating"
+				_find_safest_exit()
+		
+		"evacuate":
+			if current_target != null:
+				nav_agent.target_position = current_target.global_position
 	
-	if direction.length() > 0.1:
-		velocity = direction.normalized() * speed
-	else:
-		# Reached the exit
+	# Movement execution
+	var target_pos = nav_agent.target_position
+	var dist_to_target = Vector2(global_position.x, global_position.z).distance_to(Vector2(target_pos.x, target_pos.z))
+	
+	if dist_to_target < 2.0:
 		velocity = Vector3.ZERO
-		status = "safe"
+		# If evacuating and reached exit
+		if ai_state == "evacuate" and current_target != null:
+			status = "safe"
+			visible = false
+	else:
+		var next_pos = nav_agent.get_next_path_position()
+		var dir = next_pos - global_position
+		dir.y = 0
+		
+		if dir.length() > 0.2:
+			var spd_mult = 1.2 if ai_state == "evacuate" else 0.8
+			velocity = dir.normalized() * speed * spd_mult
+		else:
+			# Fallback: NavMesh is missing or broken. Move directly!
+			var fallback_dir = target_pos - global_position
+			fallback_dir.y = 0
+			if fallback_dir.length() > 0.1:
+				var spd_mult = 1.2 if ai_state == "evacuate" else 0.8
+				velocity = fallback_dir.normalized() * speed * spd_mult
+			else:
+				velocity = Vector3.ZERO
 	
 	move_and_slide()
 
@@ -80,15 +166,25 @@ func _manual_move(_delta: float) -> void:
 	if not _has_manual_target:
 		return
 	
-	var direction = _manual_target - global_position
-	direction.y = 0
+	nav_agent.target_position = _manual_target
+	var dist_to_target = Vector2(global_position.x, global_position.z).distance_to(Vector2(_manual_target.x, _manual_target.z))
 	
-	if direction.length() > 0.2:
-		velocity = direction.normalized() * speed
-	else:
+	if dist_to_target < 2.0:
 		velocity = Vector3.ZERO
 		_has_manual_target = false
-	
+	else:
+		var next_pos = nav_agent.get_next_path_position()
+		var direction = next_pos - global_position
+		direction.y = 0
+		
+		if direction.length() > 0.2:
+			velocity = direction.normalized() * speed
+		else:
+			# Fallback direct movement
+			var fallback_dir = _manual_target - global_position
+			fallback_dir.y = 0
+			velocity = fallback_dir.normalized() * speed
+			
 	move_and_slide()
 
 
@@ -104,23 +200,74 @@ func move_to_position(world_pos: Vector3) -> void:
 	_manual_target = world_pos
 	_manual_target.y = global_position.y  # Keep same height
 	_has_manual_target = true
+	_fire_response_state = false
+	_fire_response_target = null
 
 
 ## ─── Fire interaction (called by fire.gd Area3D) ───
 
 func trigger_fire() -> void:
-	if not fire_detected:
-		fire_detected = true
-		status = "evacuating"
-		if mode == "ai":
-			set_target(fire_exit)
-		print("[Agent %s] Fire detected! Rerouting." % agent_name)
+	if fire_detected:
+		return
+	fire_detected = true
+	
+	if _is_fire_responder():
+		# Responders prioritize crisis location, never evacuation exits.
+		status = "responding"
+		ai_state = "fire_response"
+		var nearest_fire = _find_nearest_fire()
+		if nearest_fire != null:
+			assign_fire_response_target(nearest_fire)
+		return
+	
+	ai_state = "evacuate"
+	status = "evacuating"
+	_find_safest_exit()
+
+
+func _get_all_exits() -> Array:
+	var exits = get_tree().get_nodes_in_group("exits")
+	if exits.is_empty():
+		# Fallback: manually grab default exits if group isn't set up
+		var p = get_parent()
+		if p and p.has_node("MainExit"): exits.append(p.get_node("MainExit"))
+		if p and p.has_node("FireExit"): exits.append(p.get_node("FireExit"))
+	return exits
+
+func _find_safest_exit() -> void:
+	var exits = _get_all_exits()
+	if exits.is_empty():
+		return
+	
+	var best_exit: Node3D = null
+	var min_score = INF
+	
+	for exit in exits:
+		if not is_instance_valid(exit): continue
+		var dist = global_position.distance_to(exit.global_position)
+		
+		if Global.fire_active:
+			var fire_pos = Global.fire_position
+			if fire_pos.distance_to(exit.global_position) < 5.0:
+				dist += 1000.0  # Massive penalty if fire is too close
+				
+		if dist < min_score:
+			min_score = dist
+			best_exit = exit
+			
+	if best_exit:
+		set_target(best_exit)
 
 
 func clear_fire() -> void:
 	fire_detected = false
-	if mode == "ai":
-		set_target(main_exit)
+	_fire_response_target = null
+	_fire_response_state = false
+	_extinguishing_in_progress = false
+	if mode == "ai" and status != "safe":
+		status = "idle"
+		ai_state = "wander"
+		set_target(null)
 
 
 ## ─── Bridge signal handlers ───
@@ -140,9 +287,19 @@ func _on_bridge_mode_changed(target_agent_id: String, new_mode: String) -> void:
 	if mode == "ai":
 		# Resume AI behavior
 		if fire_detected:
-			set_target(fire_exit)
+			if _is_fire_responder():
+				var nearest_fire = _find_nearest_fire()
+				if nearest_fire != null:
+					assign_fire_response_target(nearest_fire)
+				else:
+					status = "responding"
+					ai_state = "fire_response"
+			else:
+				_find_safest_exit()
 		else:
-			set_target(main_exit)
+			status = "idle"
+			ai_state = "wander"
+			set_target(null)
 		_has_manual_target = false
 	print("[Agent %s] Mode changed to: %s" % [agent_name, mode])
 
@@ -157,3 +314,92 @@ func _update_bridge() -> void:
 	var bridge = get_node_or_null("/root/JSBridge")
 	if bridge:
 		bridge.update_agent(agent_id, Vector2(global_position.x, global_position.z), status, health)
+
+
+func _is_fire_responder() -> bool:
+	var normalized_name = agent_name.to_lower()
+	return normalized_name.find("[security]") != -1 \
+		or normalized_name.find("[staff]") != -1 \
+		or normalized_name.find("[responder]") != -1 \
+		or normalized_name.begins_with("security ") \
+		or normalized_name.begins_with("staff ") \
+		or normalized_name.begins_with("responder ")
+
+
+func assign_fire_response_target(fire_node: Node3D) -> void:
+	if fire_node == null or not is_instance_valid(fire_node):
+		return
+	if status == "dead" or status == "safe":
+		return
+	_fire_response_target = fire_node
+	_fire_response_state = true
+	fire_detected = true
+	status = "responding"
+	ai_state = "fire_response"
+	mode = "ai"
+
+
+func clear_fire_response_target() -> void:
+	_fire_response_target = null
+	_fire_response_state = false
+	if status != "dead" and status != "safe":
+		status = "idle"
+		ai_state = "wander"
+
+
+func _fire_response_move(_delta: float) -> void:
+	if _fire_response_target == null or not is_instance_valid(_fire_response_target):
+		_fire_response_target = null
+		_fire_response_state = false
+		status = "idle"
+		ai_state = "wander"
+		velocity = Vector3.ZERO
+		return
+	
+	nav_agent.target_position = _fire_response_target.global_position
+	var next_pos = nav_agent.get_next_path_position()
+	var dir = next_pos - global_position
+	dir.y = 0
+	
+	if dir.length() > 0.15:
+		velocity = dir.normalized() * speed * 1.3
+	else:
+		var fallback_dir = _fire_response_target.global_position - global_position
+		fallback_dir.y = 0
+		if fallback_dir.length() > 0.1:
+			velocity = fallback_dir.normalized() * speed * 1.3
+		else:
+			velocity = Vector3.ZERO
+	
+	move_and_slide()
+	
+	if _extinguish_cooldown > 0.0:
+		return
+	
+	var fire_distance = global_position.distance_to(_fire_response_target.global_position)
+	if fire_distance <= 1.35:
+		_extinguish_cooldown = 0.8
+		_extinguishing_in_progress = true
+		status = "extinguishing"
+		var fire_to_remove = _fire_response_target
+		_fire_response_target = null
+		if is_instance_valid(fire_to_remove):
+			fire_to_remove.queue_free()
+		ai_state = "wander"
+		_fire_response_state = false
+
+
+func _find_nearest_fire() -> Node3D:
+	var fire_nodes = get_tree().get_nodes_in_group("fire_hazards")
+	var nearest_fire: Node3D = null
+	var nearest_dist := INF
+	
+	for fire in fire_nodes:
+		if not is_instance_valid(fire):
+			continue
+		var dist = global_position.distance_to(fire.global_position)
+		if dist < nearest_dist:
+			nearest_dist = dist
+			nearest_fire = fire
+	
+	return nearest_fire

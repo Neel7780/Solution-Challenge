@@ -45,6 +45,13 @@ interface Incident {
   description: string;
   reported_by_name: string;
   zone_name: string;
+  mass_alert_message?: string;
+  evacuation_routes?: {
+    guestEmergencyPlan: string[];
+    staffEvacuationPlan: string[];
+    safeExits: string[];
+    tips: string[];
+  };
 }
 
 interface PublicReport {
@@ -70,6 +77,9 @@ export default function Incidents() {
   const queryClient = useQueryClient();
   const containerRef = useRef(null);
   const canReviewPublicReports = ['admin', 'security', 'responder'].includes(user?.role || '');
+  const isOrgAdmin = user?.role === 'org_admin';
+  const [openResolveReport, setOpenResolveReport] = useState(false);
+  const [resolutionReportText, setResolutionReportText] = useState('');
 
   // Real-time updates
   useEffect(() => {
@@ -127,12 +137,14 @@ export default function Incidents() {
   });
 
   const updateStatusMutation = useMutation({
-    mutationFn: ({ id, status }: { id: number; status: string }) => 
-      axios.patch(`${API_URL}/crisis/${id}/status`, { status }),
+    mutationFn: ({ id, status, resolutionReportText }: { id: number; status: string; resolutionReportText?: string }) => 
+      axios.patch(`${API_URL}/crisis/${id}/status`, { status, resolutionReportText }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['incidents'] });
       setOpenManage(false);
       setSelectedIncident(null);
+      setOpenResolveReport(false);
+      setResolutionReportText('');
     },
   });
 
@@ -319,10 +331,10 @@ export default function Incidents() {
                             variant="contained"
                             color="info"
                             startIcon={<CheckIcon sx={{ fontSize: '12px !important' }} />}
-                            onClick={() => updateStatusMutation.mutate({ id: incident.id, status: 'acknowledged' })}
+                            onClick={() => updateStatusMutation.mutate({ id: incident.id, status: 'contained' })}
                             sx={{ fontSize: '0.65rem', py: 0, height: 24, borderRadius: 0.5, backgroundColor: 'var(--accent-blue)' }}
                           >
-                            Acknowledge
+                            Contain
                           </Button>
                         )}
                         <IconButton 
@@ -571,6 +583,19 @@ export default function Incidents() {
                   {selectedIncident.description}
                 </Typography>
               </Box>
+
+              {selectedIncident.evacuation_routes?.staffEvacuationPlan && (
+                <Box sx={{ p: 2, borderRadius: 1, border: '1px solid rgba(59, 130, 246, 0.2)', backgroundColor: 'rgba(59, 130, 246, 0.05)' }}>
+                  <Typography variant="overline" sx={{ color: 'var(--accent-blue)', display: 'block', mb: 1, fontWeight: 'bold' }}>
+                    AI TACTICAL PLAN & ASSIGNMENTS
+                  </Typography>
+                  <Stack spacing={1}>
+                    {selectedIncident.evacuation_routes.staffEvacuationPlan.map((assignment, i) => (
+                      <Typography key={i} variant="caption" sx={{ display: 'block' }}>• {assignment}</Typography>
+                    ))}
+                  </Stack>
+                </Box>
+              )}
               
               <Divider sx={{ opacity: 0.1 }} />
               
@@ -584,11 +609,11 @@ export default function Incidents() {
                       fullWidth 
                       variant="outlined" 
                       color="info"
-                      onClick={() => updateStatusMutation.mutate({ id: selectedIncident.id, status: 'acknowledged' })}
+                      onClick={() => updateStatusMutation.mutate({ id: selectedIncident.id, status: 'contained' })}
                       disabled={updateStatusMutation.isPending}
                       sx={{ justifyContent: 'flex-start', textTransform: 'none' }}
                     >
-                      Acknowledge Incident
+                      Mark as Contained
                     </Button>
                   )}
                   {selectedIncident.status !== 'contained' && selectedIncident.status !== 'resolved' && (
@@ -603,16 +628,28 @@ export default function Incidents() {
                       Mark as Contained
                     </Button>
                   )}
-                  <Button 
-                    fullWidth 
-                    variant="contained" 
-                    color="success"
-                    onClick={() => updateStatusMutation.mutate({ id: selectedIncident.id, status: 'resolved' })}
-                    disabled={updateStatusMutation.isPending}
-                    sx={{ justifyContent: 'flex-start', textTransform: 'none' }}
-                  >
-                    Resolve Incident
-                  </Button>
+                  {isOrgAdmin ? (
+                    <Button 
+                      fullWidth 
+                      variant="contained" 
+                      color="success"
+                      onClick={() => setOpenResolveReport(true)}
+                      disabled={updateStatusMutation.isPending}
+                      sx={{ justifyContent: 'flex-start', textTransform: 'none' }}
+                    >
+                      Resolve + Publish Report
+                    </Button>
+                  ) : (
+                    <Button 
+                      fullWidth 
+                      variant="contained" 
+                      color="success"
+                      disabled
+                      sx={{ justifyContent: 'flex-start', textTransform: 'none' }}
+                    >
+                      Resolve (Org Admin Only)
+                    </Button>
+                  )}
                 </Stack>
               </Box>
             </Stack>
@@ -620,6 +657,61 @@ export default function Incidents() {
         </DialogContent>
         <DialogActions sx={{ p: 2 }}>
           <Button onClick={() => setOpenManage(false)} color="inherit" size="small">Close</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Org Admin Resolution Report Dialog */}
+      <Dialog
+        open={openResolveReport}
+        onClose={() => !updateStatusMutation.isPending && setOpenResolveReport(false)}
+        maxWidth="sm"
+        fullWidth
+        slotProps={{
+          paper: {
+            sx: {
+              backgroundColor: 'rgba(18, 18, 26, 0.98)',
+              border: '1px solid var(--border-medium)',
+              boxShadow: 'var(--shadow-card)',
+            },
+          },
+        }}
+      >
+        <DialogTitle sx={{ fontWeight: 'bold' }}>
+          Publish Resolution Report for Incident #{selectedIncident?.id}
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+            This report will be public and viewable without authentication.
+          </Typography>
+          <TextField
+            fullWidth
+            multiline
+            rows={6}
+            label="Resolution Report (Public)"
+            placeholder="Summarize what happened, actions taken, and final resolution."
+            value={resolutionReportText}
+            onChange={(e) => setResolutionReportText(e.target.value)}
+          />
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          <Button onClick={() => setOpenResolveReport(false)} color="inherit" disabled={updateStatusMutation.isPending}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            color="success"
+            disabled={updateStatusMutation.isPending || resolutionReportText.trim().length < 10 || !selectedIncident}
+            onClick={() => {
+              if (!selectedIncident) return;
+              updateStatusMutation.mutate({
+                id: selectedIncident.id,
+                status: 'resolved',
+                resolutionReportText,
+              });
+            }}
+          >
+            {updateStatusMutation.isPending ? 'Publishing...' : 'Resolve & Publish'}
+          </Button>
         </DialogActions>
       </Dialog>
 
