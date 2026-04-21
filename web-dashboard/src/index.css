@@ -1,26 +1,33 @@
-/* ===== Google Fonts ===== */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600&family=Outfit:wght@300;400;500;600;700&display=swap');
+/* ===== Typography ===== */
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Orbitron:wght@600;700&display=swap');
 
-/* ===== Design Tokens (Neon.tech Inspired) ===== */
+/* ===== Design Tokens (Command Center) ===== */
 :root {
-  --bg-obsidian: #030303;
-  --bg-card: rgba(10, 10, 10, 0.7);
-  --border-subtle: rgba(255, 255, 255, 0.04);
-  --border-medium: rgba(255, 255, 255, 0.08);
-  
-  --text-primary: #f8fafc;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
+  --bg-primary: #0a0d12;
+  --bg-obsidian: #0a0d12;
+  --bg-card: rgba(16, 20, 28, 0.76);
+  --bg-elevated: rgba(21, 26, 35, 0.86);
+  --bg-glass: rgba(14, 18, 25, 0.72);
+  --border-subtle: rgba(246, 211, 101, 0.08);
+  --border-medium: rgba(246, 211, 101, 0.18);
 
-  --accent-red: #ff3e3e;
-  --accent-green: #00f58c;
-  --accent-blue: #3b82f6;
-  --accent-orange: #fb923c;
+  --text-primary: #f5f7fa;
+  --text-secondary: rgba(245, 247, 250, 0.75);
+  --text-muted: rgba(245, 247, 250, 0.52);
+
+  --accent-red: #ff5c5c;
+  --accent-green: #4de6c6;
+  --accent-blue: #70a7ff;
+  --accent-orange: #f6d365;
+  --accent-gold: #f6d365;
 
   --font-main: 'Inter', -apple-system, sans-serif;
-  --font-display: 'Outfit', sans-serif;
-  
-  --shadow-neon: 0 0 20px rgba(255, 62, 62, 0.1);
+  --font-display: 'Fraunces', 'Times New Roman', serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --font-brand: 'Orbitron', 'Inter', sans-serif;
+
+  --shadow-soft: 0 18px 48px -28px rgba(0, 0, 0, 0.78);
+  --shadow-glow: 0 0 0 1px rgba(246, 211, 101, 0.08), 0 0 42px rgba(246, 211, 101, 0.08);
 }
 
 * {
@@ -35,36 +42,37 @@ body {
   font-family: var(--font-main);
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
-  /* Signature Neon Grid */
+
+  /* Atmospheric command grid */
   background-image: 
+    radial-gradient(ellipse at top, rgba(246, 211, 101, 0.14), transparent 58%),
     linear-gradient(var(--border-subtle) 1px, transparent 1px),
     linear-gradient(90deg, var(--border-subtle) 1px, transparent 1px);
-  background-size: 40px 40px;
+  background-size: 100% 100%, 64px 64px, 64px 64px;
+  background-attachment: fixed;
 }
 
-/* ===== Typography Revamp ===== */
+/* ===== Typography ===== */
 h1, h2, h3, h4 {
   font-family: var(--font-display);
-  font-weight: 600;
+  font-weight: 300;
   letter-spacing: -0.02em;
-}
-
-p, span, div {
-  font-weight: 300; /* Lighter body text */
-  font-size: 0.875rem; /* Smaller professional size */
 }
 
 /* ===== High-End Components ===== */
 .glass-panel {
-  background: var(--bg-card);
-  backdrop-filter: blur(12px);
+  background: var(--bg-glass);
+  backdrop-filter: blur(14px);
   border: 1px solid var(--border-medium);
-  border-radius: 8px;
-  transition: border-color 0.3s ease;
+  border-radius: 12px;
+  box-shadow: var(--shadow-soft);
+  transition: border-color 0.3s ease, box-shadow 0.3s ease, transform 0.3s ease;
 }
 
 .glass-panel:hover {
-  border-color: rgba(255, 255, 255, 0.15);
+  border-color: rgba(246, 211, 101, 0.24);
+  box-shadow: var(--shadow-glow), var(--shadow-soft);
+  transform: translateY(-2px);
 }
 
 .neon-border-red { border-left: 2px solid var(--accent-red); }
@@ -87,14 +95,15 @@ p, span, div {
 
 /* ===== Utility ===== */
 .mono {
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-family: var(--font-mono);
   font-size: 0.75rem;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .stat-value {
   font-family: var(--font-display);
-  font-weight: 200; /* Super slim values like Neon */
+  font-weight: 300;
   font-size: 2.2rem;
   line-height: 1;
 }
@@ -117,4 +126,10 @@ p, span, div {
   background-color: var(--accent-green);
   box-shadow: 0 0 8px var(--accent-green);
   animation: pulse-subtle 2s infinite;
+}
+
+.status-dot--alert {
+  background-color: var(--accent-red);
+  box-shadow: 0 0 8px var(--accent-red);
+  animation: pulse-subtle 1.5s infinite;
 }

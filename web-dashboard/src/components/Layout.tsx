@@ -108,9 +108,9 @@ export default function Layout() {
 
   const drawer = (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <Toolbar sx={{ justifyContent: 'center', py: 2 }}>
-        <Typography variant="h1" sx={{ color: '#ef4444', fontSize: '1.5rem', letterSpacing: '0.05em' }}>
-          CRISIS<span style={{ color: '#f1f5f9' }}>RESPOND</span>
+      <Toolbar sx={{ justifyContent: 'center', py: 2.5 }}>
+        <Typography variant="h1" sx={{ color: 'var(--text-primary)', fontSize: '1.25rem', letterSpacing: '0.08em', fontFamily: 'var(--font-brand)', fontWeight: 700 }}>
+          CRISIS<span style={{ color: 'var(--accent-gold)' }}>RESPOND</span>
         </Typography>
       </Toolbar>
       
@@ -119,15 +119,15 @@ export default function Layout() {
           sx={{ 
             p: 1.5, 
             borderRadius: 2, 
-            border: '1px solid rgba(255,255,255,0.06)',
+            border: '1px solid var(--border-medium)',
             display: 'flex',
             alignItems: 'center',
             gap: 1.5,
-            background: 'rgba(255,255,255,0.02)'
+            background: 'var(--bg-card)'
           }}
         >
           <Box className={`status-dot ${connected ? 'status-dot--live' : 'status-dot--alert'}`} />
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" color="text.secondary" sx={{ fontFamily: 'var(--font-mono)', fontSize: '0.64rem', letterSpacing: '0.14em' }}>
             {connected ? 'System Online (Live)' : 'Reconnecting...'}
           </Typography>
         </Box>
@@ -145,21 +145,28 @@ export default function Layout() {
                 sx={{
                   borderRadius: 2,
                   py: 1.2,
+                  border: '1px solid transparent',
+                  transition: 'all 0.22s ease',
                   '&.Mui-selected': {
-                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                    borderColor: 'var(--border-medium)',
+                    backgroundColor: 'rgba(246, 211, 101, 0.12)',
                     '&:hover': {
-                      backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                      backgroundColor: 'rgba(246, 211, 101, 0.18)',
                     }
+                  },
+                  '&:hover': {
+                    borderColor: 'var(--border-subtle)',
+                    backgroundColor: 'rgba(246, 211, 101, 0.06)',
                   },
                 }}
               >
                 <ListItemIcon sx={{ minWidth: 40 }}>
-                  {item.path === '/notifications' && unreadCount > 0 ? (
+                  {item.path === '/dashboard/notifications' && unreadCount > 0 ? (
                     <Badge badgeContent={unreadCount} color="error" variant="dot">
-                      <Icon sx={{ color: isActive ? '#ef4444' : 'text.secondary' }} />
+                      <Icon sx={{ color: isActive ? 'var(--accent-gold)' : 'text.secondary' }} />
                     </Badge>
                   ) : (
-                    <Icon sx={{ color: isActive ? '#ef4444' : 'text.secondary' }} />
+                    <Icon sx={{ color: isActive ? 'var(--accent-gold)' : 'text.secondary' }} />
                   )}
                 </ListItemIcon>
                 <ListItemText
@@ -171,17 +178,17 @@ export default function Layout() {
         })}
       </List>
 
-      <Box sx={{ p: 2, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, p: 1, mb: 1 }}>
-          <Avatar sx={{ width: 36, height: 36 }}>{user?.name?.charAt(0) || 'U'}</Avatar>
+      <Box sx={{ p: 2, borderTop: '1px solid var(--border-subtle)' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, p: 1, mb: 1, border: '1px solid var(--border-subtle)', borderRadius: 2, background: 'var(--bg-card)' }}>
+          <Avatar sx={{ width: 36, height: 36, bgcolor: 'rgba(246, 211, 101, 0.22)', color: 'var(--accent-gold)' }}>{user?.name?.charAt(0) || 'U'}</Avatar>
           <Box sx={{ flexGrow: 1, overflow: 'hidden' }}>
-            <Typography variant="subtitle2" noWrap>{user?.name || 'Admin User'}</Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'capitalize' }}>
+            <Typography variant="subtitle2" noWrap sx={{ fontWeight: 600 }}>{user?.name || 'Admin User'}</Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'capitalize', fontFamily: 'var(--font-mono)', fontSize: '0.6rem', letterSpacing: '0.08em' }}>
               {user?.role || 'Administrator'}
             </Typography>
           </Box>
         </Box>
-          <ListItemButton onClick={handleLogout} sx={{ borderRadius: 2, color: 'text.secondary' }}>
+          <ListItemButton onClick={handleLogout} sx={{ borderRadius: 2, color: 'text.secondary', border: '1px solid var(--border-subtle)', '&:hover': { borderColor: 'var(--border-medium)', color: 'var(--text-primary)' } }}>
           <ListItemIcon sx={{ minWidth: 40 }}><LogoutIcon fontSize="small" sx={{ color: 'inherit' }} /></ListItemIcon>
           <ListItemText primary={<Typography sx={{ fontSize: '0.85rem' }}>Sign Out</Typography>} />
         </ListItemButton>
@@ -196,9 +203,10 @@ export default function Layout() {
         sx={{
           width: { sm: `calc(100% - ${drawerWidth}px)` },
           ml: { sm: `${drawerWidth}px` },
+          background: 'rgba(10, 13, 18, 0.74)',
         }}
       >
-        <Toolbar sx={{ pr: '24px' }}>
+        <Toolbar sx={{ pr: '24px', minHeight: 72 }}>
           <IconButton
             color="inherit"
             edge="start"
@@ -208,13 +216,13 @@ export default function Layout() {
             <MenuIcon />
           </IconButton>
           <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', gap: 2 }}>
-            <Typography component="h1" variant="h6" color="inherit" noWrap>
+            <Typography component="h1" variant="h6" color="inherit" noWrap sx={{ fontFamily: 'var(--font-display)', fontWeight: 300, fontSize: '1.45rem' }}>
               {menuItems.find(m => m.path === location.pathname)?.text || 'Dashboard'}
             </Typography>
             
             {contexts.length > 1 && (
               <>
-                <Divider orientation="vertical" flexItem sx={{ my: 2, borderColor: 'rgba(255,255,255,0.1)' }} />
+                <Divider orientation="vertical" flexItem sx={{ my: 2, borderColor: 'var(--border-subtle)' }} />
                 <Chip
                   icon={<BusinessIcon sx={{ color: 'inherit !important', fontSize: '1.1rem !important' }} />}
                   label={currentContextName}
@@ -222,19 +230,20 @@ export default function Layout() {
                   onDelete={handleContextOpen}
                   deleteIcon={<ExpandMoreIcon sx={{ color: 'inherit !important' }} />}
                   sx={{ 
-                    backgroundColor: 'rgba(255,255,255,0.05)', 
-                    color: 'rgba(255,255,255,0.8)',
+                    backgroundColor: 'var(--bg-card)', 
+                    color: 'var(--text-secondary)',
                     fontWeight: 600,
-                    '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)' }
+                    border: '1px solid var(--border-subtle)',
+                    '&:hover': { backgroundColor: 'var(--bg-elevated)', borderColor: 'var(--border-medium)' }
                   }}
                 />
                 <Menu
                   anchorEl={contextAnchorEl}
                   open={Boolean(contextAnchorEl)}
                   onClose={handleContextClose}
-                  slotProps={{ paper: { className: 'glass-strong', sx: { minWidth: 200, mt: 1 } } }}
+                  slotProps={{ paper: { sx: { minWidth: 220, mt: 1, background: 'var(--bg-card)', border: '1px solid var(--border-medium)' } } }}
                 >
-                  <Typography variant="overline" sx={{ px: 2, py: 1, display: 'block', color: 'text.secondary' }}>
+                  <Typography variant="overline" sx={{ px: 2, py: 1, display: 'block', color: 'text.secondary', fontSize: '0.6rem' }}>
                     Switch Property
                   </Typography>
                   {contexts.map((ctx) => (
@@ -255,11 +264,13 @@ export default function Layout() {
             )}
           </Box>
           
-          <IconButton color="inherit" onClick={() => navigate('/dashboard/notifications')}>
+          <Tooltip title="Notifications">
+          <IconButton color="inherit" onClick={() => navigate('/dashboard/notifications')} sx={{ border: '1px solid var(--border-subtle)', borderRadius: 2 }}>
             <Badge badgeContent={unreadCount} color="error">
               <NotificationsIcon />
             </Badge>
           </IconButton>
+          </Tooltip>
         </Toolbar>
       </AppBar>
       
@@ -293,7 +304,7 @@ export default function Layout() {
           flexGrow: 1,
           height: '100vh',
           overflow: 'auto',
-          pt: '80px',
+          pt: '88px',
           px: { xs: 2, sm: 4 },
           pb: 4,
           position: 'relative'

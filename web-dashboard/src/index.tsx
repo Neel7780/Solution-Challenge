@@ -22,37 +22,41 @@ const theme = createTheme({
   palette: {
     mode: 'dark',
     primary: {
-      main: '#ff3e3e', // Electric Red
+      main: '#f6d365',
     },
     secondary: {
-      main: '#00f58c', // Neon Green
+      main: '#4de6c6',
+    },
+    error: {
+      main: '#ff5c5c',
     },
     background: {
-      default: '#030303',
-      paper: 'rgba(10, 10, 10, 0.7)',
+      default: '#0a0d12',
+      paper: 'rgba(16, 20, 28, 0.76)',
     },
     text: {
-      primary: '#f8fafc',
-      secondary: '#94a3b8',
+      primary: '#f5f7fa',
+      secondary: 'rgba(245, 247, 250, 0.72)',
     },
-    divider: 'rgba(255, 255, 255, 0.04)',
+    divider: 'rgba(246, 211, 101, 0.12)',
   },
   typography: {
     fontFamily: "'Inter', -apple-system, sans-serif",
-    h1: { fontFamily: "'Outfit', sans-serif", fontWeight: 600, letterSpacing: '-0.02em' },
-    h2: { fontFamily: "'Outfit', sans-serif", fontWeight: 600, letterSpacing: '-0.02em' },
-    h3: { fontFamily: "'Outfit', sans-serif", fontWeight: 500 },
-    h4: { fontFamily: "'Outfit', sans-serif", fontWeight: 500 },
-    body1: { fontWeight: 300, fontSize: '0.875rem' },
-    body2: { fontWeight: 300, fontSize: '0.8125rem' },
+    h1: { fontFamily: "'Fraunces', serif", fontWeight: 300, letterSpacing: '-0.02em' },
+    h2: { fontFamily: "'Fraunces', serif", fontWeight: 300, letterSpacing: '-0.02em' },
+    h3: { fontFamily: "'Fraunces', serif", fontWeight: 300, letterSpacing: '-0.01em' },
+    h4: { fontFamily: "'Fraunces', serif", fontWeight: 400, letterSpacing: '-0.01em' },
+    overline: { fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.14em' },
+    body1: { fontWeight: 400, fontSize: '0.9rem' },
+    body2: { fontWeight: 400, fontSize: '0.82rem' },
     button: {
-      fontWeight: 500,
+      fontWeight: 600,
       textTransform: 'none' as const,
       fontSize: '0.8125rem',
     },
   },
   shape: {
-    borderRadius: 6, // Sharper, more formal corners
+    borderRadius: 10,
   },
   components: {
     MuiCssBaseline: {
@@ -69,22 +73,23 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           backgroundImage: 'none',
-          backgroundColor: 'rgba(255, 255, 255, 0.02)',
-          border: '1px solid rgba(255, 255, 255, 0.05)',
-          backdropFilter: 'blur(12px)',
+          backgroundColor: 'rgba(16, 20, 28, 0.76)',
+          border: '1px solid rgba(246, 211, 101, 0.12)',
+          backdropFilter: 'blur(14px)',
         },
       },
     },
     MuiButton: {
       styleOverrides: {
         root: {
-          borderRadius: 4,
+          borderRadius: 8,
           padding: '6px 16px',
         },
         contained: {
           boxShadow: 'none',
+          color: '#121417',
           '&:hover': {
-            boxShadow: '0 0 15px rgba(255, 62, 62, 0.2)',
+            boxShadow: '0 0 24px rgba(246, 211, 101, 0.18)',
           },
         },
       },
@@ -92,8 +97,8 @@ const theme = createTheme({
     MuiDrawer: {
       styleOverrides: {
         paper: {
-          backgroundColor: '#050505',
-          borderRight: '1px solid rgba(255, 255, 255, 0.04)',
+          backgroundColor: 'rgba(10, 13, 18, 0.95)',
+          borderRight: '1px solid rgba(246, 211, 101, 0.12)',
           width: 240, // Slimmer drawer
         },
       },
@@ -101,9 +106,9 @@ const theme = createTheme({
     MuiAppBar: {
       styleOverrides: {
         root: {
-          backgroundColor: 'rgba(3, 3, 3, 0.7)',
-          backdropFilter: 'blur(12px)',
-          borderBottom: '1px solid rgba(255, 255, 255, 0.04)',
+          backgroundColor: 'rgba(10, 13, 18, 0.75)',
+          backdropFilter: 'blur(14px)',
+          borderBottom: '1px solid rgba(246, 211, 101, 0.12)',
           boxShadow: 'none',
         },
       },

@@ -2,6 +2,7 @@ extends CharacterBody3D
 
 ## ─── Exports ───
 @export var agent_name: String = "Guest"
+@export var show_safety_path: bool = true
 
 ## ─── Node references (resolved at runtime) ───
 @onready var nav_agent: NavigationAgent3D = $NavigationAgent3D
@@ -29,9 +30,19 @@ var _fire_response_target: Node3D = null
 var _extinguish_cooldown: float = 0.0
 var _fire_response_state: bool = false
 var _extinguishing_in_progress: bool = false
+var _path_line_instance: MeshInstance3D = null
+var _path_line_mesh: ImmediateMesh = null
+var _path_line_material: StandardMaterial3D = null
+var _safe_marker_instance: MeshInstance3D = null
+var _path_refresh_timer: float = 0.0
+
+const PATH_REFRESH_INTERVAL: float = 0.12
+const PATH_Y_OFFSET: float = 0.07
 
 
 func _ready() -> void:
+	_setup_safety_visuals()
+
 	# Generate a unique ID
 	agent_id = "agent_" + str(get_instance_id())
 	
@@ -54,6 +65,7 @@ func _ready() -> void:
 
 func _physics_process(delta: float) -> void:
 	if status == "dead" or status == "safe":
+		_clear_safety_visuals()
 		return
 	
 	if _extinguish_cooldown > 0.0:
@@ -78,6 +90,7 @@ func _physics_process(delta: float) -> void:
 	
 	# Update bridge state
 	_update_bridge()
+	_update_safety_visuals(delta)
 
 func find_nearest_door() -> Marker3D:
 	var doors = get_tree().get_nodes_in_group("doors")
@@ -138,6 +151,7 @@ func _ai_move(_delta: float) -> void:
 		# If evacuating and reached exit
 		if ai_state == "evacuate" and current_target != null:
 			status = "safe"
+			_clear_safety_visuals()
 			visible = false
 	else:
 		var next_pos = nav_agent.get_next_path_position()
@@ -202,6 +216,7 @@ func move_to_position(world_pos: Vector3) -> void:
 	_has_manual_target = true
 	_fire_response_state = false
 	_fire_response_target = null
+	_clear_safety_visuals()
 
 
 ## ─── Fire interaction (called by fire.gd Area3D) ───
@@ -264,6 +279,7 @@ func clear_fire() -> void:
 	_fire_response_target = null
 	_fire_response_state = false
 	_extinguishing_in_progress = false
+	_clear_safety_visuals()
 	if mode == "ai" and status != "safe":
 		status = "idle"
 		ai_state = "wander"
@@ -301,10 +317,13 @@ func _on_bridge_mode_changed(target_agent_id: String, new_mode: String) -> void:
 			ai_state = "wander"
 			set_target(null)
 		_has_manual_target = false
+	else:
+		_clear_safety_visuals()
 	print("[Agent %s] Mode changed to: %s" % [agent_name, mode])
 
 
 func _on_bridge_reset() -> void:
+	_clear_safety_visuals()
 	queue_free()
 
 
@@ -342,6 +361,7 @@ func assign_fire_response_target(fire_node: Node3D) -> void:
 func clear_fire_response_target() -> void:
 	_fire_response_target = null
 	_fire_response_state = false
+	_clear_safety_visuals()
 	if status != "dead" and status != "safe":
 		status = "idle"
 		ai_state = "wander"
@@ -403,3 +423,93 @@ func _find_nearest_fire() -> Node3D:
 			nearest_fire = fire
 	
 	return nearest_fire
+
+
+func _setup_safety_visuals() -> void:
+	if not show_safety_path:
+		return
+
+	_path_line_material = StandardMaterial3D.new()
+	_path_line_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_path_line_material.albedo_color = Color(0.16, 0.98, 0.35, 0.95)
+	_path_line_material.emission_enabled = true
+	_path_line_material.emission = Color(0.16, 0.98, 0.35, 1.0)
+	_path_line_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+
+	_path_line_mesh = ImmediateMesh.new()
+	_path_line_instance = MeshInstance3D.new()
+	_path_line_instance.mesh = _path_line_mesh
+	add_child(_path_line_instance)
+	_path_line_instance.visible = false
+
+	var marker_mesh := SphereMesh.new()
+	marker_mesh.radius = 0.35
+
+	var marker_material := StandardMaterial3D.new()
+	marker_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	marker_material.albedo_color = Color(0.28, 1.0, 0.48, 0.75)
+	marker_material.emission_enabled = true
+	marker_material.emission = Color(0.28, 1.0, 0.48, 1.0)
+	marker_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+
+	_safe_marker_instance = MeshInstance3D.new()
+	_safe_marker_instance.mesh = marker_mesh
+	_safe_marker_instance.material_override = marker_material
+	add_child(_safe_marker_instance)
+	_safe_marker_instance.visible = false
+
+
+func _update_safety_visuals(delta: float) -> void:
+	if not show_safety_path:
+		return
+
+	var can_show := mode == "ai" and ai_state == "evacuate" and current_target != null and is_instance_valid(current_target)
+	if not can_show:
+		_clear_safety_visuals()
+		return
+
+	if _safe_marker_instance != null:
+		_safe_marker_instance.visible = true
+		_safe_marker_instance.global_position = current_target.global_position + Vector3(0.0, 0.35, 0.0)
+
+	if _path_line_instance != null:
+		_path_line_instance.visible = true
+
+	_path_refresh_timer += delta
+	if _path_refresh_timer < PATH_REFRESH_INTERVAL:
+		return
+	_path_refresh_timer = 0.0
+
+	var nav_path: PackedVector3Array = nav_agent.get_current_navigation_path()
+	_draw_path_line(nav_path)
+
+
+func _draw_path_line(path_points: PackedVector3Array) -> void:
+	if _path_line_mesh == null:
+		return
+
+	_path_line_mesh.clear_surfaces()
+	if _path_line_material == null:
+		return
+
+	var has_current_target := current_target != null and is_instance_valid(current_target)
+
+	_path_line_mesh.surface_begin(Mesh.PRIMITIVE_LINE_STRIP, _path_line_material)
+	_path_line_mesh.surface_add_vertex(global_position + Vector3(0.0, PATH_Y_OFFSET, 0.0))
+
+	for point in path_points:
+		_path_line_mesh.surface_add_vertex(point + Vector3(0.0, PATH_Y_OFFSET, 0.0))
+
+	if has_current_target:
+		_path_line_mesh.surface_add_vertex(current_target.global_position + Vector3(0.0, PATH_Y_OFFSET, 0.0))
+
+	_path_line_mesh.surface_end()
+
+
+func _clear_safety_visuals() -> void:
+	if _path_line_instance != null:
+		_path_line_instance.visible = false
+	if _safe_marker_instance != null:
+		_safe_marker_instance.visible = false
+	if _path_line_mesh != null:
+		_path_line_mesh.clear_surfaces()
