@@ -76,6 +76,40 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       });
     });
 
+    socket.on('new_crisis', (data) => {
+      const incident = data?.incident;
+      const incidentType = incident?.incident_type || data?.incident_type || 'incident';
+      const severity = incident?.severity || data?.severity || 'high';
+      const description = incident?.description || data?.description;
+
+      // Only update state if we don't already have this incident to avoid double-processing
+      // some messages that might come via both property and role rooms.
+      if (crisisState.activeIncident?.id !== incident?.id) {
+        crisisState.onCrisisReported(data);
+        
+        // If staff were auto-assigned (common in simulations), update that state too
+        if (data.assignedStaff) {
+          crisisState.onStaffAssigned(data);
+        }
+      }
+
+      addNotif({
+        type: 'crisis',
+        title: '🚨 EMERGENCY: New Crisis',
+        message: description || `${incidentType.toUpperCase()} incident reported. Action required.`,
+        severity: severity === 'critical' ? 'critical' : 'high',
+      });
+    });
+
+    socket.on('public_crisis_reported', (data) => {
+      addNotif({
+        type: 'crisis',
+        title: 'Public Crisis Report',
+        message: `A public report of ${data.type || 'incident'} has been received. Please review and escalate if necessary.`,
+        severity: data.severity === 'critical' ? 'critical' : 'high',
+      });
+    });
+
     socket.on('incident_enriched', (data) => {
       const enrichment = data?.enrichment;
       crisisState.onIncidentEnriched(data);

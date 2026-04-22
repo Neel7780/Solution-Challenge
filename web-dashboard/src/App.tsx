@@ -10,6 +10,7 @@ import Login from './pages/Login';
 import Landing from './pages/Landing';
 import AuthGuard from './components/AuthGuard';
 import LiveCrisisOverlay from './components/LiveCrisisOverlay';
+import NotificationToast from './components/NotificationToast';
 
 // Admin Pages
 import Layout from './components/Layout';
@@ -64,6 +65,7 @@ function App() {
 
   return (
     <>
+    <NotificationToast />
     <LiveCrisisOverlay />
     <Routes>
       {/* Public Landing Page */}
