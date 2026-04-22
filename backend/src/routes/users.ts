@@ -20,15 +20,15 @@ import { authenticate, requireRole } from '../middleware/auth';
 
 const router = Router();
 
-router.post('/', authenticate, requireRole(['org_admin', 'super_admin']), [
+router.post('/', authenticate, requireRole(['org_admin', 'super_admin', 'admin']), [
   body('name').notEmpty(),
   body('email').optional().isEmail(),
   body('role').isIn(['staff', 'security', 'admin', 'responder', 'org_admin']),
   body('password').isLength({ min: 8 }),
 ], createUser);
 
-router.patch('/:id', authenticate, requireRole(['org_admin', 'super_admin']), updateUser);
-router.delete('/:id', authenticate, requireRole(['org_admin', 'super_admin']), deleteUser);
+router.patch('/:id', authenticate, requireRole(['org_admin', 'super_admin', 'admin']), updateUser);
+router.delete('/:id', authenticate, requireRole(['org_admin', 'super_admin', 'admin']), deleteUser);
 
 router.post('/register', [
   body('name').notEmpty(),

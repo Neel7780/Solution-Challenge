@@ -101,9 +101,9 @@ export const reportCrisis = async (req: Request, res: Response) => {
       }
 
       await client.query(
-        `INSERT INTO notifications (incident_id, recipient_type, recipient_id, channel, message, status)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [incident.id, 'property', resolvedPropertyId, 'push', `EMERGENCY: ${type.toUpperCase()} reported. Please check in immediately.`, 'pending']
+        `INSERT INTO notifications (incident_id, property_id, recipient_type, recipient_id, channel, message, status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [incident.id, resolvedPropertyId, 'property', String(resolvedPropertyId), 'push', `EMERGENCY: ${type.toUpperCase()} reported. Please check in immediately.`, 'pending']
       );
 
       await client.query('COMMIT');

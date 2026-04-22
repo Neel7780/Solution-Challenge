@@ -51,15 +51,27 @@ export const sendMassNotification = async (req: Request, res: Response) => {
 
       const usersResult = await client.query(userQuery, params);
 
+      // Create individual records for SMS and Email
+      const individualChannels = effectiveChannels.filter(c => ['sms', 'email'].includes(c));
       for (const user of usersResult.rows) {
-        for (const channel of effectiveChannels) {
+        for (const channel of individualChannels) {
           const notifResult = await client.query(
-            `INSERT INTO notifications (recipient_type, recipient_id, channel, message, status)
-             VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-            ['individual', user.id, channel, message, 'pending']
+            `INSERT INTO notifications (recipient_type, recipient_id, channel, message, status, property_id)
+             VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+            ['individual', user.id, channel, message, 'pending', propertyId]
           );
           notifications.push(notifResult.rows[0]);
         }
+      }
+
+      // Create a single 'property' level record for Push/In-App
+      if (effectiveChannels.includes('push')) {
+        const notifResult = await client.query(
+          `INSERT INTO notifications (recipient_type, recipient_id, channel, message, status, property_id)
+           VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+          ['property', String(propertyId), 'push', message, 'sent', propertyId]
+        );
+        notifications.push(notifResult.rows[0]);
       }
 
       await client.query('COMMIT');
@@ -107,13 +119,14 @@ export const sendMassNotification = async (req: Request, res: Response) => {
 
 export const sendNotification = async (req: Request, res: Response) => {
   const { userIds, message, channel = 'push' } = req.body;
+  const propertyId = req.user?.propertyId;
   try {
     const notifications: any[] = [];
     for (const userId of userIds) {
       const result = await query(
-        `INSERT INTO notifications (recipient_type, recipient_id, channel, message, status)
-         VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-        ['individual', userId, channel, message, 'sent']
+        `INSERT INTO notifications (recipient_type, recipient_id, channel, message, status, property_id)
+         VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+        ['individual', userId, channel, message, 'sent', propertyId]
       );
       notifications.push(result.rows[0]);
     }
@@ -153,7 +166,11 @@ export const getNotificationHistory = async (req: Request, res: Response) => {
       `SELECT n.*, i.incident_type
        FROM notifications n
        LEFT JOIN incidents i ON n.incident_id = i.id
-       WHERE i.property_id = $1 OR (n.recipient_type = 'individual' AND n.recipient_id = $2::text)
+       WHERE 
+         n.property_id = $1 
+         OR i.property_id = $1 
+         OR (n.recipient_type = 'individual' AND n.recipient_id = $2::text)
+         OR (n.recipient_type = 'property' AND n.recipient_id = $1::text)
        ORDER BY n.created_at DESC
        LIMIT $3`,
       [propertyId, req.user!.userId, limit]

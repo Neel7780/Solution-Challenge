@@ -19,8 +19,8 @@ router.get('/triage/:propertyId', authenticate, requireRole(['admin', 'security'
 router.get('/stats/:propertyId', authenticate, requireRole(['admin', 'security', 'staff', 'responder', 'org_admin', 'super_admin']), getStats);
 router.get('/timeline/:propertyId', authenticate, requireRole(['admin', 'security', 'staff', 'responder', 'org_admin', 'super_admin']), getTimeline);
 router.get('/heatmap', authenticate, requireRole(['admin', 'security', 'staff', 'responder', 'org_admin', 'super_admin']), getHeatmap);
-router.get('/organization/properties', authenticate, requireRole(['org_admin', 'super_admin']), getOrganizationProperties);
-router.post('/organization/properties', authenticate, requireRole(['org_admin', 'super_admin']), createProperty);
+router.get('/organization/properties', authenticate, requireRole(['org_admin', 'super_admin', 'admin']), getOrganizationProperties);
+router.post('/organization/properties', authenticate, requireRole(['org_admin', 'super_admin', 'admin']), createProperty);
 router.get('/settings/:propertyId', authenticate, getPropertySettings);
 
 

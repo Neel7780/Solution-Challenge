@@ -100,7 +100,7 @@ export default function Layout() {
 
     const menu = [...baseItems];
 
-    if (user?.role === 'org_admin') {
+    if (user?.role === 'org_admin' || (user?.role === 'admin' && user?.organization_id)) {
       menu.push({ text: 'My Organization', icon: OrgIcon, path: '/dashboard/organization' });
     }
 
