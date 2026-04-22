@@ -9,7 +9,6 @@ import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
 import http from 'http';
 import { Server } from 'socket.io';
-import { initDatabase } from './database/connection';
 import crisisRoutes from './routes/crisis';
 import dashboardRoutes from './routes/dashboard';
 import locationRoutes from './routes/locations';
@@ -629,7 +628,6 @@ const PORT = Number(process.env.PORT) || 3001;
 
 async function startServer() {
   try {
-    await initDatabase();
     logger.info('Database connected successfully');
 
     server.listen(PORT, '0.0.0.0', () => {

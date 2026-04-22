@@ -14,6 +14,7 @@ import MainTabNavigator from './src/navigation/MainTabNavigator';
 import PanicScreen from './src/screens/PanicScreen';
 import ContactsScreen from './src/screens/ContactsScreen';
 import SafetyGuideScreen from './src/screens/SafetyGuideScreen';
+import IncidentDetailsScreen from './src/screens/IncidentDetailsScreen';
 
 const Stack = createStackNavigator<RootStackParamList>();
 
@@ -34,6 +35,16 @@ export default function App() {
                     presentation: 'modal',
                     animationTypeForReplace: 'pop'
                   }}
+                />
+                <Stack.Screen 
+                  name="IncidentDetails" 
+                  component={IncidentDetailsScreen as any} 
+                  options={{ 
+                    headerShown: true, 
+                    title: 'Incident Details',
+                    headerStyle: { backgroundColor: '#d32f2f' },
+                    headerTintColor: '#fff'
+                  }} 
                 />
                 <Stack.Screen 
                   name="EmergencyContacts" 

@@ -55,13 +55,34 @@ export const SocketProvider = ({ children }: SocketProviderProps) => {
 
     // Listen for crisis alerts
     newSocket.on('crisis_reported', (data: any) => {
-      showNotification('Crisis Alert', `Emergency: ${data.incident.incident_type}`);
+      showNotification('🚨 EMERGENCY ALERT 🚨', `${data.incident.incident_type.toUpperCase()}: ${data.incident.description}`);
+    });
+
+    // Listen for nearby crisis
+    newSocket.on('nearby_crisis', (data: any) => {
+      showNotification('⚠️ CRITICAL ALERT ⚠️', data.message);
     });
 
     // Listen for AI enrichment
     newSocket.on('incident_enriched', (data: any) => {
       if (data.enrichment?.massAlertMessage) {
         showNotification('Emergency Update', data.enrichment.massAlertMessage);
+      }
+    });
+
+    // Listen for property status updates (e.g. Evacuation Order)
+    newSocket.on('property_status_update', (data: any) => {
+      if (data.status === 'evacuating') {
+        showNotification('🛑 EVACUATION ORDER 🛑', 'IMMEDIATE EVACUATION ORDERED. Proceed to nearest safe exit.');
+      } else if (data.status === 'operational') {
+        showNotification('✅ Status Update', 'The property has returned to operational status.');
+      }
+    });
+
+    // Listen for incident status updates
+    newSocket.on('incident_status_update', (data: any) => {
+      if (data.status === 'resolved') {
+        showNotification('Emergency Resolved', `Incident #${data.incidentId} has been resolved.`);
       }
     });
 
@@ -72,8 +93,9 @@ export const SocketProvider = ({ children }: SocketProviderProps) => {
 
     // Listen for panic alerts
     newSocket.on('panic_triggered', (data: any) => {
-      if (user?.role === 'security' || user?.role === 'admin') {
-        showNotification('Panic Alert', `Panic button triggered by ${data.userName}`);
+      const isResponder = ['security', 'responder', 'admin', 'staff', 'org_admin', 'super_admin'].includes(user?.role || '');
+      if (isResponder) {
+        showNotification('🆘 PANIC ALERT 🆘', `Panic button triggered by ${data.userName || 'a guest'}`);
       }
     });
 

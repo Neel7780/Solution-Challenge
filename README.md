@@ -41,10 +41,7 @@ CrisisRespond has transitioned from a single-property application to a robust en
 - Expo development environment (for mobile)
 
 ### 1. Database Setup
-Run the migration script in your database console to set up the enterprise schema:
-```bash
-# Path: backend/src/database/enterprise_migration.sql
-```
+The database schema is expected to already exist in your PostgreSQL instance. If you are recreating the database from scratch, apply the schema manually before starting the backend.
 
 ### 2. Backend Setup
 ```bash

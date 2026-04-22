@@ -2,14 +2,20 @@ import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { MainTabParamList } from '../types';
+import { useAuth } from '../context/AuthContext';
 
 import HomeScreen from '../screens/HomeScreen';
 import StatusScreen from '../screens/StatusScreen';
 import ProfileScreen from '../screens/ProfileScreen';
+import TriageScreen from '../screens/TriageScreen';
+import MapScreen from '../screens/MapScreen';
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
 export default function MainTabNavigator() {
+  const { user } = useAuth();
+  const isResponder = user?.role === 'responder' || user?.role === 'security' || user?.role === 'staff' || user?.role === 'admin' || user?.role === 'org_admin' || user?.role === 'super_admin';
+
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -20,6 +26,10 @@ export default function MainTabNavigator() {
             iconName = 'home';
           } else if (route.name === 'Status') {
             iconName = 'assessment';
+          } else if (route.name === 'Triage') {
+            iconName = 'list-alt';
+          } else if (route.name === 'Map') {
+            iconName = 'map';
           } else if (route.name === 'Profile') {
             iconName = 'person';
           }
@@ -38,16 +48,33 @@ export default function MainTabNavigator() {
         },
       })}
     >
-      <Tab.Screen
-        name="Home"
-        component={HomeScreen as any}
-        options={{ title: 'Crisis Response' }}
-      />
-      <Tab.Screen
-        name="Status"
-        component={StatusScreen as any}
-        options={{ title: 'Status' }}
-      />
+      {!isResponder ? (
+        <>
+          <Tab.Screen
+            name="Home"
+            component={HomeScreen as any}
+            options={{ title: 'Crisis Response' }}
+          />
+          <Tab.Screen
+            name="Status"
+            component={StatusScreen as any}
+            options={{ title: 'Status' }}
+          />
+        </>
+      ) : (
+        <>
+          <Tab.Screen
+            name="Triage"
+            component={TriageScreen as any}
+            options={{ title: 'Incident Triage' }}
+          />
+          <Tab.Screen
+            name="Map"
+            component={MapScreen as any}
+            options={{ title: 'Live Map' }}
+          />
+        </>
+      )}
       <Tab.Screen
         name="Profile"
         component={ProfileScreen as any}

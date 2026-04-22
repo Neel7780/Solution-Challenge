@@ -1,5 +1,6 @@
 import logger from '../utils/logger';
 import { query } from '../database/connection';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 /* ─── Types ─── */
 
@@ -71,12 +72,11 @@ const FALLBACK_ANALYSIS: SimulationAnalysisResult = {
 /* ─── Core Analysis Function ─── */
 
 export const analyzeSimulation = async (req: SimulationAnalysisRequest): Promise<SimulationAnalysisResult> => {
-  const apiKey = process.env.LLM_API_KEY;
-  const baseUrl = process.env.LLM_BASE_URL || 'https://api.groq.com/openai/v1';
-  const model = process.env.LLM_MODEL || 'llama-3.3-70b-versatile';
+  const apiKey = process.env.GEMINI_API_KEY;
+  const model = process.env.GEMINI_MODEL || 'gemini-flash-latest';
 
   if (!apiKey) {
-    logger.warn('LLM_API_KEY not set. Using fallback simulation analysis.');
+    logger.warn('GEMINI_API_KEY not set. Using fallback simulation analysis.');
     return FALLBACK_ANALYSIS;
   }
 
@@ -122,40 +122,35 @@ METRICS:
 
 Analyze this simulation snapshot and provide your structured assessment.`;
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s timeout — analysis can be slower
 
   try {
-    const response = await fetch(`${baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      signal: controller.signal,
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
+    const client = new GoogleGenerativeAI(apiKey);
+    const genModel = client.getGenerativeModel({ model });
+
+    const result = await Promise.race([
+      genModel.generateContent({
+        contents: [
+          { role: 'user', parts: [{ text: systemPrompt + '\n\n' + userPrompt }] }
         ],
-        temperature: 0.3,
-        max_tokens: 1024,
-        response_format: { type: 'json_object' },
+        generationConfig: {
+          temperature: 0.3,
+          maxOutputTokens: 2048
+        }
       }),
-    });
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Timeout')), 30000)
+      )
+    ]) as any;
 
-    clearTimeout(timeoutId);
-
-    if (!response.ok) {
-      const errorBody = await response.text();
-      logger.error(`Simulation Analysis LLM Error (${response.status}): ${errorBody}`);
-      throw new Error(`LLM API returned ${response.status}`);
+    const content = result?.response?.text?.();
+    if (!content) {
+      throw new Error('No content in response');
     }
-
-    const data = await response.json();
-    const content = data.choices[0].message.content;
-    const cleanJson = content.replace(/```json|```/g, '').trim();
+    const cleanJson = content
+      .replace(/```json\n?/g, '')
+      .replace(/```\n?/g, '')
+      .replace(/\n\s*\n/g, ' ')
+      .trim();
     const analysis = JSON.parse(cleanJson) as SimulationAnalysisResult;
     analysis.timestamp = new Date().toISOString();
 
@@ -163,11 +158,10 @@ Analyze this simulation snapshot and provide your structured assessment.`;
     return analysis;
 
   } catch (error: any) {
-    clearTimeout(timeoutId);
-    if (error.name === 'AbortError') {
-      logger.warn(`Simulation analysis timed out for property ${propertyId}. Using fallback.`);
+      if (error.message === 'Timeout') {
+        logger.warn(`Gemini simulation analysis timed out for property ${propertyId}. Using fallback.`);
     } else {
-      logger.error(`Simulation analysis failed for property ${propertyId}:`, error);
+        logger.error(`Gemini simulation analysis failed for property ${propertyId}: ${error.message || JSON.stringify(error)}`);
     }
     return { ...FALLBACK_ANALYSIS, timestamp: new Date().toISOString() };
   }
@@ -177,7 +171,7 @@ Analyze this simulation snapshot and provide your structured assessment.`;
 
 export const saveSimulationRun = async (
   propertyId: number,
-  userId: number,
+  userId: number | null,
   snapshot: SimulationSnapshot,
   analysis: SimulationAnalysisResult,
   durationSeconds: number,
@@ -191,7 +185,7 @@ export const saveSimulationRun = async (
        RETURNING id`,
       [
         propertyId,
-        userId,
+        userId || null,  // Use NULL if userId is not provided
         durationSeconds,
         JSON.stringify(snapshot),
         JSON.stringify(analysis),

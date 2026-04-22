@@ -1,3 +1,4 @@
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import logger from '../utils/logger';
 import { query } from '../database/connection';
 
@@ -39,87 +40,77 @@ const FALLBACK_ENRICHMENT: EnrichmentData = {
 };
 
 export const enrichIncident = async (incidentId: number, aggregatedState: any): Promise<EnrichmentData> => {
-  const apiKey = process.env.LLM_API_KEY;
-  const baseUrl = process.env.LLM_BASE_URL || 'https://api.groq.com/openai/v1';
-  const model = process.env.LLM_MODEL || 'llama-3.3-70b-versatile';
+  const apiKey = process.env.GEMINI_API_KEY;
+  const model = process.env.GEMINI_MODEL || 'gemini-flash-latest';
 
   if (!apiKey) {
-    logger.warn('LLM_API_KEY not set. Using fallback enrichment.');
+    logger.warn('GEMINI_API_KEY not set. Using fallback enrichment.');
     return FALLBACK_ENRICHMENT;
   }
 
-  const systemPrompt = `
-    You are an expert Emergency Response AI for a premium property management system.
-    Analyze the crisis data and provide structured intelligence.
-    
-    STRICT RULES:
-    1. Respond ONLY with valid JSON.
-    2. Do not include any explanations, preambles, or markdown formatting outside the JSON.
-    3. SEVERITY MUST be one of: "low", "medium", "high", "critical".
-    4. massAlertMessage should be concise and instructional for occupants.
-    5. responderActionPlan should be clear, bulleted steps for security teams.
-    6. evacuationRoutes MUST be based on the provided floor_plan_data (if available).
-    
-    JSON STRUCTURE:
-    {
-      "severity": "low" | "medium" | "high" | "critical",
-      "massAlertMessage": "string",
-      "responderActionPlan": "string",
-      "evacuationRoutes": {
-        "guestEmergencyPlan": ["string"],
-        "staffEvacuationPlan": ["string"],
-        "safeExits": ["string"],
-        "tips": ["string"]
-      }
-    }
-  `;
+  const systemPrompt = `You are an expert Emergency Response AI for a premium property management system.
+Analyze the crisis data and provide structured intelligence.
 
-  const userPrompt = `
-    CONTEXT:
-    Property Context (Floor Plan Data): ${JSON.stringify(aggregatedState.propertyContext || {})}
-    Active Users: ${aggregatedState.activeUsersCount || 0}
-    Detections: ${JSON.stringify(aggregatedState.lastEvents || [])}
-    Incident Description: ${aggregatedState.description || 'Fire detected'}
-  `;
+STRICT RULES:
+1. Respond ONLY with valid JSON.
+2. Do not include any explanations, preambles, or markdown formatting outside the JSON.
+3. SEVERITY MUST be one of: "low", "medium", "high", "critical".
+4. massAlertMessage should be concise and instructional for occupants.
+5. responderActionPlan should be clear, bulleted steps for security teams.
+6. evacuationRoutes MUST be based on the provided floor_plan_data (if available).
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 2000); // 2s timeout for enrichment
+JSON STRUCTURE:
+{
+  "severity": "low" | "medium" | "high" | "critical",
+  "massAlertMessage": "string",
+  "responderActionPlan": "string",
+  "evacuationRoutes": {
+    "guestEmergencyPlan": ["string"],
+    "staffEvacuationPlan": ["string"],
+    "safeExits": ["string"],
+    "tips": ["string"]
+  }
+}`;
+
+  const userPrompt = `CONTEXT:
+Property Context (Floor Plan Data): ${JSON.stringify(aggregatedState.propertyContext || {})}
+Active Users: ${aggregatedState.activeUsersCount || 0}
+Detections: ${JSON.stringify(aggregatedState.lastEvents || [])}
+Incident Description: ${aggregatedState.description || 'Fire detected'}
+
+Respond with ONLY a valid JSON object, no markdown or additional text.`;
 
   try {
-    const response = await fetch(`${baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json'
-      },
-      signal: controller.signal,
-      body: JSON.stringify({
-        model: model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt }
+    const client = new GoogleGenerativeAI(apiKey);
+    const genModel = client.getGenerativeModel({ model });
+
+    const result = await Promise.race([
+      genModel.generateContent({
+        contents: [
+          { role: 'user', parts: [{ text: systemPrompt + '\n\n' + userPrompt }] }
         ],
-        temperature: 0.2,
-        response_format: { type: "json_object" }
-      })
-    });
+        generationConfig: {
+          temperature: 0.2,
+          maxOutputTokens: 1024
+        }
+      }),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Timeout')), 25000)
+      )
+    ]) as any;
 
-    clearTimeout(timeoutId);
-
-    if (!response.ok) {
-      const errorBody = await response.text();
-      logger.error(`LLM API Error (${response.status}): ${errorBody}`);
-      throw new Error(`LLM API returned ${response.status}`);
+    const content = result?.response?.text?.();
+    if (!content) {
+      throw new Error('No content in response');
     }
 
-    const data = await response.json();
-    const content = data.choices[0].message.content;
-    
-    // Clean potential markdown if the model ignored the system prompt
-    const cleanJson = content.replace(/```json|```/g, '').trim();
+    const cleanJson = content
+      .replace(/```json\n?/g, '')
+      .replace(/```\n?/g, '')
+      .replace(/\n\s*\n/g, ' ')
+      .trim();
     const enrichment = JSON.parse(cleanJson) as EnrichmentData;
 
-    // Persist to database
     await query(
       `UPDATE incidents 
        SET severity = $1, 
@@ -128,26 +119,24 @@ export const enrichIncident = async (incidentId: number, aggregatedState: any): 
            evacuation_routes = $4
        WHERE id = $5`,
       [
-        enrichment.severity, 
-        enrichment.massAlertMessage, 
-        enrichment.responderActionPlan, 
+        enrichment.severity,
+        enrichment.massAlertMessage,
+        enrichment.responderActionPlan,
         enrichment.evacuationRoutes ? JSON.stringify(enrichment.evacuationRoutes) : null,
         incidentId
       ]
     );
 
-    logger.info(`Incident ${incidentId} enriched by ${model}. Severity: ${enrichment.severity}`);
+    logger.info(`Incident ${incidentId} enriched by Gemini. Severity: ${enrichment.severity}`);
     return enrichment;
 
   } catch (error: any) {
-    clearTimeout(timeoutId);
-    if (error.name === 'AbortError') {
-      logger.warn(`LLM enrichment timed out for incident ${incidentId}. Using fallback.`);
+    if (error.message === 'Timeout') {
+      logger.warn(`Gemini enrichment timed out for incident ${incidentId}. Using fallback.`);
     } else {
-      logger.error(`LLM enrichment failed for incident ${incidentId}:`, error);
+      logger.error(`Gemini enrichment failed for incident ${incidentId}:`, error.message);
     }
 
-    // Fallback: Still update DB so the UI has something
     await query(
       `UPDATE incidents 
        SET severity = $1, 
@@ -156,9 +145,9 @@ export const enrichIncident = async (incidentId: number, aggregatedState: any): 
            evacuation_routes = $4
        WHERE id = $5`,
       [
-        FALLBACK_ENRICHMENT.severity, 
-        FALLBACK_ENRICHMENT.massAlertMessage, 
-        FALLBACK_ENRICHMENT.responderActionPlan, 
+        FALLBACK_ENRICHMENT.severity,
+        FALLBACK_ENRICHMENT.massAlertMessage,
+        FALLBACK_ENRICHMENT.responderActionPlan,
         JSON.stringify(FALLBACK_ENRICHMENT.evacuationRoutes),
         incidentId
       ]

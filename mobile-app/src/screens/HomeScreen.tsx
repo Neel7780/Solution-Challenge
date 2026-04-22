@@ -154,9 +154,9 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
       {/* Quick Actions */}
       <Text style={styles.sectionTitle}>Quick Actions</Text>
       <View style={styles.actionsGrid}>
-        <TouchableOpacity style={styles.actionCard}>
-          <Icon name="map" size={32} color="#1976d2" />
-          <Text style={styles.actionText}>Evacuation Map</Text>
+        <TouchableOpacity style={styles.actionCard} onPress={() => navigation.navigate('Status')}>
+          <Icon name="check-circle" size={32} color="#4caf50" />
+          <Text style={styles.actionText}>Self Check-In</Text>
         </TouchableOpacity>
         <TouchableOpacity 
           style={styles.actionCard}
@@ -172,9 +172,17 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
           <Icon name="info" size={32} color="#f57c00" />
           <Text style={styles.actionText}>Safety Guide</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.actionCard}>
+        <TouchableOpacity style={styles.actionCard} onPress={() => Alert.alert('Coming Soon', 'In-app messaging will be available in the next update.')}>
           <Icon name="chat" size={32} color="#7b1fa2" />
           <Text style={styles.actionText}>Message Staff</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.actionCard} onPress={() => navigation.navigate('Status')}>
+          <Icon name="notifications" size={32} color="#1976d2" />
+          <Text style={styles.actionText}>Active Alerts</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.actionCard} onPress={() => Alert.alert('Evacuation Map', 'Please follow the physical green exit signs in the hallways to the nearest assembly point.')}>
+          <Icon name="map" size={32} color="#d32f2f" />
+          <Text style={styles.actionText}>Exit Routes</Text>
         </TouchableOpacity>
       </View>
 

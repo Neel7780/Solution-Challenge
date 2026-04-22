@@ -45,10 +45,13 @@ export type RootStackParamList = {
   Panic: undefined;
   EmergencyContacts: undefined;
   SafetyGuide: undefined;
+  IncidentDetails: { incidentId: number };
 };
 
 export type MainTabParamList = {
   Home: undefined;
   Status: undefined;
+  Triage: undefined;
+  Map: undefined;
   Profile: undefined;
 };
