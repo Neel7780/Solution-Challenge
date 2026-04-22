@@ -8,7 +8,7 @@ import {
   Linking,
   Platform,
 } from 'react-native';
-import Icon from 'react-native-vector-icons/MaterialIcons';
+import { MaterialIcons as Icon } from '@expo/vector-icons';
 
 const CONTACTS = [
   {

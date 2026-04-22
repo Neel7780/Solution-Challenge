@@ -104,6 +104,20 @@ All endpoints below are **automatically filtered** by the active `property_id` i
 - **Rate Limiting**: Protection on all public reporting endpoints to prevent spam.
 - **SQL Protection**: Forced parameterization and context injection.
 
+## 🔮 Future Development
+
+We are continuously evolving CrisisRespond to be the ultimate safety ecosystem. Our roadmap includes:
+
+- **CAD-Driven Navigation**: Integration with original property CAD designs to generate dynamic, optimized exit paths for guests, significantly reducing evacuation times.
+- **AI-Enhanced Surveillance**: Real-time synchronization with live CCTV footage, utilizing AI for automated monitoring, incident detection, and visual verification.
+- **Multi-Hazard Crisis Management**: Expanding crisis control beyond fire to include comprehensive scenarios such as medical emergencies, security breaches, and natural disasters.
+- **Automated Compliance & Reporting**: Automated post-incident report generation and compliance exports to meet regulatory and insurance requirements seamlessly.
+- **Hyper-Realistic Simulations**: Enhanced simulation fidelity with support for simultaneous multi-hazard scenarios and complex environmental interactions.
+- **Predictive Risk Analytics**: Advanced heatmaps and intelligent resource allocation recommendations powered by historical data and predictive modeling.
+- **Inclusive Emergency Guidance**: Multilingual emergency instructions and guidance tailored for diverse occupants to ensure no one is left behind.
+- **Resilient Offline Operations**: Offline-first support to maintain mission-critical functionality in low-connectivity or compromised network environments.
+- **Deep Ecosystem Integration**: Pilot integrations with Building Management Systems (BMS) and direct communication protocols with emergency response agencies.
+
 ## 👥 Development Team
 
 - **Backend**: Node.js/Express with PostgreSQL & PostGIS
