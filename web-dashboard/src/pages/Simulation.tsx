@@ -47,7 +47,7 @@ import { useAuthStore } from '../store/authStore';
 
 const SIMULATION_URL = '/simulation/hotel_fire_simulation.html';
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
-const SIMULATION_PROPERTY_ID = 2; // Hardcoded for prototype — matches "Grand Horizon Hotel" in DB
+const DEFAULT_PROPERTY_ID = 2; // Hardcoded fallback for prototype
 
 /* ─── Tool Config ─── */
 const TOOLS: { id: SimTool; label: string; icon: React.ElementType; color: string; hint: string }[] = [
@@ -226,18 +226,27 @@ export default function Simulation() {
   const [simError, setSimError] = useState(false);
   const [iframeKey, setIframeKey] = useState(0);
   
-  // Real DB users for simulation
-  const [dbOccupants, setDbOccupants] = useState<any[]>([]);
-  const [spawnIndex, setSpawnIndex] = useState(0);
+  const { socket } = useSocketStore();
+  const { user } = useAuthStore();
 
+  const currentPropertyId = user?.property_id || DEFAULT_PROPERTY_ID;
+
+  // Entrance animations
+  useGSAP(() => {
+    gsap.from('.sim-toolbar', { y: -10, opacity: 0, duration: 0.4, ease: 'power2.out', clearProps: 'all', force3D: false });
+    gsap.from('.sim-viewport', { y: 20, opacity: 0, duration: 0.6, delay: 0.1, ease: 'power2.out', clearProps: 'all', force3D: false });
+    gsap.from('.sim-sidebar', { x: 20, opacity: 0, duration: 0.5, delay: 0.2, ease: 'power2.out', clearProps: 'all', force3D: false });
+  }, { scope: containerRef });
+
+  // ─── Data Fetching ───
   useEffect(() => {
     const fetchOccupants = async () => {
       try {
         const token = localStorage.getItem('token');
         const res = await axios.get(`${API_URL}/users`, { headers: { Authorization: `Bearer ${token}` } });
         if (res.data.users) {
-          // Filter out users strictly meant for SIMULATION_PROPERTY_ID
-          const propertyUsers = res.data.users.filter((u: any) => u.property_id === SIMULATION_PROPERTY_ID);
+          // Filter out users strictly meant for currentPropertyId
+          const propertyUsers = res.data.users.filter((u: any) => u.property_id === currentPropertyId);
           // Shuffle or sort if needed, here we just keep them
           setDbOccupants(propertyUsers);
         }
@@ -246,31 +255,7 @@ export default function Simulation() {
       }
     };
     fetchOccupants();
-  }, []);
-
-  const {
-    activeTool, setActiveTool,
-    speed, setSpeed,
-    localAgents, localFires,
-    addLocalAgent, addLocalFire, removeLocalFire,
-    moveLocalAgent, toggleAgentMode,
-    selectedAgentId, selectAgent,
-    analysis, analysisLoading, setAnalysis, setAnalysisLoading, analysisHistory,
-    isRunning, setRunning,
-    resetLocal,
-    crisisActive, crisisIncidentId, assignedStaff,
-    setCrisisActive, setAssignedStaff,
-  } = useSimulationStore();
-
-  const { socket } = useSocketStore();
-  const { user } = useAuthStore();
-
-  // Entrance animations
-  useGSAP(() => {
-    gsap.from('.sim-toolbar', { y: -10, opacity: 0, duration: 0.4, ease: 'power2.out', clearProps: 'all', force3D: false });
-    gsap.from('.sim-viewport', { y: 20, opacity: 0, duration: 0.6, delay: 0.1, ease: 'power2.out', clearProps: 'all', force3D: false });
-    gsap.from('.sim-sidebar', { x: 20, opacity: 0, duration: 0.5, delay: 0.2, ease: 'power2.out', clearProps: 'all', force3D: false });
-  }, { scope: containerRef });
+  }, [currentPropertyId]);
 
   // Socket.io analysis results listener
   useEffect(() => {
@@ -320,6 +305,10 @@ export default function Simulation() {
     };
   }, [socket, setCrisisActive, setAssignedStaff]);
 
+  // Real DB users for simulation
+  const [dbOccupants, setDbOccupants] = useState<any[]>([]);
+  const [spawnIndex, setSpawnIndex] = useState(0);
+
   // Listen to Godot messages
   const { updateFromSnapshot, agents, fires, metrics, setGodotConnected } = useSimulationStore();
   const [singleFireMode, setSingleFireMode] = useState(false);
@@ -348,7 +337,7 @@ export default function Simulation() {
 
     lastTelemetrySentAtRef.current = now;
     socket.emit('simulation:telemetry', {
-      propertyId: SIMULATION_PROPERTY_ID,
+      propertyId: currentPropertyId,
       activeFireCount: fires.length,
       activeAgentCount: agents.length,
       timestamp: new Date().toISOString(),
@@ -423,13 +412,13 @@ export default function Simulation() {
         // ─── Emit fire crisis to backend for full-stack sync ───
         if (socket) {
           socket.emit('simulation:fire_crisis', {
-            propertyId: SIMULATION_PROPERTY_ID,
+            propertyId: currentPropertyId,
             fireX: x,
             fireY: y,
             agentCount: agents.length || localAgents.length,
             userId: user?.id || null,
           });
-          console.log('[Simulation] Fire crisis emitted to backend for property', SIMULATION_PROPERTY_ID);
+          console.log('[Simulation] Fire crisis emitted to backend for property', currentPropertyId);
         }
         break;
       case 'agent':
@@ -484,7 +473,7 @@ export default function Simulation() {
       if (socket && user) {
         // Send via Socket.io for persistent analysis pipeline
         socket.emit('simulation:request_analysis', {
-          propertyId: SIMULATION_PROPERTY_ID,
+          propertyId: currentPropertyId,
           snapshot,
           simulationDuration: 0,
         });
@@ -499,7 +488,7 @@ export default function Simulation() {
         // Fallback to direct API
         const token = localStorage.getItem('token');
         const res = await axios.post(`${API_URL}/simulation/analyze`, {
-          propertyId: SIMULATION_PROPERTY_ID,
+          propertyId: currentPropertyId,
           snapshot,
         }, { headers: { Authorization: `Bearer ${token}` } });
         if (res.data?.analysis) setAnalysis(res.data.analysis);

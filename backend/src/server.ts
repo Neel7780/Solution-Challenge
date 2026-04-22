@@ -199,7 +199,7 @@ io.on('connection', (socket: any) => {
     const propertyId = Number(data?.propertyId);
     const activeFireCount = Number(data?.activeFireCount || 0);
 
-    if (!propertyId || propertyId !== SIMULATION_PROPERTY_ID) {
+    if (!propertyId) {
       return;
     }
 
@@ -330,12 +330,6 @@ io.on('connection', (socket: any) => {
 
     if (!propertyId) {
       socket.emit('simulation:crisis_error', { error: 'Property ID is required' });
-      return;
-    }
-    if (Number(propertyId) !== SIMULATION_PROPERTY_ID) {
-      socket.emit('simulation:crisis_error', {
-        error: `Simulation prototype only supports property ${SIMULATION_PROPERTY_ID} right now.`,
-      });
       return;
     }
 
