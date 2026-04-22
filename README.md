@@ -47,7 +47,6 @@ The database schema is expected to already exist in your PostgreSQL instance. If
 ```bash
 cd backend
 npm install
-npm run db:seed  # Creates Super Admin: admin@crisisrespond.com / admin123
 npm run dev
 ```
 
@@ -92,6 +91,7 @@ All endpoints below are **automatically filtered** by the active `property_id` i
 
 ## 🌟 Key Enterprise Features
 
+- **Gemini Intelligence Integration**: Advanced, robust integration with Google's Gemini API for real-time crisis analysis and simulation predictions, featuring built-in auto-retry logic for enterprise reliability.
 - **Automated Onboarding**: Super Admin approves organization requests, which auto-provisions org records, main properties, and admin accounts.
 - **Context-Aware UI**: The Web Dashboard and Mobile App dynamically adapt their menus and data based on the user's role and selected property.
 - **QueryWithContext**: A critical backend safety layer that intercepts SQL queries to inject mandatory `organization_id` and `property_id` filters.
