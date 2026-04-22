@@ -231,6 +231,15 @@ export default function Simulation() {
 
   const currentPropertyId = user?.property_id || DEFAULT_PROPERTY_ID;
 
+  const { 
+    updateFromSnapshot, agents, fires, metrics, setGodotConnected,
+    setAnalysis, setAnalysisLoading, setCrisisActive, setAssignedStaff,
+    activeTool, setActiveTool, speed, setSpeed, isRunning, setRunning,
+    selectedAgentId, selectAgent, localAgents, addLocalAgent, addLocalFire, 
+    removeLocalFire, moveLocalAgent, toggleAgentMode, resetLocal,
+    crisisActive, crisisIncidentId, assignedStaff, analysis, analysisHistory, analysisLoading
+  } = useSimulationStore();
+
   // Entrance animations
   useGSAP(() => {
     gsap.from('.sim-toolbar', { y: -10, opacity: 0, duration: 0.4, ease: 'power2.out', clearProps: 'all', force3D: false });
@@ -310,7 +319,6 @@ export default function Simulation() {
   const [spawnIndex, setSpawnIndex] = useState(0);
 
   // Listen to Godot messages
-  const { updateFromSnapshot, agents, fires, metrics, setGodotConnected } = useSimulationStore();
   const [singleFireMode, setSingleFireMode] = useState(false);
 
   useEffect(() => {

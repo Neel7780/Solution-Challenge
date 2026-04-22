@@ -77,7 +77,7 @@ export default function Incidents() {
   const queryClient = useQueryClient();
   const containerRef = useRef(null);
   const canReviewPublicReports = ['admin', 'security', 'responder'].includes(user?.role || '');
-  const isOrgAdmin = user?.role === 'org_admin';
+  const canResolve = ['org_admin', 'super_admin', 'admin'].includes(user?.role || '');
   const [openResolveReport, setOpenResolveReport] = useState(false);
   const [resolutionReportText, setResolutionReportText] = useState('');
 
@@ -628,7 +628,7 @@ export default function Incidents() {
                       Mark as Contained
                     </Button>
                   )}
-                  {isOrgAdmin ? (
+                  {canResolve ? (
                     <Button 
                       fullWidth 
                       variant="contained" 
@@ -647,7 +647,7 @@ export default function Incidents() {
                       disabled
                       sx={{ justifyContent: 'flex-start', textTransform: 'none' }}
                     >
-                      Resolve (Org Admin Only)
+                      Resolve (Admin Only)
                     </Button>
                   )}
                 </Stack>

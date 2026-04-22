@@ -508,10 +508,9 @@ export const updateIncidentStatus = async (req: Request, res: Response) => {
   const { id } = req.params;
   const { status, resolutionReportText } = req.body;
   const user = req.user!;
-  const propertyId = user.propertyId;
 
-  if (status === 'resolved' && user.role !== 'org_admin') {
-    return res.status(403).json({ error: 'Only org admins can mark incidents as resolved.' });
+  if (status === 'resolved' && !['org_admin', 'admin', 'super_admin'].includes(user.role)) {
+    return res.status(403).json({ error: 'Insufficient permissions to mark incidents as resolved.' });
   }
 
   if (status === 'resolved' && (!resolutionReportText || String(resolutionReportText).trim().length < 10)) {
@@ -523,23 +522,46 @@ export const updateIncidentStatus = async (req: Request, res: Response) => {
     try {
       await client.query('BEGIN');
 
+      // First, fetch the incident to check ownership/permissions
+      const incidentCheck = await client.query(
+        `SELECT i.*, p.organization_id 
+         FROM incidents i 
+         JOIN properties p ON i.property_id = p.id 
+         WHERE i.id = $1`,
+        [id]
+      );
+
+      if (incidentCheck.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'Incident not found' });
+      }
+
+      const incident = incidentCheck.rows[0];
+
+      // Permission check based on role
+      if (user.role !== 'super_admin') {
+        if (user.role === 'org_admin') {
+          if (incident.organization_id !== user.organizationId) {
+            await client.query('ROLLBACK');
+            return res.status(403).json({ error: 'Access denied: Incident belongs to another organization' });
+          }
+        } else {
+          // admin, security, responder, staff etc. must match propertyId
+          if (incident.property_id !== user.propertyId) {
+            await client.query('ROLLBACK');
+            return res.status(403).json({ error: 'Access denied for this property' });
+          }
+        }
+      }
+
       const resolvedAt = status === 'resolved' || status === 'false_alarm' ? new Date() : null;
 
       const result = await client.query(
-        `UPDATE incidents SET status = $1, resolved_at = $2 WHERE id = $3 AND property_id = $4 RETURNING *`,
-        [status, resolvedAt, id, propertyId]
+        `UPDATE incidents SET status = $1, resolved_at = $2 WHERE id = $3 RETURNING *`,
+        [status, resolvedAt, id]
       );
 
-      if (result.rows.length === 0) {
-        await client.query('ROLLBACK');
-        return res.status(404).json({ error: 'Incident not found or access denied' });
-      }
-
       if (status === 'resolved') {
-        const incident = result.rows[0];
-        const propertyResult = await client.query('SELECT organization_id FROM properties WHERE id = $1', [incident.property_id]);
-        const organizationId = propertyResult.rows[0]?.organization_id || null;
-
         await client.query(
           `INSERT INTO incident_resolution_reports (
              incident_id, property_id, organization_id, created_by, report_text, published, published_at
@@ -550,24 +572,20 @@ export const updateIncidentStatus = async (req: Request, res: Response) => {
              created_by = EXCLUDED.created_by,
              published = TRUE,
              published_at = CURRENT_TIMESTAMP`,
-          [incident.id, incident.property_id, organizationId, user.userId, String(resolutionReportText).trim()]
+          [incident.id, incident.property_id, incident.organization_id, user.userId, String(resolutionReportText).trim()]
         );
       }
 
       await client.query('COMMIT');
 
-      // Fetch organization ID to notify org admins
-      const orgResult = await client.query('SELECT organization_id FROM properties WHERE id = $1', [propertyId]);
-      const orgId = orgResult.rows[0]?.organization_id;
-
       if (req.io) {
-        req.io.to(`property_${propertyId}`)
+        req.io.to(`property_${incident.property_id}`)
           .to('role_security')
           .to('role_responder')
           .to('role_admin')
           .to('role_org_admin')
           .to('role_super_admin')
-          .to(`organization_${orgId}`)
+          .to(`organization_${incident.organization_id}`)
           .emit('incident_status_update', {
             incidentId: id,
             status,
@@ -576,7 +594,7 @@ export const updateIncidentStatus = async (req: Request, res: Response) => {
           });
       }
 
-      logger.info(`Incident ${id} status updated to: ${status}`);
+      logger.info(`Incident ${id} status updated to: ${status} by user ${user.userId} (${user.role})`);
 
       res.json({ success: true, incident: result.rows[0] });
     } catch (error: any) {
