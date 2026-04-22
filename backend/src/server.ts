@@ -33,9 +33,13 @@ process.on('uncaughtException', (err) => {
 const app = express();
 const server = http.createServer(app);
 
+// Robust CORS handling: Trim trailing slashes from the environment variable
+const rawOrigin = process.env.CORS_ORIGIN || process.env.WS_CORS_ORIGIN || '*';
+const corsOrigin = rawOrigin.endsWith('/') ? rawOrigin.slice(0, -1) : rawOrigin;
+
 const io = new Server(server, {
   cors: {
-    origin: process.env.CORS_ORIGIN || '*',
+    origin: corsOrigin === '*' ? true : [corsOrigin, `${corsOrigin}/`],
     methods: ['GET', 'POST'],
     credentials: true
   },
