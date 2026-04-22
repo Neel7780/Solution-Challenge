@@ -31,6 +31,13 @@ import { useAuthStore, UserContext } from '../store/authStore';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
+const getDashboardHomeByRole = (role?: string) => {
+  if (role === 'responder') return '/dashboard/responder';
+  if (role === 'security') return '/dashboard/security';
+  if (role === 'staff') return '/dashboard/staff';
+  return '/dashboard/command';
+};
+
 export default function Login() {
   const navigate = useNavigate();
   const { login } = useAuthStore();
@@ -74,7 +81,7 @@ export default function Login() {
         if (response.data.user.role === 'guest') {
           navigate('/guest');
         } else {
-          navigate('/dashboard');
+          navigate(getDashboardHomeByRole(response.data.user.role));
         }
       }
     } catch (err: unknown) {
@@ -108,7 +115,7 @@ export default function Login() {
       if (response.data.user.role === 'guest') {
         navigate('/guest');
       } else {
-        navigate('/dashboard');
+        navigate(getDashboardHomeByRole(response.data.user.role));
       }
     } catch (err) {
       setError('Failed to select context. Please try again.');

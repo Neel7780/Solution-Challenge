@@ -103,12 +103,12 @@ export const feedToDashboard = async (req: Request, res: Response) => {
 
   try {
     // Import dynamically to avoid circular deps
-    const { pool } = await import('../database/connection.js');
+    const { query } = await import('../database/connection.js');
 
     // Get the simulation run
     let analysis: any;
     if (runId) {
-      const runResult = await pool.query(
+      const runResult = await query(
         'SELECT ai_analysis FROM simulation_runs WHERE id = $1 AND property_id = $2',
         [runId, propertyId]
       );
@@ -123,7 +123,7 @@ export const feedToDashboard = async (req: Request, res: Response) => {
     }
 
     // Create a real incident from the simulation analysis
-    const incidentResult = await pool.query(
+    const incidentResult = await query(
       `INSERT INTO incidents (
         property_id, reported_by, incident_type, severity, status,
         description, mass_alert_message, responder_action_plan

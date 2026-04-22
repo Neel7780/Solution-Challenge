@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { io, Socket } from 'socket.io-client';
 import { useNotificationStore } from './notificationStore';
+import { useCrisisStore } from './crisisStore';
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
 
@@ -30,6 +31,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     });
 
     const addNotif = useNotificationStore.getState().addNotification;
+    const crisisState = useCrisisStore.getState();
 
     socket.on('connect', () => {
       console.log('Socket connected');
@@ -64,6 +66,8 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       const severity = incident?.severity || data?.severity || 'high';
       const description = incident?.description || data?.description;
 
+      crisisState.onCrisisReported(data);
+
       addNotif({
         type: 'crisis',
         title: 'New Crisis Reported',
@@ -74,6 +78,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
 
     socket.on('incident_enriched', (data) => {
       const enrichment = data?.enrichment;
+      crisisState.onIncidentEnriched(data);
       if (enrichment) {
         addNotif({
           type: 'mass',
@@ -123,6 +128,10 @@ export const useSocketStore = create<SocketState>((set, get) => ({
 
     socket.on('incident_status_update', (data) => {
       const incidentId = data?.incident_id || data?.incidentId;
+      crisisState.onIncidentStatusUpdate({
+        ...data,
+        incidentId,
+      });
       addNotif({
         type: 'status',
         title: 'Incident Updated',
@@ -140,6 +149,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     socket.on('staff_auto_assigned', (data) => {
       const coords = data?.fireCoordinates;
       const coordText = coords ? ` Fire location: (${coords.x}, ${coords.y}).` : '';
+      crisisState.onStaffAssigned(data);
       addNotif({
         type: 'crisis',
         title: '🚨 Staff Auto-Assigned',
@@ -151,6 +161,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     socket.on('task_assigned', (data) => {
       const coords = data?.fireCoordinates;
       const coordText = coords ? ` Fire location: (${coords.x}, ${coords.y}).` : '';
+      crisisState.onTaskAssigned(data);
       addNotif({
         type: 'crisis',
         title: '🚨 URGENT Task Assigned',
@@ -160,12 +171,23 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     });
 
     socket.on('evacuation_triggered', (data) => {
+      crisisState.onEvacuationTriggered(data);
       addNotif({
         type: 'crisis',
         title: '🚨 EVACUATION ORDER',
         message: data.message || 'Immediate evacuation ordered. Proceed to nearest exit.',
         severity: 'critical',
       });
+    });
+
+    socket.on('property_status_update', (data) => {
+      crisisState.onPropertyStatusUpdate(data);
+    });
+
+    socket.on('mass_notification', (data) => {
+      if (typeof data?.message === 'string' && /evac|emergency|crisis|alert/i.test(data.message)) {
+        crisisState.onEvacuationTriggered(data);
+      }
     });
 
     set({ socket });

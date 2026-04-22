@@ -1,4 +1,4 @@
-import { pool } from '../database/connection';
+import { pool, query } from '../database/connection';
 import logger from '../utils/logger';
 import type { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
@@ -16,7 +16,7 @@ export const submitOnboardingRequest = async (req: Request, res: Response) => {
   } = req.body;
 
   try {
-    const result = await pool.query(
+    const result = await query(
       `INSERT INTO organization_requests (
         org_name, org_type, address, contact_name, contact_email, 
         contact_phone, expected_capacity, additional_info
@@ -39,7 +39,7 @@ export const submitOnboardingRequest = async (req: Request, res: Response) => {
 
 export const getOnboardingRequests = async (req: Request, res: Response) => {
   try {
-    const result = await pool.query(
+    const result = await query(
       `SELECT * FROM organization_requests ORDER BY created_at DESC`
     );
     res.json({ success: true, requests: result.rows });
@@ -138,7 +138,7 @@ export const reviewOnboardingRequest = async (req: Request, res: Response) => {
 
 export const getOrganizations = async (req: Request, res: Response) => {
   try {
-    const result = await pool.query(
+    const result = await query(
       `SELECT * FROM organizations ORDER BY created_at DESC`
     );
     res.json({ success: true, organizations: result.rows });

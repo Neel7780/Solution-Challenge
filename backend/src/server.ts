@@ -46,6 +46,30 @@ const io = new Server(server, {
 const activeSimulationIncidents = new Map<string, { id: number, lastUpdate: number }>();
 const INCIDENT_DEDUPLICATION_WINDOW = 30000; // 30 seconds for idempotency
 const SIMULATION_PROPERTY_ID = 2;
+const SIMULATION_NO_FIRE_RESOLVE_MS = Number(process.env.SIMULATION_NO_FIRE_RESOLVE_MS || 90000);
+
+type FireWatchState = {
+  activeIncidentId: number | null;
+  lastFireSeenAt: number;
+  noFireSince: number | null;
+  resolving: boolean;
+};
+
+const simulationFireWatch = new Map<number, FireWatchState>();
+
+const getFireWatch = (propertyId: number): FireWatchState => {
+  const existing = simulationFireWatch.get(propertyId);
+  if (existing) return existing;
+
+  const initial: FireWatchState = {
+    activeIncidentId: null,
+    lastFireSeenAt: Date.now(),
+    noFireSince: null,
+    resolving: false,
+  };
+  simulationFireWatch.set(propertyId, initial);
+  return initial;
+};
 
 app.use(helmet());
 app.use(cors());
@@ -170,6 +194,132 @@ io.on('connection', (socket: any) => {
       update, 
       timestamp: new Date().toISOString() 
     });
+  });
+
+  socket.on('simulation:telemetry', async (data: any) => {
+    const propertyId = Number(data?.propertyId);
+    const activeFireCount = Number(data?.activeFireCount || 0);
+
+    if (!propertyId || propertyId !== SIMULATION_PROPERTY_ID) {
+      return;
+    }
+
+    const now = Date.now();
+    const fireWatch = getFireWatch(propertyId);
+
+    if (activeFireCount > 0) {
+      fireWatch.lastFireSeenAt = now;
+      fireWatch.noFireSince = null;
+      return;
+    }
+
+    if (!fireWatch.activeIncidentId || fireWatch.resolving) {
+      return;
+    }
+
+    if (!fireWatch.noFireSince) {
+      fireWatch.noFireSince = now;
+      return;
+    }
+
+    if (now - fireWatch.noFireSince < SIMULATION_NO_FIRE_RESOLVE_MS) {
+      return;
+    }
+
+    fireWatch.resolving = true;
+
+    try {
+      const { pool } = await import('./database/connection.js');
+      const client = await pool.connect();
+
+      try {
+        await client.query('BEGIN');
+
+        const incidentResult = await client.query(
+          `UPDATE incidents
+           SET status = 'contained', resolved_at = CURRENT_TIMESTAMP
+           WHERE id = $1 AND property_id = $2 AND status = 'active'
+           RETURNING id, status, resolved_at`,
+          [fireWatch.activeIncidentId, propertyId]
+        );
+
+        const statusColumnCheck = await client.query(
+          `SELECT 1
+           FROM information_schema.columns
+           WHERE table_name = 'properties' AND column_name = 'status'
+           LIMIT 1`
+        );
+        const hasPropertyStatus = statusColumnCheck.rows.length > 0;
+
+        if (hasPropertyStatus) {
+          await client.query(
+            `UPDATE properties
+             SET status = 'operational', updated_at = CURRENT_TIMESTAMP
+             WHERE id = $1`,
+            [propertyId]
+          );
+        } else {
+          await client.query(
+            `UPDATE properties
+             SET updated_at = CURRENT_TIMESTAMP
+             WHERE id = $1`,
+            [propertyId]
+          );
+        }
+
+        await client.query(
+          `INSERT INTO notifications (
+            incident_id, property_id, recipient_type, recipient_id, channel, message, status, sent_at
+          ) VALUES ($1, $2, 'property', $3, 'websocket', $4, 'sent', CURRENT_TIMESTAMP)`,
+          [
+            fireWatch.activeIncidentId,
+            propertyId,
+            String(propertyId),
+            'AI Update: Fire has been extinguished. Crisis status has been contained and property returned to operational monitoring.',
+          ]
+        );
+
+        await client.query('COMMIT');
+
+        const incident = incidentResult.rows[0];
+        if (incident) {
+          io.to(`property_${propertyId}`).emit('incident_status_update', {
+            incidentId: incident.id,
+            status: incident.status,
+            resolvedAt: incident.resolved_at,
+            timestamp: new Date().toISOString(),
+          });
+        }
+
+        io.to(`property_${propertyId}`).emit('property_status_update', {
+          propertyId,
+          status: 'operational',
+          reason: 'auto_resolved_no_fire',
+          timestamp: new Date().toISOString(),
+        });
+
+        io.to(`property_${propertyId}`).emit('mass_notification', {
+          title: 'Crisis Contained',
+          message: 'AI confirms fire inactivity over sustained period. Crisis marked contained and property is operational.',
+          severity: 'info',
+          timestamp: new Date().toISOString(),
+        });
+
+        logger.info(`Simulation crisis auto-contained for property ${propertyId} after ${SIMULATION_NO_FIRE_RESOLVE_MS}ms without fire activity.`);
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
+    } catch (error: any) {
+      logger.error('Failed to auto-resolve simulation crisis:', error);
+    } finally {
+      fireWatch.activeIncidentId = null;
+      fireWatch.noFireSince = null;
+      fireWatch.resolving = false;
+      activeSimulationIncidents.delete(`sim_fire_${propertyId}`);
+    }
   });
 
   // ═══════════════════════════════════════════════════
@@ -299,6 +449,12 @@ io.on('connection', (socket: any) => {
 
         // Track for deduplication
         activeSimulationIncidents.set(crisisKey, { id: incident.id, lastUpdate: now });
+
+        const fireWatch = getFireWatch(Number(propertyId));
+        fireWatch.activeIncidentId = incident.id;
+        fireWatch.lastFireSeenAt = now;
+        fireWatch.noFireSince = null;
+        fireWatch.resolving = false;
 
         // ─── Broadcast to ALL connected clients ───
 

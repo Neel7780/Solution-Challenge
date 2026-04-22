@@ -1,5 +1,5 @@
 import logger from '../utils/logger';
-import { pool } from '../database/connection';
+import { query } from '../database/connection';
 
 export interface EnrichmentData {
   severity: 'low' | 'medium' | 'high' | 'critical';
@@ -120,7 +120,7 @@ export const enrichIncident = async (incidentId: number, aggregatedState: any): 
     const enrichment = JSON.parse(cleanJson) as EnrichmentData;
 
     // Persist to database
-    await pool.query(
+    await query(
       `UPDATE incidents 
        SET severity = $1, 
            mass_alert_message = $2, 
@@ -148,7 +148,7 @@ export const enrichIncident = async (incidentId: number, aggregatedState: any): 
     }
 
     // Fallback: Still update DB so the UI has something
-    await pool.query(
+    await query(
       `UPDATE incidents 
        SET severity = $1, 
            mass_alert_message = $2, 

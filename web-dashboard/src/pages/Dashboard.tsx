@@ -1,11 +1,10 @@
-import React, { useRef } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import {
   Grid,
   Typography,
   Box,
   Paper,
 } from '@mui/material';
-import { alpha } from '@mui/material/styles';
 import {
   Warning as WarningIcon,
   People as PeopleIcon,
@@ -37,8 +36,6 @@ import {
 import { 
   ExitToApp as EvacuateIcon, 
   Check as SafeIcon, 
-  HelpOutlined as UnaccountedIcon,
-  LocalHospital as AidIcon,
 } from '@mui/icons-material';
 
 import { useSocketStore } from '../store/socketStore';
@@ -104,66 +101,100 @@ const StatCard = ({ title, value, icon: Icon, color, subtitle }: StatCardProps) 
 
 export default function Dashboard() {
   const containerRef = useRef(null);
-  const { connected } = useSocketStore();
+  const { socket } = useSocketStore();
   const { user } = useAuthStore();
   const queryClient = useQueryClient();
   const [showEvacConfirm, setShowEvacConfirm] = React.useState(false);
   const propertyId = user?.property_id || 2;
 
   const { data: overview } = useQuery<OverviewData>({
-    queryKey: ['dashboardOverview'],
+    queryKey: ['dashboardOverview', propertyId],
     queryFn: async () => {
-      try {
-        const res = await axios.get(`${API_URL}/dashboard/overview/${propertyId}`);
-        return res.data.overview;
-      } catch {
-        return {
-          incidents: { active_incidents: 1, critical_count: 1 },
-          currentOccupancy: 245
-        };
-      }
+      const res = await axios.get(`${API_URL}/dashboard/overview/${propertyId}`);
+      return res.data.overview;
     },
     refetchInterval: 30000,
+    enabled: !!propertyId,
   });
 
   const { data: safetyRoster } = useQuery({
-    queryKey: ['safetyRoster', user?.property_id],
+    queryKey: ['safetyRoster', propertyId],
     queryFn: async () => {
-      const res = await axios.get(`${API_URL}/crisis/property/${user?.property_id}/safety-roster`);
+      const res = await axios.get(`${API_URL}/crisis/property/${propertyId}/safety-roster`);
       return res.data;
     },
-    enabled: !!user?.property_id,
+    enabled: !!propertyId,
     refetchInterval: 5000, // Frequent updates during crisis
   });
 
+  const { data: timelineRows } = useQuery<any[]>({
+    queryKey: ['incidentTimeline', propertyId],
+    queryFn: async () => {
+      const res = await axios.get(`${API_URL}/dashboard/timeline/${propertyId}?limit=200`);
+      return res.data.timeline || [];
+    },
+    enabled: !!propertyId,
+    refetchInterval: 15000,
+  });
+
   const triggerEvacuationMutation = useMutation({
-    mutationFn: () => axios.post(`${API_URL}/crisis/property/${user?.property_id}/status`, { status: 'evacuating' }),
+    mutationFn: () => axios.post(`${API_URL}/crisis/property/${propertyId}/status`, { status: 'evacuating' }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['dashboardOverview'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboardOverview', propertyId] });
+      queryClient.invalidateQueries({ queryKey: ['triageData', propertyId] });
+      queryClient.invalidateQueries({ queryKey: ['incidentTimeline', propertyId] });
+      queryClient.invalidateQueries({ queryKey: ['safetyRoster', propertyId] });
       setShowEvacConfirm(false);
     },
   });
 
   const cancelEvacuationMutation = useMutation({
-    mutationFn: () => axios.post(`${API_URL}/crisis/property/${user?.property_id}/status`, { status: 'operational' }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['dashboardOverview'] }),
+    mutationFn: () => axios.post(`${API_URL}/crisis/property/${propertyId}/status`, { status: 'operational' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['dashboardOverview', propertyId] });
+      queryClient.invalidateQueries({ queryKey: ['triageData', propertyId] });
+      queryClient.invalidateQueries({ queryKey: ['incidentTimeline', propertyId] });
+      queryClient.invalidateQueries({ queryKey: ['safetyRoster', propertyId] });
+    },
   });
 
 
   const { data: triageData } = useQuery<TriageData>({
-    queryKey: ['triageData'],
+    queryKey: ['triageData', propertyId],
     queryFn: async () => {
-      try {
-        const res = await axios.get(`${API_URL}/dashboard/triage/${propertyId}`);
-        return res.data.triage;
-      } catch {
-        return {
-          safe_count: 200, distressed_count: 25, needs_help_count: 5, missing_count: 15, unchecked: 0
-        };
-      }
+      const res = await axios.get(`${API_URL}/dashboard/triage/${propertyId}`);
+      return res.data.triage;
     },
     refetchInterval: 15000,
+    enabled: !!propertyId,
   });
+
+  useEffect(() => {
+    if (!socket || !propertyId) return;
+
+    const refreshDashboardState = () => {
+      queryClient.invalidateQueries({ queryKey: ['dashboardOverview', propertyId] });
+      queryClient.invalidateQueries({ queryKey: ['triageData', propertyId] });
+      queryClient.invalidateQueries({ queryKey: ['incidentTimeline', propertyId] });
+      queryClient.invalidateQueries({ queryKey: ['safetyRoster', propertyId] });
+    };
+
+    socket.on('crisis_reported', refreshDashboardState);
+    socket.on('incident_status_update', refreshDashboardState);
+    socket.on('property_status_update', refreshDashboardState);
+    socket.on('evacuation_triggered', refreshDashboardState);
+    socket.on('incident_enriched', refreshDashboardState);
+    socket.on('user_checkin', refreshDashboardState);
+
+    return () => {
+      socket.off('crisis_reported', refreshDashboardState);
+      socket.off('incident_status_update', refreshDashboardState);
+      socket.off('property_status_update', refreshDashboardState);
+      socket.off('evacuation_triggered', refreshDashboardState);
+      socket.off('incident_enriched', refreshDashboardState);
+      socket.off('user_checkin', refreshDashboardState);
+    };
+  }, [socket, propertyId, queryClient]);
 
   useGSAP(() => {
     gsap.from('.stat-card', {
@@ -195,18 +226,43 @@ export default function Dashboard() {
     { name: 'Missing', value: (triageData?.missing_count || 0) + (triageData?.unchecked || 0), color: 'var(--text-muted)' },
   ];
 
-  const activityData = [
-    { time: '00:00', incidents: 0 },
-    { time: '04:00', incidents: 1 },
-    { time: '08:00', incidents: 0 },
-    { time: '12:00', incidents: 2 },
-    { time: '16:00', incidents: 1 },
-    { time: '20:00', incidents: 0 },
-    { time: 'Now', incidents: 1 },
-  ];
+  const activityData = useMemo(() => {
+    const now = new Date();
+    const slots: Array<{ time: string; incidents: number }> = [];
+
+    for (let i = 0; i < 7; i += 1) {
+      const point = new Date(now);
+      point.setHours(now.getHours() - (6 - i) * 4, 0, 0, 0);
+
+      const label = i === 6
+        ? 'Now'
+        : `${String(point.getHours()).padStart(2, '0')}:00`;
+
+      slots.push({ time: label, incidents: 0 });
+    }
+
+    if (!timelineRows || timelineRows.length === 0) {
+      return slots;
+    }
+
+    const start = new Date(now);
+    start.setHours(now.getHours() - 24, 0, 0, 0);
+    const slotMs = 4 * 60 * 60 * 1000;
+
+    for (const incident of timelineRows) {
+      const createdAt = new Date(incident.created_at);
+      if (Number.isNaN(createdAt.getTime()) || createdAt < start || createdAt > now) continue;
+      const slotIndex = Math.min(6, Math.max(0, Math.floor((createdAt.getTime() - start.getTime()) / slotMs)));
+      slots[slotIndex].incidents += 1;
+    }
+
+    return slots;
+  }, [timelineRows]);
 
   const criticalCount = overview?.incidents?.critical_count ?? 0;
   const activeIncidents = overview?.incidents?.active_incidents ?? 0;
+  const propertyStatus = overview?.property?.status || 'operational';
+  const isEvacuating = propertyStatus === 'evacuating';
 
   return (
     <Box ref={containerRef}>
@@ -220,12 +276,13 @@ export default function Dashboard() {
         
         {/* Tactical Evacuation Control */}
         <Stack direction="row" spacing={2}>
-            {criticalCount > 0 && (
+            {!isEvacuating ? (
              <Button
                variant="contained"
                color="error"
                startIcon={<EvacuateIcon />}
                onClick={() => setShowEvacConfirm(true)}
+                disabled={triggerEvacuationMutation.isPending}
                sx={{ 
                  color: '#fff',
                  background: 'linear-gradient(90deg, #ff5c5c 0%, #e84f4f 100%)', 
@@ -241,20 +298,30 @@ export default function Dashboard() {
                  }
                }}
              >
-               TRIGGER EVACUATION
+               {triggerEvacuationMutation.isPending ? 'TRIGGERING...' : 'TRIGGER EVACUATION'}
              </Button>
+           ) : (
+            <Button
+              variant="outlined"
+              color="warning"
+              onClick={() => cancelEvacuationMutation.mutate()}
+              disabled={cancelEvacuationMutation.isPending}
+              sx={{ borderColor: 'var(--accent-orange)', color: 'var(--accent-orange)' }}
+            >
+              {cancelEvacuationMutation.isPending ? 'CANCELLING...' : 'CANCEL ALERT'}
+            </Button>
            )}
         </Stack>
       </Box>
 
       {/* Evacuation Alert Banner */}
-      {safetyRoster?.stats?.unaccounted > 0 && criticalCount > 0 && (
+      {isEvacuating && (
         <Alert 
           severity="error" 
           sx={{ mb: 4, backgroundColor: 'rgba(255, 92, 92, 0.12)', border: '1px solid rgba(255, 92, 92, 0.5)', color: '#fff', borderRadius: 2 }}
           action={
-            <Button color="inherit" size="small" onClick={() => cancelEvacuationMutation.mutate()}>
-              Cancel Alert
+            <Button color="inherit" size="small" onClick={() => cancelEvacuationMutation.mutate()} disabled={cancelEvacuationMutation.isPending}>
+              {cancelEvacuationMutation.isPending ? 'Cancelling...' : 'Cancel Alert'}
             </Button>
           }
         >
@@ -339,7 +406,7 @@ export default function Dashboard() {
                 </PieChart>
               </ResponsiveContainer>
               <Box sx={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center' }}>
-                <Typography sx={{ fontFamily: 'var(--font-display)', fontWeight: 300, fontSize: '2rem' }}>{(overview?.currentOccupancy || 245)}</Typography>
+                <Typography sx={{ fontFamily: 'var(--font-display)', fontWeight: 300, fontSize: '2rem' }}>{overview?.currentOccupancy || 0}</Typography>
                 <Typography variant="caption" sx={{ color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.12em', fontFamily: 'var(--font-mono)' }}>Total</Typography>
               </Box>
             </Box>

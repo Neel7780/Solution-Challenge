@@ -1,4 +1,5 @@
-import { pool, queryWithContext } from '../database/connection';
+import { pool, query, queryWithContext } from '../database/connection';
+
 import logger from '../utils/logger';
 import type { Request, Response } from 'express';
 
@@ -6,7 +7,7 @@ export const getPropertySettings = async (req: Request, res: Response) => {
   const propertyId = req.user!.propertyId;
 
   try {
-    const result = await pool.query(
+    const result = await query(
       `SELECT id, name, address, floor_plan_data, created_at, updated_at
        FROM properties WHERE id = $1`,
       [propertyId]
@@ -28,7 +29,7 @@ export const updatePropertySettings = async (req: Request, res: Response) => {
   const { name, address, floorPlanData } = req.body;
 
   try {
-    const result = await pool.query(
+    const result = await query(
       `UPDATE properties
        SET name = COALESCE($1, name),
            address = COALESCE($2, address),
@@ -55,6 +56,21 @@ export const getOverview = async (req: Request, res: Response) => {
   try {
     const client = await pool.connect();
     try {
+      const statusColumnCheck = await client.query(
+        `SELECT 1
+         FROM information_schema.columns
+         WHERE table_name = 'properties' AND column_name = 'status'
+         LIMIT 1`
+      );
+      const hasPropertyStatusColumn = statusColumnCheck.rows.length > 0;
+
+      const propertyResult = await client.query(
+        hasPropertyStatusColumn
+          ? `SELECT id, name, status, updated_at FROM properties WHERE id = $1 LIMIT 1`
+          : `SELECT id, name, NULL::text as status, updated_at FROM properties WHERE id = $1 LIMIT 1`,
+        [propertyId]
+      );
+
       const incidentsResult = await client.query(
         `SELECT COUNT(*) as active_incidents,
          COUNT(*) FILTER (WHERE severity = 'critical') as critical_count,
@@ -86,11 +102,13 @@ export const getOverview = async (req: Request, res: Response) => {
       res.json({
         success: true,
         overview: {
+          property: propertyResult.rows[0] || null,
           incidents: incidentsResult.rows[0],
           users: usersResult.rows[0],
           checkIns: checkInsResult.rows,
           currentOccupancy: parseInt(occupancyResult.rows[0].total) || 0,
         },
+        warning: hasPropertyStatusColumn ? undefined : 'properties.status column is missing in DB; property status is returned as null until migration is applied.',
       });
     } finally {
       client.release();
@@ -161,7 +179,7 @@ export const getStats = async (req: Request, res: Response) => {
     if (period === '7d') interval = '7 days';
     if (period === '30d') interval = '30 days';
 
-    const statsResult = await pool.query(
+    const statsResult = await query(
       `SELECT
        COUNT(*) as total_incidents,
        COUNT(*) FILTER (WHERE status = 'resolved') as resolved_count,
@@ -175,7 +193,7 @@ export const getStats = async (req: Request, res: Response) => {
       [propertyId]
     );
 
-    const avgResponseResult = await pool.query(
+    const avgResponseResult = await query(
       `SELECT AVG(EXTRACT(EPOCH FROM (resolved_at - created_at))) as avg_response_seconds
        FROM incidents
        WHERE property_id = $1 AND status = 'resolved'
@@ -202,7 +220,7 @@ export const getTimeline = async (req: Request, res: Response) => {
   const { limit = 50 } = req.query;
 
   try {
-    const result = await pool.query(
+    const result = await query(
       `SELECT i.*, u.name as reported_by_name
        FROM incidents i
        LEFT JOIN users u ON i.reported_by = u.id
@@ -222,7 +240,7 @@ export const getTimeline = async (req: Request, res: Response) => {
 export const getHeatmap = async (req: Request, res: Response) => {
   const propertyId = req.user!.propertyId;
   try {
-    const result = await pool.query(
+    const result = await query(
       `SELECT z.id, z.name, z.current_occupancy, z.capacity, z.zone_type,
        COUNT(i.id) as incident_count
        FROM zones z
@@ -244,7 +262,7 @@ export const getOrganizationProperties = async (req: Request, res: Response) => 
   const organizationId = req.user!.organizationId;
 
   try {
-    const result = await pool.query(
+    const result = await query(
       `SELECT p.*, 
        (SELECT COUNT(*) FROM incidents i WHERE i.property_id = p.id AND i.status = 'active') as active_incidents,
        (SELECT COUNT(*) FROM users u WHERE u.property_id = p.id AND u.role != 'guest') as staff_count

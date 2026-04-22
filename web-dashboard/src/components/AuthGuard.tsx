@@ -8,6 +8,13 @@ interface AuthGuardProps {
   requireAuth?: boolean;
 }
 
+const getDashboardHomeByRole = (role?: string) => {
+  if (role === 'responder') return '/dashboard/responder';
+  if (role === 'security') return '/dashboard/security';
+  if (role === 'staff') return '/dashboard/staff';
+  return '/dashboard/command';
+};
+
 export default function AuthGuard({ allowedRoles, requireAuth = true }: AuthGuardProps) {
   const { isAuthenticated, isAuthChecking, user } = useAuthStore();
   const location = useLocation();
@@ -29,7 +36,7 @@ export default function AuthGuard({ allowedRoles, requireAuth = true }: AuthGuar
     if (user?.role === 'guest') {
       return <Navigate to="/guest" replace />;
     }
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to={getDashboardHomeByRole(user?.role)} replace />;
   }
 
   if (allowedRoles && user && !allowedRoles.includes(user.role)) {
@@ -37,7 +44,7 @@ export default function AuthGuard({ allowedRoles, requireAuth = true }: AuthGuar
     if (user.role === 'guest') {
       return <Navigate to="/guest" replace />;
     }
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to={getDashboardHomeByRole(user?.role)} replace />;
   }
 
   return <Outlet />;

@@ -3,12 +3,15 @@ import { body } from 'express-validator';
 import {
   getNotificationHistory,
   getNotificationStatus,
+  markNotificationAsRead,
   sendMassNotification,
   sendNotification,
 } from '../controllers/notificationController';
 import { authenticate, requireRole } from '../middleware/auth';
 
 const router = Router();
+
+router.post('/:id/read', authenticate, markNotificationAsRead);
 
 router.post('/mass', authenticate, requireRole(['admin', 'security', 'staff', 'org_admin', 'super_admin']), [
   body('propertyId').isInt(),

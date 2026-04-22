@@ -1,6 +1,6 @@
 import twilio from 'twilio';
 import type { Request, Response } from 'express';
-import { pool } from '../database/connection';
+import { pool, query } from '../database/connection';
 import logger from '../utils/logger';
 
 let twilioClient: any = null;
@@ -110,7 +110,7 @@ export const sendNotification = async (req: Request, res: Response) => {
   try {
     const notifications: any[] = [];
     for (const userId of userIds) {
-      const result = await pool.query(
+      const result = await query(
         `INSERT INTO notifications (recipient_type, recipient_id, channel, message, status)
          VALUES ($1, $2, $3, $4, $5) RETURNING *`,
         ['individual', userId, channel, message, 'sent']
@@ -134,7 +134,7 @@ export const sendNotification = async (req: Request, res: Response) => {
 export const getNotificationStatus = async (req: Request, res: Response) => {
   const { notificationId } = req.params;
   try {
-    const result = await pool.query(`SELECT * FROM notifications WHERE id = $1`, [notificationId]);
+    const result = await query(`SELECT * FROM notifications WHERE id = $1`, [notificationId]);
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Notification not found' });
     }
@@ -149,7 +149,7 @@ export const getNotificationHistory = async (req: Request, res: Response) => {
   const propertyId = req.user!.propertyId;
   const { limit = 50 } = req.query;
   try {
-    const result = await pool.query(
+    const result = await query(
       `SELECT n.*, i.incident_type
        FROM notifications n
        LEFT JOIN incidents i ON n.incident_id = i.id
@@ -162,5 +162,28 @@ export const getNotificationHistory = async (req: Request, res: Response) => {
   } catch (error: any) {
     logger.error('Error fetching notification history:', error);
     res.status(500).json({ error: 'Failed to fetch notification history' });
+  }
+};
+
+export const markNotificationAsRead = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  try {
+    const result = await query(
+      `UPDATE notifications 
+       SET is_read = TRUE, 
+           status = 'read', 
+           read_at = CURRENT_TIMESTAMP 
+       WHERE id = $1 RETURNING *`,
+      [id]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Notification not found' });
+    }
+    
+    res.json({ success: true, notification: result.rows[0] });
+  } catch (error: any) {
+    logger.error('Error marking notification as read:', error);
+    res.status(500).json({ error: 'Failed to mark notification as read' });
   }
 };

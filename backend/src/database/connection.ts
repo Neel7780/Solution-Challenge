@@ -54,6 +54,28 @@ pool.on('error', (err: unknown) => {
   logger.error('Unexpected database error:', err);
 });
 
+const executeQueryWithRetry = async (queryText: string, queryParams: any[] = [], attempt = 1): Promise<any> => {
+  try {
+    return await pool.query(queryText, queryParams);
+  } catch (error: any) {
+    const isTransientError = 
+      error.code === 'EAI_AGAIN' || 
+      error.code === 'ETIMEDOUT' || 
+      error.code === 'ECONNRESET' ||
+      error.message?.includes('timeout') ||
+      error.message?.includes('getaddrinfo') ||
+      error.message?.includes('connection');
+
+    if (attempt < 3 && isTransientError) {
+      const delay = attempt * 1000;
+      logger.warn(`Transient DB error ${error.code || error.message}, retrying in ${delay}ms (attempt ${attempt}/3)...`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return executeQueryWithRetry(queryText, queryParams, attempt + 1);
+    }
+    throw error;
+  }
+};
+
 export async function initDatabase() {
   const client = await pool.connect();
   try {
@@ -62,6 +84,7 @@ export async function initDatabase() {
     } catch (e: any) {
       logger.warn('PostGIS extension creation failed or skipped: ' + e.message);
     }
+    // ... rest of initDatabase
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS organizations (
@@ -201,7 +224,9 @@ export async function initDatabase() {
         recipient_id VARCHAR(255),
         channel VARCHAR(50) CHECK (channel IN ('push', 'sms', 'email', 'websocket')),
         message TEXT NOT NULL,
-        status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'sent', 'failed', 'delivered')),
+        status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'sent', 'failed', 'delivered', 'read')),
+        is_read BOOLEAN DEFAULT FALSE,
+        read_at TIMESTAMP,
         sent_at TIMESTAMP,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
@@ -306,7 +331,7 @@ export async function initDatabase() {
   }
 }
 
-export const query = (text: string, params?: unknown[]) => pool.query(text, params);
+export const query = (text: string, params?: any[]) => executeQueryWithRetry(text, params);
 
 export const queryWithContext = async (
   user: { userId: number; propertyId: number; organizationId: number; role: string } | undefined, 
@@ -314,34 +339,21 @@ export const queryWithContext = async (
   params: any[] = [],
   tableAlias?: string
 ) => {
-  const executeQuery = async (queryText: string, queryParams: any[], attempt = 1): Promise<any> => {
-    try {
-      return await pool.query(queryText, queryParams);
-    } catch (error: any) {
-      if (attempt < 2 && (error.code === 'EAI_AGAIN' || error.code === 'ETIMEDOUT' || error.message?.includes('timeout'))) {
-        logger.warn(`Transient DB error ${error.code}, retrying...`);
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        return executeQuery(queryText, queryParams, attempt + 1);
-      }
-      throw error;
-    }
-  };
-
   if (!user) {
     logger.error('queryWithContext called without user context');
-    return executeQuery(text, params);
+    return executeQueryWithRetry(text, params);
   }
 
   const isSuperAdmin = user.role === 'super_admin';
   const isOrgAdmin = user.role === 'org_admin';
 
   if (isSuperAdmin) {
-    return executeQuery(text, params);
+    return executeQueryWithRetry(text, params);
   }
 
   if (!user.organizationId) {
     logger.warn(`Non-super-admin user ${user.userId} has no organizationId in context`);
-    return executeQuery(text, params);
+    return executeQueryWithRetry(text, params);
   }
 
   let contextualQuery = text;
@@ -381,5 +393,5 @@ export const queryWithContext = async (
     contextualParams.push(user.propertyId, user.organizationId);
   }
 
-  return executeQuery(contextualQuery, contextualParams);
+  return executeQueryWithRetry(contextualQuery, contextualParams);
 };

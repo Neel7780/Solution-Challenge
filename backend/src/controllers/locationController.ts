@@ -1,11 +1,11 @@
-import { pool } from '../database/connection';
+import { query } from '../database/connection';
 import logger from '../utils/logger';
 import type { Request, Response } from 'express';
 
 export const getZones = async (req: Request, res: Response) => {
   const propertyId = req.user!.propertyId;
   try {
-    const result = await pool.query(
+    const result = await query(
       `SELECT id, name, zone_type, floor_number, capacity, current_occupancy,
        ST_AsGeoJSON(coordinates) as coordinates
        FROM zones WHERE property_id = $1 ORDER BY floor_number, name`,
@@ -24,7 +24,7 @@ export const getZoneDetails = async (req: Request, res: Response) => {
   const propertyId = req.user!.propertyId;
 
   try {
-    const zoneResult = await pool.query(
+    const zoneResult = await query(
       `SELECT z.*, ST_AsGeoJSON(z.coordinates) as coordinates,
        p.name as property_name
        FROM zones z
@@ -37,7 +37,7 @@ export const getZoneDetails = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Zone not found or access denied' });
     }
 
-    const usersResult = await pool.query(
+    const usersResult = await query(
       `SELECT DISTINCT ON (lt.user_id) u.id, u.name, u.role, u.status,
        lt.latitude, lt.longitude, lt.recorded_at
        FROM location_tracking lt
@@ -58,13 +58,13 @@ export const getZoneDetails = async (req: Request, res: Response) => {
 export const getOccupancy = async (req: Request, res: Response) => {
   const propertyId = req.user!.propertyId;
   try {
-    const result = await pool.query(
+    const result = await query(
       `SELECT zone_type, SUM(current_occupancy) as total_occupancy, SUM(capacity) as total_capacity
        FROM zones WHERE property_id = $1 GROUP BY zone_type`,
       [propertyId]
     );
 
-    const totalResult = await pool.query(
+    const totalResult = await query(
       `SELECT SUM(current_occupancy) as total, SUM(capacity) as capacity
        FROM zones WHERE property_id = $1`,
       [propertyId]
@@ -81,7 +81,7 @@ export const getUserLocationHistory = async (req: Request, res: Response) => {
   const { userId } = req.params;
   const { limit = 50 } = req.query;
   try {
-    const result = await pool.query(
+    const result = await query(
       `SELECT lt.*, z.name as zone_name
        FROM location_tracking lt
        LEFT JOIN zones z ON lt.zone_id = z.id
@@ -103,7 +103,7 @@ export const getUsersInZone = async (req: Request, res: Response) => {
   const propertyId = req.user!.propertyId;
 
   try {
-    const result = await pool.query(
+    const result = await query(
       `SELECT DISTINCT ON (lt.user_id) u.id, u.name, u.role, u.room_number,
        lt.latitude, lt.longitude, lt.beacon_id, lt.recorded_at
        FROM location_tracking lt
@@ -125,7 +125,7 @@ export const getUsersInZone = async (req: Request, res: Response) => {
 export const getAllActiveLocations = async (req: Request, res: Response) => {
   const propertyId = req.user!.propertyId;
   try {
-    const result = await pool.query(
+    const result = await query(
       `SELECT DISTINCT ON (lt.user_id) u.id, u.name, u.role, u.status as user_status,
        lt.latitude, lt.longitude, lt.beacon_id, lt.zone_id, z.name as zone_name,
        lt.recorded_at

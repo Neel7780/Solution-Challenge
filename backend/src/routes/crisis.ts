@@ -63,7 +63,7 @@ router.patch('/:id/status', authenticate, [body('status').isIn(['active', 'conta
 router.get('/:id/full', authenticate, getIncidentDetails);
 router.post('/:id/resolve', authenticate, resolveIncident);
 
-router.post('/property/:propertyId/status', authenticate, requireRole(['admin', 'security', 'org_admin']), updatePropertyStatus);
+router.post('/property/:propertyId/status', authenticate, requireRole(['admin', 'security', 'staff', 'responder', 'org_admin', 'super_admin']), updatePropertyStatus);
 router.get('/property/:propertyId/safety-roster', authenticate, requireRole(['admin', 'security', 'org_admin', 'super_admin', 'responder']), getSafetyRoster);
 
 export default router;

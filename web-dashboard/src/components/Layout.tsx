@@ -45,6 +45,13 @@ import { useNotificationStore } from '../store/notificationStore';
 
 const drawerWidth = 260;
 
+const getDashboardHomeByRole = (role?: string) => {
+  if (role === 'responder') return '/dashboard/responder';
+  if (role === 'security') return '/dashboard/security';
+  if (role === 'staff') return '/dashboard/staff';
+  return '/dashboard/command';
+};
+
 export default function Layout() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [contextAnchorEl, setContextAnchorEl] = useState<null | HTMLElement>(null);
@@ -80,8 +87,9 @@ export default function Layout() {
   const currentContextName = contexts.find(c => c.propertyId === user?.property_id)?.propertyName || 'Primary Property';
 
   const getMenuItems = () => {
+    const commandCenterPath = getDashboardHomeByRole(user?.role);
     const baseItems = [
-      { text: 'Command Center', icon: DashboardIcon, path: '/dashboard' },
+      { text: 'Command Center', icon: DashboardIcon, path: commandCenterPath },
       { text: 'Incidents', icon: WarningIcon, path: '/dashboard/incidents' },
       { text: 'Triage & Safety', icon: HealingIcon, path: '/dashboard/triage' },
       { text: 'Live Map', icon: MapIcon, path: '/dashboard/locations' },

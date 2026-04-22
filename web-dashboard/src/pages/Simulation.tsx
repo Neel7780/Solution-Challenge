@@ -218,6 +218,7 @@ export default function Simulation() {
   const containerRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const lastTelemetrySentAtRef = useRef<number>(0);
   const syncedOccupantIdsRef = useRef<Set<number>>(new Set());
 
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -290,8 +291,30 @@ export default function Simulation() {
         if (data.assignedStaff) setAssignedStaff(data.assignedStaff);
       }
     };
+
+    const statusHandler = (data: any) => {
+      if (data?.status === 'contained' || data?.status === 'resolved' || data?.status === 'false_alarm') {
+        setCrisisActive(false, null);
+        setAssignedStaff([]);
+      }
+    };
+
+    const propertyStatusHandler = (data: any) => {
+      if (data?.status === 'operational') {
+        setCrisisActive(false, null);
+        setAssignedStaff([]);
+      }
+    };
+
     socket.on('simulation:crisis_ack', ackHandler);
-    return () => { socket.off('simulation:crisis_ack', ackHandler); };
+    socket.on('incident_status_update', statusHandler);
+    socket.on('property_status_update', propertyStatusHandler);
+
+    return () => {
+      socket.off('simulation:crisis_ack', ackHandler);
+      socket.off('incident_status_update', statusHandler);
+      socket.off('property_status_update', propertyStatusHandler);
+    };
   }, [socket, setCrisisActive, setAssignedStaff]);
 
   // Listen to Godot messages
@@ -310,6 +333,24 @@ export default function Simulation() {
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
   }, [updateFromSnapshot, setGodotConnected]);
+
+  // Send lightweight fire telemetry heartbeat so backend can auto-contain crisis after no-fire cooldown.
+  useEffect(() => {
+    if (!socket || !simLoaded) return;
+
+    const now = Date.now();
+    if (now - lastTelemetrySentAtRef.current < 1500) {
+      return;
+    }
+
+    lastTelemetrySentAtRef.current = now;
+    socket.emit('simulation:telemetry', {
+      propertyId: SIMULATION_PROPERTY_ID,
+      activeFireCount: fires.length,
+      activeAgentCount: agents.length,
+      timestamp: new Date().toISOString(),
+    });
+  }, [fires, agents, socket, simLoaded]);
 
   // Fullscreen
   const toggleFullscreen = useCallback(() => {

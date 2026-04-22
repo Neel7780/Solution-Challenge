@@ -1,4 +1,4 @@
-import { pool } from '../database/connection';
+import { pool, query } from '../database/connection';
 import logger from '../utils/logger';
 import type { Request, Response } from 'express';
 import { enrichIncident } from '../services/intelligenceService';
@@ -18,7 +18,7 @@ export const notifyNearbyUsers = async (io: any, latitude: number, longitude: nu
   try {
     // Find users within 200 meters based on their latest recorded location in the last hour
     const radiusMeters = 200;
-    const nearbyUsers = await pool.query(
+    const nearbyUsers = await query(
       `SELECT DISTINCT ON (user_id) user_id
        FROM location_tracking
        WHERE ST_DWithin(
@@ -131,7 +131,7 @@ export const reportCrisis = async (req: Request, res: Response) => {
       }
 
       // SLOW PATH: Asynchronous LLM Enrichment for Manual Reports
-      const activeUsersResult = await pool.query('SELECT COUNT(*) FROM users WHERE property_id = $1 AND status = $2', [resolvedPropertyId, 'active']);
+      const activeUsersResult = await query('SELECT COUNT(*) FROM users WHERE property_id = $1 AND status = $2', [resolvedPropertyId, 'active']);
       const aggregatedState = {
         propertyContext: floorPlanData,
         activeUsersCount: parseInt(activeUsersResult.rows[0]?.count || '0'),
@@ -181,7 +181,7 @@ export const reportPublicCrisis = async (req: Request, res: Response) => {
   const userAgent = req.get('user-agent') || 'unknown';
 
   try {
-    const result = await pool.query(
+    const result = await query(
       `INSERT INTO public_crisis_reports (
          property_id, incident_type, severity, zone_id, description,
          latitude, longitude, location, reporter_name, reporter_contact,
@@ -240,22 +240,22 @@ export const getPublicCrisisReports = async (req: Request, res: Response) => {
   const propertyId = req.user!.propertyId;
 
   try {
-    let query = `SELECT * FROM public_crisis_reports WHERE property_id = $1`;
+    let queryStr = `SELECT * FROM public_crisis_reports WHERE property_id = $1`;
     const params: any[] = [propertyId];
 
     if (status) {
       params.push(status);
-      query += ` AND status = $${params.length}`;
+      queryStr += ` AND status = $${params.length}`;
     }
 
     if (propertyId) {
       params.push(propertyId);
-      query += ` AND property_id = $${params.length}`;
+      queryStr += ` AND property_id = $${params.length}`;
     }
 
-    query += ' ORDER BY created_at DESC';
+    queryStr += ' ORDER BY created_at DESC';
 
-    const result = await pool.query(query, params);
+    const result = await query(queryStr, params);
     res.json({ success: true, reports: result.rows, count: result.rows.length });
   } catch (error: any) {
     logger.error('Error fetching public crisis reports:', error);
@@ -410,7 +410,7 @@ export const getActiveIncidents = async (req: Request, res: Response) => {
     }
 
     baseQuery += ` ORDER BY i.created_at DESC`;
-    const result = await pool.query(baseQuery, params);
+    const result = await query(baseQuery, params);
 
     res.json({ success: true, count: result.rows.length, incidents: result.rows });
   } catch (error: any) {
@@ -424,7 +424,7 @@ export const getIncident = async (req: Request, res: Response) => {
   const propertyId = req.user!.propertyId;
 
   try {
-    const result = await pool.query(
+    const result = await query(
       `SELECT i.*, u.name as reported_by_name, z.name as zone_name
        FROM incidents i
        LEFT JOIN users u ON i.reported_by = u.id
@@ -595,7 +595,7 @@ export const getPublishedResolutionReports = async (req: Request, res: Response)
   const limit = Math.min(Number(req.query.limit) || 50, 200);
 
   try {
-    const result = await pool.query(
+    const result = await query(
       `SELECT
          rr.id,
          rr.incident_id,
@@ -628,7 +628,7 @@ export const resolveIncident = async (req: Request, res: Response) => {
   const propertyId = req.user!.propertyId;
 
   try {
-    const result = await pool.query(
+    const result = await query(
       `UPDATE incidents SET status = 'resolved', resolved_at = CURRENT_TIMESTAMP WHERE id = $1 AND property_id = $2 RETURNING *`,
       [id, propertyId]
     );
@@ -654,62 +654,245 @@ export const updatePropertyStatus = async (req: Request, res: Response) => {
   const { propertyId } = req.params;
   const { status } = req.body;
   const user = req.user!;
+  const numericPropertyId = Number(propertyId);
 
   if (!['operational', 'evacuating', 'closed'].includes(status)) {
     return res.status(400).json({ error: 'Invalid status' });
   }
 
+  if (
+    user.role !== 'super_admin' &&
+    user.role !== 'org_admin' &&
+    user.propertyId !== numericPropertyId
+  ) {
+    return res.status(403).json({ error: 'Access denied for this property context' });
+  }
+
+  const defaultEvacuationRoutes = {
+    guestEmergencyPlan: [
+      'Stay calm and move toward the nearest marked exit.',
+      'Avoid elevators and use stairwells only.',
+      'Follow responder and staff instructions immediately.',
+      'Proceed to the outdoor assembly point and check in.',
+    ],
+    staffEvacuationPlan: [
+      'Open and secure evacuation corridors for guests.',
+      'Perform room-by-room sweep for your assigned sector.',
+      'Report trapped or distressed occupants to responders.',
+      'Complete roll call at the assembly point.',
+    ],
+    safeExits: ['Main Entrance', 'North Stairwell', 'South Fire Escape'],
+    tips: [
+      'Stay low if smoke is present.',
+      'Do not return for belongings.',
+      'Assist children and elderly occupants first.',
+    ],
+  };
+
   try {
-    const statusColumnCheck = await pool.query(
-      `SELECT 1
-       FROM information_schema.columns
-       WHERE table_name = 'properties' AND column_name = 'status'
-       LIMIT 1`
-    );
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
 
-    const hasStatusColumn = statusColumnCheck.rows.length > 0;
+      const statusColumnCheck = await client.query(
+        `SELECT 1
+         FROM information_schema.columns
+         WHERE table_name = 'properties' AND column_name = 'status'
+         LIMIT 1`
+      );
+      const hasStatusColumn = statusColumnCheck.rows.length > 0;
 
-    const result = hasStatusColumn
-      ? await pool.query(
-          `UPDATE properties SET status = $1, updated_at = CURRENT_TIMESTAMP
-           WHERE id = $2 RETURNING *`,
-          [status, propertyId]
-        )
-      : await pool.query(
-          `UPDATE properties SET updated_at = CURRENT_TIMESTAMP
-           WHERE id = $1 RETURNING *`,
-          [propertyId]
-        );
+      const propertyResult = hasStatusColumn
+        ? await client.query(
+            `UPDATE properties SET status = $1, updated_at = CURRENT_TIMESTAMP
+             WHERE id = $2 RETURNING *`,
+            [status, numericPropertyId]
+          )
+        : await client.query(
+            `UPDATE properties SET updated_at = CURRENT_TIMESTAMP
+             WHERE id = $1 RETURNING *`,
+            [numericPropertyId]
+          );
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Property not found' });
-    }
+      if (propertyResult.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'Property not found' });
+      }
 
-    if (req.io) {
-      req.io.to(`property_${propertyId}`).emit('property_status_update', {
-        propertyId,
-        status,
-        timestamp: new Date().toISOString()
-      });
+      let activeIncident: any = null;
+      let statusChangedIncidents: Array<{ id: number; status: string; resolved_at: string | null }> = [];
 
       if (status === 'evacuating') {
-        req.io.to(`property_${propertyId}`).emit('evacuation_triggered', {
-          propertyId,
-          message: 'EMERGENCY: Immediate evacuation ordered. Proceed to nearest exit.',
-          timestamp: new Date().toISOString()
+        const activeIncidentResult = await client.query(
+          `SELECT *
+           FROM incidents
+           WHERE property_id = $1 AND status = 'active'
+           ORDER BY
+             CASE WHEN incident_type = 'evacuation' THEN 0 ELSE 1 END,
+             created_at DESC
+           LIMIT 1`,
+          [numericPropertyId]
+        );
+
+        if (activeIncidentResult.rows.length > 0) {
+          activeIncident = activeIncidentResult.rows[0];
+
+          if (!activeIncident.mass_alert_message || !activeIncident.evacuation_routes) {
+            const patchedIncident = await client.query(
+              `UPDATE incidents
+               SET mass_alert_message = COALESCE(mass_alert_message, $1),
+                   responder_action_plan = COALESCE(responder_action_plan, $2),
+                   evacuation_routes = COALESCE(evacuation_routes, $3)
+               WHERE id = $4
+               RETURNING *`,
+              [
+                'EMERGENCY: Immediate evacuation ordered. Proceed to nearest safe exit and check in.',
+                'Responders and staff: execute evacuation protocol, secure exits, and complete sweep.',
+                JSON.stringify(defaultEvacuationRoutes),
+                activeIncident.id,
+              ]
+            );
+            activeIncident = patchedIncident.rows[0];
+          }
+        } else {
+          const createdIncidentResult = await client.query(
+            `INSERT INTO incidents (
+              property_id, organization_id, reported_by, incident_type, severity, status, description,
+              mass_alert_message, responder_action_plan, evacuation_routes
+            )
+            SELECT
+              p.id,
+              p.organization_id,
+              $2,
+              'evacuation',
+              'critical',
+              'active',
+              'Manual evacuation initiated from command center.',
+              $3,
+              $4,
+              $5
+            FROM properties p
+            WHERE p.id = $1
+            RETURNING *`,
+            [
+              numericPropertyId,
+              user.userId,
+              'EMERGENCY: Immediate evacuation ordered. Proceed to nearest safe exit and check in.',
+              'Responders and staff: execute evacuation protocol, secure exits, and complete sweep.',
+              JSON.stringify(defaultEvacuationRoutes),
+            ]
+          );
+
+          activeIncident = createdIncidentResult.rows[0];
+        }
+      }
+
+      if (status === 'operational') {
+        const closeResult = await client.query(
+          `UPDATE incidents
+           SET status = 'contained', resolved_at = CURRENT_TIMESTAMP
+           WHERE property_id = $1
+             AND status = 'active'
+             AND incident_type IN ('evacuation', 'fire')
+           RETURNING id, status, resolved_at`,
+          [numericPropertyId]
+        );
+        statusChangedIncidents = closeResult.rows;
+      }
+
+      const notificationMessage = status === 'evacuating'
+        ? 'EMERGENCY: Evacuation is in progress. Follow the safety plan and nearest safe exit.'
+        : status === 'operational'
+        ? 'UPDATE: Evacuation alert has been cleared. Continue monitoring official instructions.'
+        : 'Property status updated.';
+
+      await client.query(
+        `INSERT INTO notifications (
+          incident_id, property_id, organization_id, recipient_type, recipient_id, channel, message, status, sent_at
+        ) VALUES ($1, $2, $3, 'property', $4, 'websocket', $5, 'sent', CURRENT_TIMESTAMP)`,
+        [
+          activeIncident?.id || null,
+          numericPropertyId,
+          propertyResult.rows[0].organization_id || null,
+          String(numericPropertyId),
+          notificationMessage,
+        ]
+      );
+
+      await client.query('COMMIT');
+
+      if (req.io) {
+        req.io.to(`property_${numericPropertyId}`).emit('property_status_update', {
+          propertyId: numericPropertyId,
+          status,
+          incidentId: activeIncident?.id || null,
+          timestamp: new Date().toISOString(),
+        });
+
+        if (status === 'evacuating') {
+          if (activeIncident) {
+            req.io.to(`property_${numericPropertyId}`).emit('crisis_reported', {
+              incident: activeIncident,
+              fromCommandCenter: true,
+              timestamp: new Date().toISOString(),
+            });
+
+            req.io.to(`property_${numericPropertyId}`).emit('incident_enriched', {
+              incidentId: activeIncident.id,
+              enrichment: {
+                severity: activeIncident.severity,
+                massAlertMessage: activeIncident.mass_alert_message,
+                responderActionPlan: activeIncident.responder_action_plan,
+                evacuationRoutes: activeIncident.evacuation_routes || defaultEvacuationRoutes,
+              },
+              timestamp: new Date().toISOString(),
+            });
+          }
+
+          req.io.to(`property_${numericPropertyId}`).emit('evacuation_triggered', {
+            propertyId: numericPropertyId,
+            incidentId: activeIncident?.id || null,
+            message: 'EMERGENCY: Immediate evacuation ordered. Proceed to nearest exit.',
+            timestamp: new Date().toISOString(),
+          });
+        }
+
+        if (statusChangedIncidents.length > 0) {
+          for (const incident of statusChangedIncidents) {
+            req.io.to(`property_${numericPropertyId}`).emit('incident_status_update', {
+              incidentId: incident.id,
+              status: incident.status,
+              resolvedAt: incident.resolved_at,
+              timestamp: new Date().toISOString(),
+            });
+          }
+        }
+
+        req.io.to(`property_${numericPropertyId}`).emit('mass_notification', {
+          title: status === 'evacuating' ? 'EVACUATION ORDER' : 'STATUS UPDATE',
+          message: notificationMessage,
+          severity: status === 'evacuating' ? 'critical' : 'info',
+          timestamp: new Date().toISOString(),
         });
       }
+
+      const propertyPayload = hasStatusColumn
+        ? propertyResult.rows[0]
+        : { ...propertyResult.rows[0], status };
+
+      res.json({
+        success: true,
+        property: propertyPayload,
+        incident: activeIncident || null,
+        affectedIncidents: statusChangedIncidents,
+        warning: hasStatusColumn ? undefined : 'properties.status column is missing in DB; status change was broadcast in real time but not persisted.',
+      });
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
     }
-
-    const propertyPayload = hasStatusColumn
-      ? result.rows[0]
-      : { ...result.rows[0], status };
-
-    res.json({
-      success: true,
-      property: propertyPayload,
-      warning: hasStatusColumn ? undefined : 'properties.status column is missing in DB; status change was broadcast in real time but not persisted.',
-    });
   } catch (error: any) {
     logger.error('Error updating property status:', error);
     res.status(500).json({ error: 'Failed to update property status' });
@@ -722,7 +905,7 @@ export const getSafetyRoster = async (req: Request, res: Response) => {
 
   try {
     // Get all users currently registered at this property
-    const occupants = await pool.query(
+    const occupants = await query(
       `SELECT u.id, u.name, u.room_number, u.role,
        (SELECT status FROM check_ins ci 
         WHERE ci.user_id = u.id AND ci.incident_id = $1 
@@ -792,7 +975,7 @@ export const createAutomatedIncident = async (io: any, data: any) => {
       logger.info(`Automated incident created for property ${propertyId}, ID: ${incident.id} (Confidence: ${confidence})`);
 
       // 4. SLOW PATH: Asynchronous LLM Enrichment
-      const activeUsersResult = await pool.query('SELECT COUNT(*) FROM users WHERE property_id = $1 AND status = $2', [propertyId, 'active']);
+      const activeUsersResult = await query('SELECT COUNT(*) FROM users WHERE property_id = $1 AND status = $2', [propertyId, 'active']);
 
       const aggregatedState = {
         propertyContext: floorPlanData,

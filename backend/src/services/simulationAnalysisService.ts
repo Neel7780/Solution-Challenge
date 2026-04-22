@@ -1,5 +1,5 @@
 import logger from '../utils/logger';
-import { pool } from '../database/connection';
+import { query } from '../database/connection';
 
 /* ─── Types ─── */
 
@@ -183,7 +183,7 @@ export const saveSimulationRun = async (
   durationSeconds: number,
 ): Promise<number | null> => {
   try {
-    const result = await pool.query(
+    const result = await query(
       `INSERT INTO simulation_runs 
        (property_id, started_by, duration_seconds, final_snapshot, ai_analysis,
         evacuation_efficiency, risk_score, total_agents, casualties, evacuated, status)
@@ -214,7 +214,7 @@ export const saveSimulationRun = async (
 
 export const getSimulationHistory = async (propertyId: number, limit = 20) => {
   try {
-    const result = await pool.query(
+    const result = await query(
       `SELECT id, property_id, started_by, started_at, duration_seconds,
               evacuation_efficiency, risk_score, total_agents, casualties, evacuated, status,
               (ai_analysis->>'severity') as severity,

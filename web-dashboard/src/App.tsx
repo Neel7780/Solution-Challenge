@@ -9,6 +9,7 @@ import { useAuthStore } from './store/authStore';
 import Login from './pages/Login';
 import Landing from './pages/Landing';
 import AuthGuard from './components/AuthGuard';
+import LiveCrisisOverlay from './components/LiveCrisisOverlay';
 
 // Admin Pages
 import Layout from './components/Layout';
@@ -22,6 +23,9 @@ import Notifications from './pages/Notifications';
 import PlatformAdmin from './pages/PlatformAdmin';
 import OrganizationAdmin from './pages/OrganizationAdmin';
 import Simulation from './pages/Simulation';
+import ResponderDashboard from './pages/ResponderDashboard';
+import SecurityDashboard from './pages/SecurityDashboard';
+import StaffDashboard from './pages/StaffDashboard';
 
 // Guest Pages
 import GuestLayout from './components/GuestLayout';
@@ -29,6 +33,18 @@ import GuestDashboard from './pages/guest/GuestDashboard';
 import GuestEmergency from './pages/guest/GuestEmergency';
 import GuestNotifications from './pages/guest/GuestNotifications';
 import GuestCheckIn from './pages/guest/GuestCheckIn';
+
+function getDashboardHomeByRole(role?: string) {
+  if (role === 'responder') return '/dashboard/responder';
+  if (role === 'security') return '/dashboard/security';
+  if (role === 'staff') return '/dashboard/staff';
+  return '/dashboard/command';
+}
+
+function RoleDashboardIndex() {
+  const { user } = useAuthStore();
+  return <Navigate to={getDashboardHomeByRole(user?.role)} replace />;
+}
 
 function App() {
   const { connect, disconnect, connected } = useSocketStore();
@@ -47,6 +63,8 @@ function App() {
   }, [isAuthenticated, connected, connect, disconnect]);
 
   return (
+    <>
+    <LiveCrisisOverlay />
     <Routes>
       {/* Public Landing Page */}
       <Route path="/" element={<Landing />} />
@@ -59,7 +77,11 @@ function App() {
       {/* Admin/Staff Routes */}
       <Route element={<AuthGuard allowedRoles={['admin', 'staff', 'security', 'responder', 'super_admin', 'org_admin']} />}>
         <Route path="/dashboard" element={<Layout />}>
-          <Route index element={<Dashboard />} />
+          <Route index element={<RoleDashboardIndex />} />
+          <Route path="command" element={<Dashboard />} />
+          <Route path="responder" element={<ResponderDashboard />} />
+          <Route path="security" element={<SecurityDashboard />} />
+          <Route path="staff" element={<StaffDashboard />} />
           <Route path="incidents" element={<Incidents />} />
           <Route path="triage" element={<Triage />} />
           <Route path="locations" element={<Locations />} />
@@ -77,6 +99,7 @@ function App() {
         <Route path="/users" element={<Navigate to="/dashboard/users" replace />} />
         <Route path="/notifications" element={<Navigate to="/dashboard/notifications" replace />} />
         <Route path="/settings" element={<Navigate to="/dashboard/settings" replace />} />
+        <Route path="/command" element={<Navigate to="/dashboard/command" replace />} />
       </Route>
 
       {/* Guest Routes */}
@@ -92,6 +115,7 @@ function App() {
       {/* Catch All */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </>
   );
 }
 

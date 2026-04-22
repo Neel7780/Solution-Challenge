@@ -21,6 +21,12 @@ export interface Incident {
 }
 
 export interface OverviewData {
+  property?: {
+    id: number;
+    name?: string;
+    status?: 'operational' | 'evacuating' | 'closed' | string;
+    updated_at?: string;
+  };
   incidents?: {
     active_incidents: number;
     critical_count: number;

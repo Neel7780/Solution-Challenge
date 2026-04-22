@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { pool, queryWithContext } from '../database/connection';
+import { pool, query, queryWithContext } from '../database/connection';
 import logger from '../utils/logger';
 import type { Request, Response } from 'express';
 import type { SignOptions } from 'jsonwebtoken';
@@ -32,7 +32,7 @@ export const createGuestAccount = async (req: Request, res: Response) => {
   try {
     // If organizationId is missing from context (e.g. super_admin), fetch it from property
     if (!organizationId && resolvedPropertyId) {
-      const propResult = await pool.query('SELECT organization_id FROM properties WHERE id = $1', [resolvedPropertyId]);
+      const propResult = await query('SELECT organization_id FROM properties WHERE id = $1', [resolvedPropertyId]);
       if (propResult.rows.length > 0) {
         organizationId = propResult.rows[0].organization_id;
       }
@@ -40,7 +40,7 @@ export const createGuestAccount = async (req: Request, res: Response) => {
 
     const passwordHash = await bcrypt.hash(password, 10);
 
-    const result = await pool.query(
+    const result = await query(
       `INSERT INTO users (property_id, organization_id, name, email, phone, role, room_number, password_hash)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
       [resolvedPropertyId, organizationId, name, email, phone, role, roomNumber, passwordHash]
@@ -50,7 +50,7 @@ export const createGuestAccount = async (req: Request, res: Response) => {
     delete user.password_hash;
 
     // Also link to user_properties for consistency
-    await pool.query(
+    await query(
       `INSERT INTO user_properties (user_id, property_id, role) VALUES ($1, $2, $3)`,
       [user.id, resolvedPropertyId, role]
     );
@@ -83,7 +83,7 @@ export const createUser = async (req: Request, res: Response) => {
   try {
     const passwordHash = await bcrypt.hash(password, 10);
 
-    const result = await pool.query(
+    const result = await query(
       `INSERT INTO users (organization_id, property_id, name, email, phone, role, password_hash)
        VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, name, email, role, organization_id, property_id`,
       [finalOrgId, finalPropertyId, name, email, phone, role, passwordHash]
@@ -93,7 +93,7 @@ export const createUser = async (req: Request, res: Response) => {
 
     // If a property was specified, also create a mapping in user_properties
     if (finalPropertyId) {
-      await pool.query(
+      await query(
         `INSERT INTO user_properties (user_id, property_id, role)
          VALUES ($1, $2, $3)`,
         [newUser.id, finalPropertyId, role]
@@ -191,7 +191,7 @@ export const deleteUser = async (req: Request, res: Response) => {
   const userContext = req.user!;
 
   try {
-    const checkResult = await pool.query(
+    const checkResult = await query(
       `SELECT organization_id FROM users WHERE id = $1`,
       [id]
     );
@@ -204,7 +204,7 @@ export const deleteUser = async (req: Request, res: Response) => {
       return res.status(403).json({ error: 'Permission denied' });
     }
 
-    await pool.query(`DELETE FROM users WHERE id = $1`, [id]);
+    await query(`DELETE FROM users WHERE id = $1`, [id]);
     
     res.json({ success: true, message: 'User deleted successfully' });
   } catch (error: any) {
@@ -230,7 +230,7 @@ export const login = async (req: Request, res: Response) => {
   }
 
   try {
-    const result = await pool.query(
+    const result = await query(
       `SELECT * FROM users WHERE email = $1 OR phone = $1 LIMIT 1`,
       [resolvedIdentifier]
     );
@@ -246,7 +246,7 @@ export const login = async (req: Request, res: Response) => {
     }
 
     // Fetch available property contexts
-    const contextResult = await pool.query(
+    const contextResult = await query(
       `SELECT up.property_id, up.role, p.name as property_name, p.organization_id
        FROM user_properties up
        JOIN properties p ON up.property_id = p.id
@@ -254,7 +254,35 @@ export const login = async (req: Request, res: Response) => {
       [user.id]
     );
 
-    const contexts = contextResult.rows;
+    let contexts = contextResult.rows;
+
+    // Backward compatibility: some legacy accounts only have users.property_id populated.
+    // If so, create a synthetic context and backfill user_properties.
+    if (contexts.length === 0 && user.property_id && user.role !== 'super_admin') {
+      const propertyResult = await query(
+        `SELECT id, name, organization_id FROM properties WHERE id = $1 LIMIT 1`,
+        [user.property_id]
+      );
+
+      if (propertyResult.rows.length > 0) {
+        const property = propertyResult.rows[0];
+        contexts = [{
+          property_id: property.id,
+          role: user.role,
+          property_name: property.name,
+          organization_id: property.organization_id,
+        }];
+
+        // Self-heal missing mapping so future logins work through user_properties.
+        await query(
+          `INSERT INTO user_properties (user_id, property_id, role)
+           VALUES ($1, $2, $3)
+           ON CONFLICT (user_id, property_id)
+           DO UPDATE SET role = EXCLUDED.role`,
+          [user.id, property.id, user.role]
+        );
+      }
+    }
 
     if (contexts.length === 0 && user.role !== 'super_admin') {
       return res.status(403).json({ error: 'No property access assigned to this account' });
@@ -274,27 +302,38 @@ export const login = async (req: Request, res: Response) => {
         selectedRole = selectedContext.role;
         selectedOrgId = selectedContext.organization_id;
       }
-    } else if (contexts.length > 1 && !user.last_property_id && !user.property_id) {
-      // User must select a context
-      return res.json({
-        success: true,
-        requiresContextSelection: true,
-        contexts: contexts.map(c => ({
-          propertyId: c.property_id,
-          propertyName: c.property_name,
-          role: c.role
-        })),
-        message: 'Multiple contexts available. Please select one.'
-      });
-    } else if (contexts.length > 0 && !selectedPropertyId) {
-       selectedPropertyId = contexts[0].property_id;
-       selectedRole = contexts[0].role;
-       selectedOrgId = contexts[0].organization_id;
+    } else {
+      if (contexts.length > 0) {
+        const matchedContext = selectedPropertyId
+          ? contexts.find(c => c.property_id === Number(selectedPropertyId))
+          : null;
+        const resolvedContext = matchedContext || contexts[0];
+        if (resolvedContext) {
+          selectedPropertyId = resolvedContext.property_id;
+          selectedRole = resolvedContext.role;
+          selectedOrgId = resolvedContext.organization_id;
+        }
+      }
+
+      if (contexts.length > 1 && !user.last_property_id && !user.property_id) {
+        // User must select a context
+        return res.json({
+          success: true,
+          requiresContextSelection: true,
+          contexts: contexts.map(c => ({
+            propertyId: c.property_id,
+            propertyName: c.property_name,
+            role: c.role,
+            organizationId: c.organization_id,
+          })),
+          message: 'Multiple contexts available. Please select one.'
+        });
+      }
     }
 
     // Update last_property_id
     if (selectedPropertyId) {
-      await pool.query(`UPDATE users SET last_property_id = $1 WHERE id = $2`, [selectedPropertyId, user.id]);
+      await query(`UPDATE users SET last_property_id = $1 WHERE id = $2`, [selectedPropertyId, user.id]);
     }
 
     const token = signUserToken({
@@ -315,7 +354,12 @@ export const login = async (req: Request, res: Response) => {
       success: true,
       token,
       user,
-      contexts: contexts.length > 1 ? contexts : undefined,
+      contexts: contexts.map(c => ({
+        propertyId: c.property_id,
+        propertyName: c.property_name,
+        role: c.role,
+        organizationId: c.organization_id,
+      })),
       message: 'Login successful'
     });
   } catch (error: any) {
@@ -329,7 +373,7 @@ export const switchContext = async (req: Request, res: Response) => {
   const userId = req.user!.userId;
 
   try {
-    const contextResult = await pool.query(
+    const contextResult = await query(
       `SELECT up.property_id, up.role, p.organization_id
        FROM user_properties up
        JOIN properties p ON up.property_id = p.id
@@ -339,18 +383,18 @@ export const switchContext = async (req: Request, res: Response) => {
 
     if (contextResult.rows.length === 0) {
       // Check if user is super_admin or org_admin for this property
-      const userResult = await pool.query(`SELECT id, role, organization_id FROM users WHERE id = $1`, [userId]);
+      const userResult = await query(`SELECT id, role, organization_id FROM users WHERE id = $1`, [userId]);
       const user = userResult.rows[0];
 
       if (user.role === 'super_admin' || (user.role === 'org_admin' && user.organization_id)) {
-         const propResult = await pool.query(`SELECT id, organization_id FROM properties WHERE id = $1`, [propertyId]);
+         const propResult = await query(`SELECT id, organization_id FROM properties WHERE id = $1`, [propertyId]);
          if (propResult.rows.length === 0) return res.status(404).json({ error: 'Property not found' });
          
          if (user.role === 'org_admin' && propResult.rows[0].organization_id !== user.organization_id) {
            return res.status(403).json({ error: 'Access denied for this property' });
          }
 
-         await pool.query(`UPDATE users SET last_property_id = $1 WHERE id = $2`, [propertyId, userId]);
+         await query(`UPDATE users SET last_property_id = $1 WHERE id = $2`, [propertyId, userId]);
 
          const newToken = signUserToken({
            id: userId,
@@ -365,7 +409,7 @@ export const switchContext = async (req: Request, res: Response) => {
     }
 
     const context = contextResult.rows[0];
-    await pool.query(`UPDATE users SET last_property_id = $1 WHERE id = $2`, [propertyId, userId]);
+    await query(`UPDATE users SET last_property_id = $1 WHERE id = $2`, [propertyId, userId]);
 
     const newToken = signUserToken({
       id: userId,
@@ -383,7 +427,7 @@ export const switchContext = async (req: Request, res: Response) => {
 
 export const getProfile = async (req: Request, res: Response) => {
   try {
-    const result = await pool.query(
+    const result = await query(
       `SELECT id, property_id, organization_id, last_property_id, name, email, phone, role, room_number, status, created_at
        FROM users WHERE id = $1`,
       [req.user!.userId]
@@ -404,7 +448,7 @@ export const updateProfile = async (req: Request, res: Response) => {
   const { name, phone, roomNumber } = req.body;
 
   try {
-    const result = await pool.query(
+    const result = await query(
       `UPDATE users SET name = COALESCE($1, name), phone = COALESCE($2, phone),
        room_number = COALESCE($3, room_number), updated_at = CURRENT_TIMESTAMP
        WHERE id = $4 RETURNING *`,
@@ -430,7 +474,7 @@ export const changePassword = async (req: Request, res: Response) => {
   }
 
   try {
-    const userResult = await pool.query(`SELECT id, password_hash FROM users WHERE id = $1`, [req.user!.userId]);
+    const userResult = await query(`SELECT id, password_hash FROM users WHERE id = $1`, [req.user!.userId]);
 
     if (userResult.rows.length === 0) {
       return res.status(404).json({ error: 'User not found' });
@@ -443,7 +487,7 @@ export const changePassword = async (req: Request, res: Response) => {
 
     const newPasswordHash = await bcrypt.hash(newPassword, 10);
 
-    await pool.query(
+    await query(
       `UPDATE users SET password_hash = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`,
       [newPasswordHash, req.user!.userId]
     );
@@ -496,7 +540,7 @@ export const updateLocation = async (req: Request, res: Response) => {
   const userId = req.user!.userId;
 
   try {
-    await pool.query(
+    await query(
       `INSERT INTO location_tracking (user_id, zone_id, beacon_id, latitude, longitude, location)
        VALUES ($1, $2, $3, $4, $5, ST_SetSRID(ST_MakePoint($5, $4), 4326))`,
       [userId, zoneId, beaconId, latitude, longitude]
@@ -525,10 +569,10 @@ export const triggerPanic = async (req: Request, res: Response) => {
   const userId = req.user!.userId;
 
   try {
-    const userResult = await pool.query(`SELECT property_id, name FROM users WHERE id = $1`, [userId]);
+    const userResult = await query(`SELECT property_id, name FROM users WHERE id = $1`, [userId]);
     const user = userResult.rows[0];
 
-    const incidentResult = await pool.query(
+    const incidentResult = await query(
       `WITH coords AS (
          SELECT $4::double precision AS lat, $5::double precision AS lon
        )
@@ -539,7 +583,7 @@ export const triggerPanic = async (req: Request, res: Response) => {
       [user.property_id, userId, message || `Panic button triggered by ${user.name}`, latitude, longitude]
     );
 
-    await pool.query(
+    await query(
       `WITH coords AS (
          SELECT $3::double precision AS lat, $4::double precision AS lon
        )
@@ -600,7 +644,7 @@ export const checkIn = async (req: Request, res: Response) => {
   const userId = req.user!.userId;
 
   try {
-    const result = await pool.query(
+    const result = await query(
       `WITH coords AS (
          SELECT $5::double precision AS lat, $6::double precision AS lon
        )
