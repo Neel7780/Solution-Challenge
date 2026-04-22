@@ -80,24 +80,39 @@ Incident Description: ${aggregatedState.description || 'Fire detected'}
 
 Respond with ONLY a valid JSON object, no markdown or additional text.`;
 
-  try {
-    const client = new GoogleGenerativeAI(apiKey);
-    const genModel = client.getGenerativeModel({ model });
+  const executeWithRetry = async (attempt = 1): Promise<any> => {
+    try {
+      const client = new GoogleGenerativeAI(apiKey);
+      const genModel = client.getGenerativeModel({ model });
 
-    const result = await Promise.race([
-      genModel.generateContent({
-        contents: [
-          { role: 'user', parts: [{ text: systemPrompt + '\n\n' + userPrompt }] }
-        ],
-        generationConfig: {
-          temperature: 0.2,
-          maxOutputTokens: 1024
-        }
-      }),
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Timeout')), 25000)
-      )
-    ]) as any;
+      return await Promise.race([
+        genModel.generateContent({
+          contents: [
+            { role: 'user', parts: [{ text: systemPrompt + '\n\n' + userPrompt }] }
+          ],
+          generationConfig: {
+            temperature: 0.2,
+            maxOutputTokens: 1024
+          }
+        }),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Timeout')), 60000)
+        )
+      ]);
+    } catch (error: any) {
+      const isTransient = error.message?.includes('503') || error.message?.includes('high demand') || error.message === 'Timeout';
+      if (attempt < 3 && isTransient) {
+        const delay = attempt * 2000;
+        logger.warn(`Gemini enrichment transient error (attempt ${attempt}), retrying in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return executeWithRetry(attempt + 1);
+      }
+      throw error;
+    }
+  };
+
+  try {
+    const result = await executeWithRetry();
 
     const content = result?.response?.text?.();
     if (!content) {

@@ -55,7 +55,7 @@ const moduleFeatures = [
   {
     code: 'MOD.02',
     icon: <PsychologyAltOutlined />,
-    title: 'Llama 3.3 Intelligence',
+    title: 'Gemini Intelligence',
     description: 'AI predicts bottlenecks and drafts evacuation routes from density and hazard telemetry.',
     color: '#4de6c6',
   },

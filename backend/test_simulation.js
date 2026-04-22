@@ -32,7 +32,7 @@ socket.on('crisis_reported', (data) => {
 });
 
 socket.on('incident_enriched', (data) => {
-  console.log('🧠 SLOW PATH: LLM Enrichment Received:');
+  console.log('🧠 SLOW PATH: Gemini Enrichment Received:');
   console.log('📊 Severity:', data.enrichment.severity);
   console.log('📢 Alert:', data.enrichment.massAlertMessage);
   console.log('📋 Responder Plan:', data.enrichment.responderActionPlan);

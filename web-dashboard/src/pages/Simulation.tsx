@@ -276,11 +276,14 @@ export default function Simulation() {
   useEffect(() => {
     if (!socket) return;
     const handler = (data: any) => {
-      if (data?.analysis) setAnalysis(data.analysis as SimAnalysis);
+      if (data?.analysis) {
+        setAnalysis(data.analysis as SimAnalysis);
+        setAnalysisLoading(false);
+      }
     };
     socket.on('simulation:analysis_result', handler);
     return () => { socket.off('simulation:analysis_result', handler); };
-  }, [socket, setAnalysis]);
+  }, [socket, setAnalysis, setAnalysisLoading]);
 
   // Listen for crisis acknowledgment from backend
   useEffect(() => {
@@ -979,9 +982,8 @@ export default function Simulation() {
               AI Analysis
             </Typography>
             <Typography variant="caption" sx={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.6rem' }}>
-              Powered by Groq LLM
-            </Typography>
-          </Box>
+              Powered by Gemini
+            </Typography>          </Box>
         </Box>
 
         <Box sx={{ flexGrow: 1, overflow: 'auto', px: 2, py: 2 }}>

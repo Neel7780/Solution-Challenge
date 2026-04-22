@@ -123,29 +123,51 @@ METRICS:
 Analyze this simulation snapshot and provide your structured assessment.`;
 
 
+  const executeWithRetry = async (attempt = 1): Promise<any> => {
+    try {
+      const client = new GoogleGenerativeAI(apiKey);
+      const genModel = client.getGenerativeModel({ model });
+
+      return await Promise.race([
+        genModel.generateContent({
+          contents: [
+            { role: 'user', parts: [{ text: systemPrompt + '\n\n' + userPrompt }] }
+          ],
+          generationConfig: {
+            temperature: 0.3,
+            maxOutputTokens: 2048
+          }
+        }),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Timeout')), 60000)
+        )
+      ]);
+    } catch (error: any) {
+      const isTransient = error.message?.includes('503') || error.message?.includes('high demand') || error.message === 'Timeout';
+      if (attempt < 3 && isTransient) {
+        const delay = attempt * 2000;
+        logger.warn(`Gemini analysis transient error (attempt ${attempt}), retrying in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return executeWithRetry(attempt + 1);
+      }
+      throw error;
+    }
+  };
+
   try {
-    const client = new GoogleGenerativeAI(apiKey);
-    const genModel = client.getGenerativeModel({ model });
+    logger.debug(`Sending simulation analysis request to Gemini for property ${propertyId}. Agents: ${snapshot.agents.length}, Fires: ${snapshot.fires.length}`);
 
-    const result = await Promise.race([
-      genModel.generateContent({
-        contents: [
-          { role: 'user', parts: [{ text: systemPrompt + '\n\n' + userPrompt }] }
-        ],
-        generationConfig: {
-          temperature: 0.3,
-          maxOutputTokens: 2048
-        }
-      }),
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Timeout')), 30000)
-      )
-    ]) as any;
+    const result = await executeWithRetry();
 
-    const content = result?.response?.text?.();
+    const response = await result.response;
+    const content = response.text();
+    
     if (!content) {
+      logger.error(`Empty response from Gemini for property ${propertyId}`);
       throw new Error('No content in response');
     }
+
+    logger.debug(`Gemini response content for property ${propertyId}: ${content.substring(0, 200)}...`);
     const cleanJson = content
       .replace(/```json\n?/g, '')
       .replace(/```\n?/g, '')
