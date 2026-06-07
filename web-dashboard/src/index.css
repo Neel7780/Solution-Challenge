@@ -3,31 +3,31 @@
 
 /* ===== Design Tokens (Command Center) ===== */
 :root {
-  --bg-primary: #0a0d12;
-  --bg-obsidian: #0a0d12;
-  --bg-card: rgba(16, 20, 28, 0.76);
-  --bg-elevated: rgba(21, 26, 35, 0.86);
-  --bg-glass: rgba(14, 18, 25, 0.72);
-  --border-subtle: rgba(246, 211, 101, 0.08);
-  --border-medium: rgba(246, 211, 101, 0.18);
+  --bg-primary: #f8f9fa;
+  --bg-obsidian: #ffffff;
+  --bg-card: #ffffff;
+  --bg-elevated: #f8f9fa;
+  --bg-glass: rgba(255, 255, 255, 0.85);
+  --border-subtle: rgba(0, 121, 193, 0.06);
+  --border-medium: rgba(0, 121, 193, 0.12);
 
-  --text-primary: #f5f7fa;
-  --text-secondary: rgba(245, 247, 250, 0.75);
-  --text-muted: rgba(245, 247, 250, 0.52);
+  --text-primary: #1c1e21;
+  --text-secondary: #5f6368;
+  --text-muted: #80868b;
 
-  --accent-red: #ff5c5c;
-  --accent-green: #4de6c6;
-  --accent-blue: #70a7ff;
-  --accent-orange: #f6d365;
-  --accent-gold: #f6d365;
+  --accent-red: #d32f2f;
+  --accent-green: #2e7d32;
+  --accent-blue: #0079c1;
+  --accent-orange: #ed6c02;
+  --accent-gold: #0079c1;
 
   --font-main: 'Inter', -apple-system, sans-serif;
-  --font-display: 'Fraunces', 'Times New Roman', serif;
+  --font-display: 'Inter', -apple-system, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
-  --font-brand: 'Orbitron', 'Inter', sans-serif;
+  --font-brand: 'Inter', -apple-system, sans-serif;
 
-  --shadow-soft: 0 18px 48px -28px rgba(0, 0, 0, 0.78);
-  --shadow-glow: 0 0 0 1px rgba(246, 211, 101, 0.08), 0 0 42px rgba(246, 211, 101, 0.08);
+  --shadow-soft: 0 10px 30px -15px rgba(0, 0, 0, 0.08);
+  --shadow-glow: 0 0 0 1px rgba(0, 121, 193, 0.06), 0 0 24px rgba(0, 121, 193, 0.04);
 }
 
 * {
@@ -37,7 +37,7 @@
 }
 
 body {
-  background-color: var(--bg-obsidian);
+  background-color: var(--bg-primary);
   color: var(--text-primary);
   font-family: var(--font-main);
   -webkit-font-smoothing: antialiased;
@@ -45,7 +45,7 @@ body {
 
   /* Atmospheric command grid */
   background-image: 
-    radial-gradient(ellipse at top, rgba(246, 211, 101, 0.14), transparent 58%),
+    radial-gradient(ellipse at top, rgba(0, 121, 193, 0.05), transparent 58%),
     linear-gradient(var(--border-subtle) 1px, transparent 1px),
     linear-gradient(90deg, var(--border-subtle) 1px, transparent 1px);
   background-size: 100% 100%, 64px 64px, 64px 64px;
@@ -55,7 +55,7 @@ body {
 /* ===== Typography ===== */
 h1, h2, h3, h4 {
   font-family: var(--font-display);
-  font-weight: 300;
+  font-weight: 500;
   letter-spacing: -0.02em;
 }
 
@@ -70,7 +70,7 @@ h1, h2, h3, h4 {
 }
 
 .glass-panel:hover {
-  border-color: rgba(246, 211, 101, 0.24);
+  border-color: rgba(0, 121, 193, 0.24);
   box-shadow: var(--shadow-glow), var(--shadow-soft);
   transform: translateY(-2px);
 }

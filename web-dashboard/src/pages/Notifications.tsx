@@ -133,9 +133,9 @@ export default function Notifications() {
             className="anim-panel"
             sx={{
               p: 4,
-              backgroundColor: 'rgba(18, 18, 26, 0.98)',
+              backgroundColor: 'var(--bg-card)',
               border: '1px solid var(--border-medium)',
-              boxShadow: 'var(--shadow-card)',
+              boxShadow: 'var(--shadow-soft)',
             }}
           >
             <Typography variant="h6" sx={{ mb: 3 }}>Compose Mass Alert</Typography>
@@ -147,7 +147,7 @@ export default function Notifications() {
               placeholder="Enter mass notification message to all personnel and guests..."
               value={message}
               onChange={(e) => setMessage(e.target.value)}
-              sx={{ mb: 4, '& .MuiOutlinedInput-root': { background: 'rgba(255,255,255,0.02)' } }}
+              sx={{ mb: 4, '& .MuiOutlinedInput-root': { background: 'var(--bg-elevated)' } }}
             />
 
             <Typography variant="subtitle2" sx={{ mb: 2, color: 'text.secondary' }}>Delivery Channels</Typography>
@@ -192,9 +192,9 @@ export default function Notifications() {
             sx={{
               p: 4,
               height: '100%',
-              backgroundColor: 'rgba(18, 18, 26, 0.98)',
+              backgroundColor: 'var(--bg-card)',
               border: '1px solid var(--border-medium)',
-              boxShadow: 'var(--shadow-card)',
+              boxShadow: 'var(--shadow-soft)',
             }}
           >
             <Typography variant="h6" sx={{ mb: 3 }}>Broadcast History</Typography>
@@ -205,7 +205,7 @@ export default function Notifications() {
             )}
             <List disablePadding>
               {history.map((item) => (
-                <ListItem key={item.id} alignItems="flex-start" sx={{ px: 0, py: 2, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                <ListItem key={item.id} alignItems="flex-start" sx={{ px: 0, py: 2, borderBottom: '1px solid var(--border-subtle)' }}>
                   <ListItemIcon sx={{ minWidth: 40 }}>
                     <Avatar sx={{ background: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6', width: 32, height: 32 }}>
                       <SmsIcon fontSize="small" />
@@ -241,9 +241,9 @@ export default function Notifications() {
         slotProps={{
           paper: {
             sx: {
-              backgroundColor: 'rgba(18, 18, 26, 0.98)',
+              backgroundColor: 'var(--bg-card)',
               border: '1px solid var(--border-medium)',
-              boxShadow: 'var(--shadow-card)',
+              boxShadow: 'var(--shadow-soft)',
             },
           },
         }}

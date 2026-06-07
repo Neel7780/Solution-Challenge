@@ -51,9 +51,9 @@ const TriageCard = ({ title, count, icon: Icon, color }: TriageCardProps) => (
       borderLeft: `4px solid ${color}`,
       position: 'relative',
       overflow: 'hidden'
-      ,backgroundColor: 'rgba(18, 18, 26, 0.98)',
+      ,backgroundColor: 'var(--bg-card)',
       border: '1px solid var(--border-medium)',
-      boxShadow: 'var(--shadow-card)',
+      boxShadow: 'var(--shadow-soft)',
     }}
   >
     <Box sx={{ p: 2, borderRadius: 2, background: alpha(color, 0.1) }}>
@@ -202,12 +202,12 @@ export default function Triage() {
 
       <Paper
         sx={{
-          backgroundColor: 'rgba(18, 18, 26, 0.98)',
+          backgroundColor: 'var(--bg-card)',
           border: '1px solid var(--border-medium)',
-          boxShadow: 'var(--shadow-card)',
+          boxShadow: 'var(--shadow-soft)',
         }}
       >
-        <Box sx={{ p: 3, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+        <Box sx={{ p: 3, borderBottom: '1px solid var(--border-subtle)' }}>
           <Typography variant="h6">Live Personnel Roster</Typography>
         </Box>
         <TableContainer>

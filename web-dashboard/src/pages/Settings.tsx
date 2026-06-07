@@ -144,9 +144,9 @@ export default function Settings() {
             sx={{
               p: 4,
               mb: 4,
-              backgroundColor: 'rgba(18, 18, 26, 0.98)',
+              backgroundColor: 'var(--bg-card)',
               border: '1px solid var(--border-medium)',
-              boxShadow: 'var(--shadow-card)',
+              boxShadow: 'var(--shadow-soft)',
             }}
           >
             <Typography variant="h6" sx={{ mb: 4 }}>Property Configuration</Typography>
@@ -185,9 +185,9 @@ export default function Settings() {
             className="anim-panel"
             sx={{
               p: 4,
-              backgroundColor: 'rgba(18, 18, 26, 0.98)',
+              backgroundColor: 'var(--bg-card)',
               border: '1px solid var(--border-medium)',
-              boxShadow: 'var(--shadow-card)',
+              boxShadow: 'var(--shadow-soft)',
             }}
           >
             <Typography variant="h6" sx={{ mb: 4 }}>Emergency Direct Lines</Typography>
@@ -215,9 +215,9 @@ export default function Settings() {
             sx={{
               p: 4,
               height: '100%',
-              backgroundColor: 'rgba(18, 18, 26, 0.98)',
+              backgroundColor: 'var(--bg-card)',
               border: '1px solid var(--border-medium)',
-              boxShadow: 'var(--shadow-card)',
+              boxShadow: 'var(--shadow-soft)',
             }}
           >
             <Typography variant="h6" sx={{ mb: 4 }}>Automated Responses</Typography>

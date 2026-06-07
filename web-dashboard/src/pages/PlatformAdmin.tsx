@@ -157,9 +157,9 @@ export default function PlatformAdmin() {
 
       <Paper
         sx={{
-          backgroundColor: 'rgba(18, 18, 26, 0.98)',
+          backgroundColor: 'var(--bg-card)',
           border: '1px solid var(--border-medium)',
-          boxShadow: 'var(--shadow-card)',
+          boxShadow: 'var(--shadow-soft)',
         }}
       >
         <TableContainer>

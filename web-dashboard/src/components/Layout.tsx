@@ -157,14 +157,14 @@ export default function Layout() {
                   transition: 'all 0.22s ease',
                   '&.Mui-selected': {
                     borderColor: 'var(--border-medium)',
-                    backgroundColor: 'rgba(246, 211, 101, 0.12)',
+                    backgroundColor: 'rgba(0, 121, 193, 0.08)',
                     '&:hover': {
-                      backgroundColor: 'rgba(246, 211, 101, 0.18)',
+                      backgroundColor: 'rgba(0, 121, 193, 0.12)',
                     }
                   },
                   '&:hover': {
                     borderColor: 'var(--border-subtle)',
-                    backgroundColor: 'rgba(246, 211, 101, 0.06)',
+                    backgroundColor: 'rgba(0, 121, 193, 0.04)',
                   },
                 }}
               >
@@ -185,10 +185,10 @@ export default function Layout() {
           );
         })}
       </List>
-
+ 
       <Box sx={{ p: 2, borderTop: '1px solid var(--border-subtle)' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, p: 1, mb: 1, border: '1px solid var(--border-subtle)', borderRadius: 2, background: 'var(--bg-card)' }}>
-          <Avatar sx={{ width: 36, height: 36, bgcolor: 'rgba(246, 211, 101, 0.22)', color: 'var(--accent-gold)' }}>{user?.name?.charAt(0) || 'U'}</Avatar>
+          <Avatar sx={{ width: 36, height: 36, bgcolor: 'rgba(0, 121, 193, 0.08)', color: 'var(--accent-blue)' }}>{user?.name?.charAt(0) || 'U'}</Avatar>
           <Box sx={{ flexGrow: 1, overflow: 'hidden' }}>
             <Typography variant="subtitle2" noWrap sx={{ fontWeight: 600 }}>{user?.name || 'Admin User'}</Typography>
             <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'capitalize', fontFamily: 'var(--font-mono)', fontSize: '0.6rem', letterSpacing: '0.08em' }}>
@@ -211,7 +211,11 @@ export default function Layout() {
         sx={{
           width: { sm: `calc(100% - ${drawerWidth}px)` },
           ml: { sm: `${drawerWidth}px` },
-          background: 'rgba(10, 13, 18, 0.74)',
+          backgroundColor: 'rgba(255, 255, 255, 0.85)',
+          backdropFilter: 'blur(12px)',
+          color: 'text.primary',
+          borderBottom: '1px solid var(--border-subtle)',
+          boxShadow: 'none',
         }}
       >
         <Toolbar sx={{ pr: '24px', minHeight: 72 }}>

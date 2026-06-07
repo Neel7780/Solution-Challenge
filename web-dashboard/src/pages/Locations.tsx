@@ -124,9 +124,9 @@ export default function Locations() {
               p: 2,
               height: 'calc(100vh - 180px)',
               minHeight: 500,
-              backgroundColor: 'rgba(18, 18, 26, 0.98)',
+              backgroundColor: 'var(--bg-card)',
               border: '1px solid var(--border-medium)',
-              boxShadow: 'var(--shadow-card)',
+              boxShadow: 'var(--shadow-soft)',
             }}
           >
             <Box sx={{ height: '100%', width: '100%', borderRadius: 3, overflow: 'hidden' }}>
@@ -193,9 +193,9 @@ export default function Locations() {
               className="anim-panel"
               sx={{
                 p: 3,
-                backgroundColor: 'rgba(18, 18, 26, 0.98)',
+                backgroundColor: 'var(--bg-card)',
                 border: '1px solid var(--border-medium)',
-                boxShadow: 'var(--shadow-card)',
+                boxShadow: 'var(--shadow-soft)',
               }}
             >
               <Typography variant="h6" sx={{ mb: 3 }}>Zone Occupancy</Typography>
@@ -215,7 +215,7 @@ export default function Locations() {
                       value={Math.min(percentage, 100)}
                       sx={{
                         height: 6,
-                        backgroundColor: 'rgba(255,255,255,0.06)',
+                        backgroundColor: 'rgba(0,0,0,0.06)',
                         '& .MuiLinearProgress-bar': { backgroundColor: color },
                       }}
                     />
@@ -232,17 +232,17 @@ export default function Locations() {
               sx={{
                 p: 3,
                 flexGrow: 1,
-                backgroundColor: 'rgba(18, 18, 26, 0.98)',
+                backgroundColor: 'var(--bg-card)',
                 border: '1px solid var(--border-medium)',
-                boxShadow: 'var(--shadow-card)',
+                boxShadow: 'var(--shadow-soft)',
               }}
             >
               <Typography variant="h6" sx={{ mb: 2 }}>Recently Active Personnel</Typography>
               <List disablePadding>
                 {loadingUsers ? <CircularProgress size={24} /> : activeUsers.slice(0, 10).map((user: any) => (
-                  <ListItem key={user.id} disableGutters sx={{ borderBottom: '1px solid rgba(255,255,255,0.06)', py: 1.5 }}>
+                  <ListItem key={user.id} disableGutters sx={{ borderBottom: '1px solid var(--border-subtle)', py: 1.5 }}>
                     <ListItemAvatar>
-                      <Avatar sx={{ bgcolor: user.role === 'staff' || user.role === 'security' ? 'rgba(59, 130, 246, 0.2)' : 'rgba(148, 163, 184, 0.2)', color: user.role === 'staff' || user.role === 'security' ? '#60a5fa' : '#cbd5e1' }}>
+                      <Avatar sx={{ bgcolor: user.role === 'staff' || user.role === 'security' ? 'rgba(0, 121, 193, 0.1)' : 'rgba(0,0,0,0.04)', color: user.role === 'staff' || user.role === 'security' ? '#0079c1' : '#5f6368' }}>
                         {user.name.charAt(0)}
                       </Avatar>
                     </ListItemAvatar>

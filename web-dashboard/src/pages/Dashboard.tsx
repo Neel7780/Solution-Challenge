@@ -85,7 +85,7 @@ const StatCard = ({ title, value, icon: Icon, color, subtitle }: StatCardProps) 
         <Typography variant="overline" sx={{ color: 'var(--text-muted)', fontSize: '0.6rem', fontWeight: 600, letterSpacing: '0.14em' }}>
           {title}
         </Typography>
-        <Typography className="stat-value" sx={{ my: 0.5, color: '#fff' }}>
+        <Typography className="stat-value" sx={{ my: 0.5, color: 'text.primary' }}>
           {value}
         </Typography>
         {subtitle && (
@@ -318,7 +318,7 @@ export default function Dashboard() {
       {isEvacuating && (
         <Alert 
           severity="error" 
-          sx={{ mb: 4, backgroundColor: 'rgba(255, 92, 92, 0.12)', border: '1px solid rgba(255, 92, 92, 0.5)', color: '#fff', borderRadius: 2 }}
+          sx={{ mb: 4, backgroundColor: 'rgba(211, 47, 47, 0.05)', border: '1px solid rgba(211, 47, 47, 0.25)', color: '#d32f2f', borderRadius: 2 }}
           action={
             <Button color="inherit" size="small" onClick={() => cancelEvacuationMutation.mutate()} disabled={cancelEvacuationMutation.isPending}>
               {cancelEvacuationMutation.isPending ? 'Cancelling...' : 'Cancel Alert'}
@@ -400,8 +400,8 @@ export default function Dashboard() {
                     ))}
                   </Pie>
                   <Tooltip
-                    contentStyle={{ backgroundColor: '#131925', border: '1px solid rgba(246,211,101,0.2)', borderRadius: 10, fontSize: '0.75rem' }}
-                    itemStyle={{ color: '#fff' }}
+                    contentStyle={{ backgroundColor: '#ffffff', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 10, fontSize: '0.75rem', boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}
+                    itemStyle={{ color: '#1c1e21' }}
                   />
                 </PieChart>
               </ResponsiveContainer>
@@ -412,7 +412,7 @@ export default function Dashboard() {
             </Box>
           </Paper>
         </Grid>
-
+ 
         <Grid size={{ xs: 12, md: 7 }}>
           <Paper
             className="chart-panel"
@@ -428,11 +428,12 @@ export default function Dashboard() {
             <Box sx={{ height: 300 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={activityData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(246,211,101,0.08)" vertical={false} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(0, 0, 0, 0.05)" vertical={false} />
                   <XAxis dataKey="time" stroke="var(--text-muted)" axisLine={false} tickLine={false} style={{ fontSize: '0.7rem' }} />
                   <YAxis stroke="var(--text-muted)" axisLine={false} tickLine={false} style={{ fontSize: '0.7rem' }} allowDecimals={false} />
                   <Tooltip
-                    contentStyle={{ backgroundColor: '#131925', border: '1px solid rgba(246,211,101,0.2)', borderRadius: 10, fontSize: '0.75rem' }}
+                    contentStyle={{ backgroundColor: '#ffffff', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 10, fontSize: '0.75rem', boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}
+                    itemStyle={{ color: '#1c1e21' }}
                   />
                   <Line
                     type="monotone"
@@ -440,7 +441,7 @@ export default function Dashboard() {
                     stroke="var(--accent-orange)"
                     strokeWidth={2}
                     dot={{ fill: 'var(--accent-orange)', r: 2.5 }}
-                    activeDot={{ r: 5, fill: 'var(--accent-orange)', stroke: '#fff' }}
+                    activeDot={{ r: 5, fill: 'var(--accent-orange)', stroke: '#ffffff' }}
                   />
                 </LineChart>
               </ResponsiveContainer>
@@ -463,10 +464,10 @@ export default function Dashboard() {
              <Table size="small" stickyHeader>
                <TableHead>
                  <TableRow>
-                   <TableCell sx={{ backgroundColor: 'rgba(10,13,18,0.96)', fontSize: '0.62rem', fontFamily: 'var(--font-mono)', letterSpacing: '0.1em' }}>PERSONNEL / GUEST</TableCell>
-                   <TableCell sx={{ backgroundColor: 'rgba(10,13,18,0.96)', fontSize: '0.62rem', fontFamily: 'var(--font-mono)', letterSpacing: '0.1em' }}>STATUS</TableCell>
-                   <TableCell sx={{ backgroundColor: 'rgba(10,13,18,0.96)', fontSize: '0.62rem', fontFamily: 'var(--font-mono)', letterSpacing: '0.1em' }}>LAST SEEN</TableCell>
-                   <TableCell align="right" sx={{ backgroundColor: 'rgba(10,13,18,0.96)', fontSize: '0.62rem', fontFamily: 'var(--font-mono)', letterSpacing: '0.1em' }}>ACTION</TableCell>
+                   <TableCell sx={{ backgroundColor: 'var(--bg-elevated)', fontSize: '0.62rem', fontFamily: 'var(--font-mono)', letterSpacing: '0.1em' }}>PERSONNEL / GUEST</TableCell>
+                   <TableCell sx={{ backgroundColor: 'var(--bg-elevated)', fontSize: '0.62rem', fontFamily: 'var(--font-mono)', letterSpacing: '0.1em' }}>STATUS</TableCell>
+                   <TableCell sx={{ backgroundColor: 'var(--bg-elevated)', fontSize: '0.62rem', fontFamily: 'var(--font-mono)', letterSpacing: '0.1em' }}>LAST SEEN</TableCell>
+                   <TableCell align="right" sx={{ backgroundColor: 'var(--bg-elevated)', fontSize: '0.62rem', fontFamily: 'var(--font-mono)', letterSpacing: '0.1em' }}>ACTION</TableCell>
                  </TableRow>
                </TableHead>
                <TableBody>
