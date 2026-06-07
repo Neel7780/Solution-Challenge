@@ -244,9 +244,29 @@ export default function Login() {
                 color="primary"
                 size="large"
                 disabled={loading}
-                sx={{ py: 1.5, fontSize: '1.1rem' }}
+                sx={{ py: 1.5, fontSize: '1.1rem', mb: 2 }}
               >
                 {loading ? 'Authenticating...' : 'Sign In'}
+              </Button>
+
+              <Button
+                fullWidth
+                variant="outlined"
+                color="inherit"
+                size="large"
+                onClick={() => navigate('/')}
+                sx={{ 
+                  py: 1.5, 
+                  fontSize: '1.1rem',
+                  borderColor: 'var(--border-medium)',
+                  color: 'text.secondary',
+                  '&:hover': {
+                    borderColor: 'var(--accent-blue)',
+                    color: 'text.primary',
+                  }
+                }}
+              >
+                Back to Home Page
               </Button>
             </Box>
           </>

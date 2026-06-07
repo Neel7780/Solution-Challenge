@@ -44,6 +44,7 @@ import axios from 'axios';
 import { useSimulationStore, type SimTool, type SimAnalysis } from '../store/simulationStore';
 import { useSocketStore } from '../store/socketStore';
 import { useAuthStore } from '../store/authStore';
+import { godotToLatLng } from './Locations';
 
 const SIMULATION_URL = '/simulation/hotel_fire_simulation.html';
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
@@ -348,9 +349,17 @@ export default function Simulation() {
       propertyId: currentPropertyId,
       activeFireCount: fires.length,
       activeAgentCount: agents.length,
+      agents: agents.map(a => ({
+        id: a.id,
+        name: a.name,
+        x: a.x,
+        y: a.y,
+        status: a.status,
+        health: a.health
+      })),
       timestamp: new Date().toISOString(),
     });
-  }, [fires, agents, socket, simLoaded]);
+  }, [fires, agents, socket, simLoaded, currentPropertyId]);
 
   // Fullscreen
   const toggleFullscreen = useCallback(() => {
@@ -417,16 +426,25 @@ export default function Simulation() {
         addLocalFire(x, y);
         sendToGodot('spawn_fire', { x, y });
 
+        // Calculate Godot world coordinates from click pixels (fallback range matches godot serve.py / camera viewport projection)
+        const worldX = -9.0 + (x / rect.width) * 14.0;
+        const worldY = -15.0 + (y / rect.height) * 25.0;
+
+        // Convert to georeferenced Lat/Lng
+        const [lat, lng] = godotToLatLng(worldX, worldY);
+
         // ─── Emit fire crisis to backend for full-stack sync ───
         if (socket) {
           socket.emit('simulation:fire_crisis', {
             propertyId: currentPropertyId,
             fireX: x,
             fireY: y,
+            latitude: lat,
+            longitude: lng,
             agentCount: agents.length || localAgents.length,
             userId: user?.id || null,
           });
-          console.log('[Simulation] Fire crisis emitted to backend for property', currentPropertyId);
+          console.log('[Simulation] Fire crisis emitted to backend at georeferenced coordinates:', lat, lng);
         }
         break;
       case 'agent':

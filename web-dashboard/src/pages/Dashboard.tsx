@@ -400,8 +400,8 @@ export default function Dashboard() {
                     ))}
                   </Pie>
                   <Tooltip
-                    contentStyle={{ backgroundColor: '#ffffff', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 10, fontSize: '0.75rem', boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}
-                    itemStyle={{ color: '#1c1e21' }}
+                    contentStyle={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: 10, fontSize: '0.75rem', boxShadow: 'var(--shadow-soft)' }}
+                    itemStyle={{ color: 'var(--text-primary)' }}
                   />
                 </PieChart>
               </ResponsiveContainer>
@@ -428,12 +428,12 @@ export default function Dashboard() {
             <Box sx={{ height: 300 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={activityData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(0, 0, 0, 0.05)" vertical={false} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />
                   <XAxis dataKey="time" stroke="var(--text-muted)" axisLine={false} tickLine={false} style={{ fontSize: '0.7rem' }} />
                   <YAxis stroke="var(--text-muted)" axisLine={false} tickLine={false} style={{ fontSize: '0.7rem' }} allowDecimals={false} />
                   <Tooltip
-                    contentStyle={{ backgroundColor: '#ffffff', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 10, fontSize: '0.75rem', boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}
-                    itemStyle={{ color: '#1c1e21' }}
+                    contentStyle={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: 10, fontSize: '0.75rem', boxShadow: 'var(--shadow-soft)' }}
+                    itemStyle={{ color: 'var(--text-primary)' }}
                   />
                   <Line
                     type="monotone"

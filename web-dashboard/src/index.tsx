@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -18,15 +18,17 @@ const queryClient = new QueryClient({
   },
 });
 
-const theme = createTheme({
+import { useThemeStore } from './store/themeStore';
+
+const getTheme = (mode: 'light' | 'dark') => createTheme({
   palette: {
-    mode: 'light',
+    mode,
     primary: {
       main: '#0079c1',
       contrastText: '#ffffff',
     },
     secondary: {
-      main: '#005a90',
+      main: mode === 'light' ? '#005a90' : '#009bf7',
     },
     error: {
       main: '#d32f2f',
@@ -38,14 +40,14 @@ const theme = createTheme({
       main: '#2e7d32',
     },
     background: {
-      default: '#f8f9fa',
-      paper: '#ffffff',
+      default: mode === 'light' ? '#f8f9fa' : '#0a0c10',
+      paper: mode === 'light' ? '#ffffff' : '#161b22',
     },
     text: {
-      primary: '#1c1e21',
-      secondary: '#5f6368',
+      primary: mode === 'light' ? '#1c1e21' : '#f0f6fc',
+      secondary: mode === 'light' ? '#5f6368' : '#8b949e',
     },
-    divider: 'rgba(0, 0, 0, 0.08)',
+    divider: mode === 'light' ? 'rgba(0, 0, 0, 0.08)' : 'rgba(255, 255, 255, 0.08)',
   },
   typography: {
     fontFamily: "'Inter', -apple-system, sans-serif",
@@ -80,9 +82,9 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           backgroundImage: 'none',
-          backgroundColor: '#ffffff',
-          border: '1px solid rgba(0, 0, 0, 0.08)',
-          boxShadow: '0 4px 20px -2px rgba(0, 0, 0, 0.05)',
+          backgroundColor: mode === 'light' ? '#ffffff' : '#161b22',
+          border: mode === 'light' ? '1px solid rgba(0, 0, 0, 0.08)' : '1px solid rgba(255, 255, 255, 0.08)',
+          boxShadow: mode === 'light' ? '0 4px 20px -2px rgba(0, 0, 0, 0.05)' : '0 4px 20px -2px rgba(0, 0, 0, 0.4)',
         },
       },
     },
@@ -96,7 +98,7 @@ const theme = createTheme({
           boxShadow: 'none',
           color: '#ffffff',
           '&:hover': {
-            boxShadow: '0 4px 12px rgba(0, 121, 193, 0.2)',
+            boxShadow: mode === 'light' ? '0 4px 12px rgba(0, 121, 193, 0.2)' : '0 4px 12px rgba(0, 121, 193, 0.4)',
           },
         },
       },
@@ -104,8 +106,8 @@ const theme = createTheme({
     MuiDrawer: {
       styleOverrides: {
         paper: {
-          backgroundColor: '#ffffff',
-          borderRight: '1px solid rgba(0, 0, 0, 0.08)',
+          backgroundColor: mode === 'light' ? '#ffffff' : '#0d1117',
+          borderRight: mode === 'light' ? '1px solid rgba(0, 0, 0, 0.08)' : '1px solid rgba(255, 255, 255, 0.08)',
           width: 240, // Slimmer drawer
         },
       },
@@ -113,9 +115,9 @@ const theme = createTheme({
     MuiAppBar: {
       styleOverrides: {
         root: {
-          backgroundColor: '#ffffff',
-          color: '#1c1e21',
-          borderBottom: '1px solid rgba(0, 0, 0, 0.08)',
+          backgroundColor: mode === 'light' ? '#ffffff' : '#0d1117',
+          color: mode === 'light' ? '#1c1e21' : '#f0f6fc',
+          borderBottom: mode === 'light' ? '1px solid rgba(0, 0, 0, 0.08)' : '1px solid rgba(255, 255, 255, 0.08)',
           boxShadow: 'none',
         },
       },
@@ -124,18 +126,33 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           padding: '10px 16px',
-          borderBottom: '1px solid rgba(0, 0, 0, 0.04)',
+          borderBottom: mode === 'light' ? '1px solid rgba(0, 0, 0, 0.04)' : '1px solid rgba(255, 255, 255, 0.04)',
         },
         head: {
-          color: '#5f6368',
+          color: mode === 'light' ? '#5f6368' : '#8b949e',
           fontSize: '0.7rem',
           fontWeight: 600,
-          backgroundColor: '#f8f9fa',
+          backgroundColor: mode === 'light' ? '#f8f9fa' : '#161b22',
         },
       },
     },
   },
 });
+
+function ThemeContainer({ children }: { children: React.ReactNode }) {
+  const mode = useThemeStore((s) => s.mode);
+
+  const theme = useMemo(() => {
+    return getTheme(mode);
+  }, [mode]);
+
+  return (
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      {children}
+    </ThemeProvider>
+  );
+}
 
 function AppWrapper() {
   const loadFromStorage = useAuthStore((s) => s.loadFromStorage);
@@ -154,12 +171,11 @@ const root = ReactDOM.createRoot(
 root.render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider theme={theme}>
-        <CssBaseline />
+      <ThemeContainer>
         <BrowserRouter>
           <AppWrapper />
         </BrowserRouter>
-      </ThemeProvider>
+      </ThemeContainer>
     </QueryClientProvider>
   </React.StrictMode>
 );

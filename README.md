@@ -44,6 +44,7 @@ CrisisRespond has transitioned from a single-property application to a robust en
 The database schema is expected to already exist in your PostgreSQL instance. If you are recreating the database from scratch, apply the schema manually before starting the backend.
 
 ### 2. Backend Setup
+For detailed setup instructions, PostGIS database details, WebSocket channels, and Gemini AI integration pipelines, see the [Backend README](file:///home/godllike/Documents/Soln-Challenge/backend/README.md).
 ```bash
 cd backend
 npm install
@@ -51,6 +52,7 @@ npm run dev
 ```
 
 ### 3. Web Dashboard Setup
+For detailed UI architecture, pages description, theme controls, and Zustand state stores, see the [Web Dashboard README](file:///home/godllike/Documents/Soln-Challenge/web-dashboard/README.md).
 ```bash
 cd web-dashboard
 npm install
@@ -96,6 +98,13 @@ All endpoints below are **automatically filtered** by the active `property_id` i
 - **Context-Aware UI**: The Web Dashboard and Mobile App dynamically adapt their menus and data based on the user's role and selected property.
 - **QueryWithContext**: A critical backend safety layer that intercepts SQL queries to inject mandatory `organization_id` and `property_id` filters.
 - **Organization-Wide Sockets**: Real-time alerts can be broadcast to a specific property (`property_[id]`) or an entire organization (`organization_[id]`).
+
+## 🆕 Recent Session Upgrades
+
+- **Dual-View GIS & Schematic Mode**: Integrated a dynamic view switcher to toggle between **Global GIS Mode** (Georeferenced floor plan overlays aligned with CartoDB Voyager basemap) and **Isolated Schematic Mode** (Flat 1-to-1 coordinate layout with L.CRS.Simple for CAD-focused tracking), featuring key-based MapContainer remounting and automatic viewport fitting.
+- **Georeferenced Map Sync (GIS / Godot)**: Establishes a mathematical coordinate translation bridge (`godotToLatLng`) with real-world anchor GPS points, rotation, and scaling. It renders rotated, high-resolution indoor floor plans onto the CartoDB Voyager basemap via a custom `RotatedImageOverlay` React component, aligning simulated occupants and fire incidents with city streets in real-time.
+- **Toggleable Dark Mode**: Added a toggleable dark mode (sun/moon switch) on the dashboard header bar, using a Zustand `themeStore` with localStorage persistence, CSS-in-JS MUI theme wrappers, and custom CSS variables.
+- **Landing Page Navigation**: Added a "Back to Home Page" option to the login page for improved user flow navigation.
 
 ## 🛡 Security & Compliance
 

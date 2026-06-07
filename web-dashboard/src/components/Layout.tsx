@@ -32,6 +32,8 @@ import {
   CorporateFare as OrgIcon,
   AdminPanelSettings as PlatformIcon,
   Videocam as SimulationIcon,
+  LightMode as LightModeIcon,
+  DarkMode as DarkModeIcon,
 } from '@mui/icons-material';
 import {
   Menu,
@@ -42,6 +44,7 @@ import {
 import { useAuthStore } from '../store/authStore';
 import { useSocketStore } from '../store/socketStore';
 import { useNotificationStore } from '../store/notificationStore';
+import { useThemeStore } from '../store/themeStore';
 
 const drawerWidth = 260;
 
@@ -61,6 +64,7 @@ export default function Layout() {
   const { user, logout, contexts, switchContext } = useAuthStore();
   const { connected } = useSocketStore();
   const { unreadCount } = useNotificationStore();
+  const { mode, toggleTheme } = useThemeStore();
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -211,7 +215,7 @@ export default function Layout() {
         sx={{
           width: { sm: `calc(100% - ${drawerWidth}px)` },
           ml: { sm: `${drawerWidth}px` },
-          backgroundColor: 'rgba(255, 255, 255, 0.85)',
+          backgroundColor: 'var(--bg-glass)',
           backdropFilter: 'blur(12px)',
           color: 'text.primary',
           borderBottom: '1px solid var(--border-subtle)',
@@ -276,12 +280,22 @@ export default function Layout() {
             )}
           </Box>
           
+          <Tooltip title={mode === 'light' ? 'Switch to Dark Mode' : 'Switch to Light Mode'}>
+            <IconButton 
+              color="inherit" 
+              onClick={toggleTheme} 
+              sx={{ border: '1px solid var(--border-subtle)', borderRadius: 2, mr: 1.5 }}
+            >
+              {mode === 'light' ? <DarkModeIcon /> : <LightModeIcon />}
+            </IconButton>
+          </Tooltip>
+
           <Tooltip title="Notifications">
-          <IconButton color="inherit" onClick={() => navigate('/dashboard/notifications')} sx={{ border: '1px solid var(--border-subtle)', borderRadius: 2 }}>
-            <Badge badgeContent={unreadCount} color="error">
-              <NotificationsIcon />
-            </Badge>
-          </IconButton>
+            <IconButton color="inherit" onClick={() => navigate('/dashboard/notifications')} sx={{ border: '1px solid var(--border-subtle)', borderRadius: 2 }}>
+              <Badge badgeContent={unreadCount} color="error">
+                <NotificationsIcon />
+              </Badge>
+            </IconButton>
           </Tooltip>
         </Toolbar>
       </AppBar>

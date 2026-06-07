@@ -19,6 +19,7 @@
     "date-fns": "^4.1.0",
     "gsap": "^3.15.0",
     "leaflet": "^1.9.4",
+    "leaflet-imageoverlay-rotated": "^0.2.1",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "react-leaflet": "^5.0.0",

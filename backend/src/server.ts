@@ -37,9 +37,29 @@ const server = http.createServer(app);
 const rawOrigin = process.env.CORS_ORIGIN || process.env.WS_CORS_ORIGIN || '*';
 const corsOrigin = rawOrigin.endsWith('/') ? rawOrigin.slice(0, -1) : rawOrigin;
 
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:3001',
+  'http://localhost:5173',
+  'http://localhost:8080',
+  'https://solution-challenge-nu.vercel.app',
+];
+if (corsOrigin !== '*' && !allowedOrigins.includes(corsOrigin)) {
+  allowedOrigins.push(corsOrigin);
+}
+
+const checkOrigin = (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+  if (!origin || corsOrigin === '*') {
+    callback(null, true);
+    return;
+  }
+  const isAllowed = allowedOrigins.includes(origin) || origin.endsWith('.vercel.app') || origin.includes('localhost');
+  callback(null, isAllowed);
+};
+
 const io = new Server(server, {
   cors: {
-    origin: corsOrigin === '*' ? true : [corsOrigin, `${corsOrigin}/`],
+    origin: checkOrigin,
     methods: ['GET', 'POST'],
     credentials: true
   },
@@ -75,7 +95,12 @@ const getFireWatch = (propertyId: number): FireWatchState => {
 };
 
 app.use(helmet());
-app.use(cors());
+app.use(cors({
+  origin: checkOrigin,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 
 const crisisLimiter = rateLimit({
   windowMs: 1 * 60 * 1000,
@@ -202,9 +227,63 @@ io.on('connection', (socket: any) => {
   socket.on('simulation:telemetry', async (data: any) => {
     const propertyId = Number(data?.propertyId);
     const activeFireCount = Number(data?.activeFireCount || 0);
+    const agents = data?.agents || [];
 
     if (!propertyId) {
       return;
+    }
+
+    // Update simulated agent coordinates in DB in real-time
+    if (agents.length > 0) {
+      try {
+        const { pool } = await import('./database/connection.js');
+        const client = await pool.connect();
+        try {
+          // PROPERTY CONFIG (Matches Locations.tsx exactly)
+          const ANCHOR_LAT = 40.7128;
+          const ANCHOR_LNG = -74.0060;
+          const SCALE_LAT = 0.000008983;
+          const SCALE_LNG = 0.000011831;
+          const ROTATION_RAD = 0.25;
+
+          const theta = ROTATION_RAD;
+          const cosTheta = Math.cos(theta);
+          const sinTheta = Math.sin(theta);
+
+          for (const agent of agents) {
+            // Strip role tags like [GUEST], [SECURITY], [STAFF], [RESPONDER] from name
+            const cleanName = agent.name.replace(/^\[[A-Z]+\]\s*/, '').trim();
+
+            const userRes = await client.query(
+              `SELECT id FROM users WHERE name = $1 AND property_id = $2 LIMIT 1`,
+              [cleanName, propertyId]
+            );
+
+            if (userRes.rows.length > 0) {
+              const userId = userRes.rows[0].id;
+              const x = Number(agent.x) || 0;
+              const y = Number(agent.y) || 0;
+
+              // Georeference calculations
+              const eastOffset = x * cosTheta - y * sinTheta;
+              const northOffset = -x * sinTheta - y * cosTheta;
+
+              const lat = ANCHOR_LAT + northOffset * SCALE_LAT;
+              const lng = ANCHOR_LNG + eastOffset * SCALE_LNG;
+
+              await client.query(
+                `INSERT INTO location_tracking (user_id, latitude, longitude, location, recorded_at)
+                 VALUES ($1, $2, $3, ST_SetSRID(ST_MakePoint($3, $2), 4326), CURRENT_TIMESTAMP)`,
+                [userId, lat, lng]
+              );
+            }
+          }
+        } finally {
+          client.release();
+        }
+      } catch (err) {
+        logger.error('Error updating simulated agent positions in database:', err);
+      }
     }
 
     const now = Date.now();
@@ -329,8 +408,8 @@ io.on('connection', (socket: any) => {
   // SIMULATION FIRE CRISIS → Full Stack Integration
   // ═══════════════════════════════════════════════════
   socket.on('simulation:fire_crisis', async (data: any) => {
-    const { propertyId, fireX, fireY, agentCount, userId } = data;
-    logger.info(`🔥 Simulation fire crisis received for property ${propertyId} at (${fireX}, ${fireY})`);
+    const { propertyId, fireX, fireY, agentCount, userId, latitude, longitude } = data;
+    logger.info(`🔥 Simulation fire crisis received for property ${propertyId} at (${fireX}, ${fireY}) - Georeferenced: [${latitude}, ${longitude}]`);
 
     if (!propertyId) {
       socket.emit('simulation:crisis_error', { error: 'Property ID is required' });
@@ -364,13 +443,17 @@ io.on('connection', (socket: any) => {
           y: Math.round(Number(fireY) || 0),
         };
 
+        const incidentLat = latitude !== undefined ? Number(latitude) : null;
+        const incidentLng = longitude !== undefined ? Number(longitude) : null;
+
         // 1. Create the incident
         const incidentResult = await client.query(
           `INSERT INTO incidents (
             property_id, reported_by, incident_type, severity, status,
-            description, mass_alert_message, responder_action_plan
+            description, mass_alert_message, responder_action_plan,
+            latitude, longitude, location
           ) VALUES ($1, $2, 'fire', 'critical', 'active',
-            $3, $4, $5
+            $3, $4, $5, $6, $7, CASE WHEN $6 IS NOT NULL AND $7 IS NOT NULL THEN ST_SetSRID(ST_MakePoint($7, $6), 4326) ELSE NULL END
           ) RETURNING *`,
           [
             propertyId,
@@ -378,6 +461,8 @@ io.on('connection', (socket: any) => {
             `[SIMULATION] Fire detected at simulation coordinates (${simulationCoordinates.x}, ${simulationCoordinates.y}). ${agentCount || 0} guests in the building.`,
             `🚨 FIRE EMERGENCY: A fire has been detected. Please proceed to the nearest exit immediately. Follow staff instructions.`,
             'Security and responders: secure evacuation corridors, prioritize high-risk zones, and complete room-by-room sweep.',
+            incidentLat,
+            incidentLng
           ]
         );
         const incident = incidentResult.rows[0];
