@@ -31,6 +31,7 @@ process.on('uncaughtException', (err) => {
 });
 
 const app = express();
+app.set('trust proxy', 1);
 const server = http.createServer(app);
 
 // Robust CORS handling: Trim trailing slashes from the environment variable
@@ -273,7 +274,7 @@ io.on('connection', (socket: any) => {
 
               await client.query(
                 `INSERT INTO location_tracking (user_id, latitude, longitude, location, recorded_at)
-                 VALUES ($1, $2, $3, ST_SetSRID(ST_MakePoint($3, $2), 4326), CURRENT_TIMESTAMP)`,
+                 VALUES ($1, $2::numeric, $3::numeric, ST_SetSRID(ST_MakePoint($3::double precision, $2::double precision), 4326), CURRENT_TIMESTAMP)`,
                 [userId, lat, lng]
               );
             }
@@ -453,7 +454,7 @@ io.on('connection', (socket: any) => {
             description, mass_alert_message, responder_action_plan,
             latitude, longitude, location
           ) VALUES ($1, $2, 'fire', 'critical', 'active',
-            $3, $4, $5, $6, $7, CASE WHEN $6 IS NOT NULL AND $7 IS NOT NULL THEN ST_SetSRID(ST_MakePoint($7, $6), 4326) ELSE NULL END
+            $3, $4, $5, $6::numeric, $7::numeric, CASE WHEN $6 IS NOT NULL AND $7 IS NOT NULL THEN ST_SetSRID(ST_MakePoint($7::double precision, $6::double precision), 4326) ELSE NULL END
           ) RETURNING *`,
           [
             propertyId,

@@ -542,7 +542,7 @@ export const updateLocation = async (req: Request, res: Response) => {
   try {
     await query(
       `INSERT INTO location_tracking (user_id, zone_id, beacon_id, latitude, longitude, location)
-       VALUES ($1, $2, $3, $4, $5, ST_SetSRID(ST_MakePoint($5, $4), 4326))`,
+       VALUES ($1, $2, $3, $4::numeric, $5::numeric, ST_SetSRID(ST_MakePoint($5::double precision, $4::double precision), 4326))`,
       [userId, zoneId, beaconId, latitude, longitude]
     );
 

@@ -5,11 +5,18 @@ import {
   Box,
   Paper,
 } from '@mui/material';
+import { useNavigate } from 'react-router-dom';
 import {
   Warning as WarningIcon,
   People as PeopleIcon,
   CheckCircle as CheckCircleIcon,
   Error as ErrorIcon,
+  Map as MapIcon,
+  Healing as TriageIcon,
+  Videocam as SimIcon,
+  Business as OrgIcon,
+  AdminPanelSettings as PlatformIcon,
+  Settings as SettingsIcon,
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
@@ -101,11 +108,84 @@ const StatCard = ({ title, value, icon: Icon, color, subtitle }: StatCardProps) 
 
 export default function Dashboard() {
   const containerRef = useRef(null);
+  const navigate = useNavigate();
   const { socket } = useSocketStore();
   const { user } = useAuthStore();
   const queryClient = useQueryClient();
   const [showEvacConfirm, setShowEvacConfirm] = React.useState(false);
   const propertyId = user?.property_id || 2;
+
+  const portals = useMemo(() => {
+    const role = user?.role;
+    const list = [
+      {
+        title: 'Live Tactical Map',
+        desc: 'Georeferenced street GIS & flat CAD schematic layouts.',
+        icon: MapIcon,
+        path: '/dashboard/locations',
+        color: 'var(--accent-blue)',
+        visible: true,
+      },
+      {
+        title: 'Incidents Queue',
+        desc: 'Review SOS alerts, assign responders, and write action plans.',
+        icon: WarningIcon,
+        path: '/dashboard/incidents',
+        color: 'var(--accent-red)',
+        visible: true,
+      },
+      {
+        title: 'Triage & Safety',
+        desc: 'Track accountability roster, check-ins, and safety compliance.',
+        icon: TriageIcon,
+        path: '/dashboard/triage',
+        color: 'var(--accent-green)',
+        visible: true,
+      },
+      {
+        title: 'Personnel Directory',
+        desc: 'Manage responders, security agents, and guests list.',
+        icon: PeopleIcon,
+        path: '/dashboard/users',
+        color: 'var(--accent-gold)',
+        visible: true,
+      },
+      {
+        title: 'Simulation Sandbox',
+        desc: 'WebGL simulator to run AI emergency predictions.',
+        icon: SimIcon,
+        path: '/dashboard/simulation',
+        color: 'var(--accent-orange)',
+        visible: true,
+      },
+      {
+        title: 'Organization Console',
+        desc: 'Manage multiple buildings, properties, and reports.',
+        icon: OrgIcon,
+        path: '/dashboard/organization',
+        color: 'var(--accent-blue)',
+        visible: role === 'org_admin' || role === 'admin',
+      },
+      {
+        title: 'Platform Control',
+        desc: 'Onboard organizations and manage platform scopes.',
+        icon: PlatformIcon,
+        path: '/dashboard/platform',
+        color: '#7c3aed',
+        visible: role === 'super_admin',
+      },
+      {
+        title: 'System Settings',
+        desc: 'Configure user profiles, credentials, and settings.',
+        icon: SettingsIcon,
+        path: '/dashboard/settings',
+        color: 'var(--text-muted)',
+        visible: true,
+      },
+    ];
+
+    return list.filter((p) => p.visible);
+  }, [user]);
 
   const { data: overview } = useQuery<OverviewData>({
     queryKey: ['dashboardOverview', propertyId],
@@ -202,6 +282,17 @@ export default function Dashboard() {
       opacity: 0,
       duration: 0.5,
       stagger: 0.05,
+      ease: 'power2.out',
+      clearProps: 'all',
+      force3D: false,
+    });
+
+    gsap.from('.portal-card', {
+      y: 12,
+      opacity: 0,
+      duration: 0.5,
+      delay: 0.1,
+      stagger: 0.04,
       ease: 'power2.out',
       clearProps: 'all',
       force3D: false,
@@ -368,6 +459,93 @@ export default function Dashboard() {
           />
         </Grid>
       </Grid>
+
+      {/* TACTICAL PORTALS HUB */}
+      <Box sx={{ mb: 4 }}>
+        <Typography variant="overline" sx={{ color: 'var(--text-muted)', mb: 2, display: 'block', fontSize: '0.62rem', letterSpacing: '0.14em' }}>
+          Tactical Operations Portals
+        </Typography>
+        <Grid container spacing={2}>
+          {portals.map((portal) => {
+            const Icon = portal.icon;
+            return (
+              <Grid key={portal.title} size={{ xs: 12, sm: 6, md: 3 }} className="portal-card">
+                <Paper
+                  onClick={() => navigate(portal.path)}
+                  sx={{
+                    p: 2.5,
+                    cursor: 'pointer',
+                    backgroundColor: 'var(--bg-card)',
+                    border: '1px solid var(--border-subtle)',
+                    borderRadius: 2.5,
+                    height: '100%',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 1.25,
+                    position: 'relative',
+                    overflow: 'hidden',
+                    transition: 'all 0.25s ease',
+                    '&::after': {
+                      content: '""',
+                      position: 'absolute',
+                      bottom: 0,
+                      left: 0,
+                      right: 0,
+                      height: '3px',
+                      backgroundColor: 'transparent',
+                      transition: 'background-color 0.25s ease',
+                    },
+                    '&:hover': {
+                      transform: 'translateY(-3px)',
+                      borderColor: 'var(--border-medium)',
+                      boxShadow: 'var(--shadow-soft)',
+                      '&::after': {
+                        backgroundColor: portal.color,
+                      },
+                      '& .portal-icon': {
+                        color: portal.color,
+                        transform: 'scale(1.15)',
+                      }
+                    },
+                  }}
+                >
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Icon
+                      className="portal-icon"
+                      sx={{
+                        fontSize: 22,
+                        color: 'var(--text-muted)',
+                        transition: 'all 0.25s ease',
+                      }}
+                    />
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: '0.58rem',
+                        letterSpacing: '0.08em',
+                        color: portal.color,
+                        fontWeight: 700,
+                        textTransform: 'uppercase',
+                      }}
+                    >
+                      Open Portal
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'text.primary', mb: 0.5 }}>
+                      {portal.title}
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: 'var(--text-muted)', display: 'block', lineHeight: 1.35 }}>
+                      {portal.desc}
+                    </Typography>
+                  </Box>
+                </Paper>
+              </Grid>
+            );
+          })}
+        </Grid>
+      </Box>
 
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, md: 5 }}>
