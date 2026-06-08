@@ -55,14 +55,31 @@ export default function OrganizationAdmin() {
   const containerRef = useRef(null);
   const queryClient = useQueryClient();
   const { user, switchContext } = useAuthStore();
-  const [activeTab, setActiveTab] = useState<'properties' | 'personnel'>('properties');
+  const [activeTab, setActiveTab] = useState<'properties' | 'personnel' | 'tasks'>(
+    user?.role === 'admin' ? 'personnel' : 'properties'
+  );
   const [openAddProperty, setOpenAddProperty] = useState(false);
   const [openAddPersonnel, setOpenAddPersonnel] = useState(false);
   const [openManagePersonnel, setOpenManagePersonnel] = useState(false);
   const [selectedPersonnel, setSelectedPersonnel] = useState<any>(null);
+  
+  // Task state
+  const [openAddTask, setOpenAddTask] = useState(false);
+  const [openManageTask, setOpenManageTask] = useState(false);
+  const [selectedTask, setSelectedTask] = useState<any>(null);
+  const [newTask, setNewTask] = useState({ 
+    propertyId: user?.role === 'admin' ? String(user.property_id || '') : '', 
+    assignedTo: '', 
+    description: '', 
+    priority: 'medium', 
+    taskType: 'general' 
+  });
+  
   const [newProperty, setNewProperty] = useState({ name: '', address: '' });
   const [newPersonnel, setNewPersonnel] = useState({ 
-    name: '', email: '', phone: '', role: 'staff', propertyId: '', password: '' 
+    name: '', email: '', phone: '', role: 'staff', 
+    propertyId: user?.role === 'admin' ? String(user.property_id || '') : '', 
+    password: '' 
   });
 
   const [formError, setFormError] = useState('');
@@ -100,7 +117,11 @@ export default function OrganizationAdmin() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['org-personnel'] });
       setOpenAddPersonnel(false);
-      setNewPersonnel({ name: '', email: '', phone: '', role: 'staff', propertyId: '', password: '' });
+      setNewPersonnel({ 
+        name: '', email: '', phone: '', role: 'staff', 
+        propertyId: user?.role === 'admin' ? String(user.property_id || '') : '', 
+        password: '' 
+      });
       setFormError('');
     },
     onError: (error: any) => {
@@ -142,7 +163,63 @@ export default function OrganizationAdmin() {
       const res = await axios.get(`${API_URL}/users`);
       return res.data.users;
     },
-    enabled: activeTab === 'personnel',
+    enabled: activeTab === 'personnel' || activeTab === 'tasks' || openAddTask || openManageTask,
+  });
+
+  // Fetch tasks belonging to this organization
+  const { data: tasks = [], isLoading: loadingTasks } = useQuery({
+    queryKey: ['org-tasks'],
+    queryFn: async () => {
+      const res = await axios.get(`${API_URL}/tasks`);
+      return res.data.tasks;
+    },
+    enabled: activeTab === 'tasks',
+  });
+
+  const createTaskMutation = useMutation({
+    mutationFn: (payload: any) => axios.post(`${API_URL}/tasks`, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['org-tasks'] });
+      setOpenAddTask(false);
+      setNewTask({ 
+        propertyId: user?.role === 'admin' ? String(user.property_id || '') : '', 
+        assignedTo: '', 
+        description: '', 
+        priority: 'medium', 
+        taskType: 'general' 
+      });
+      setFormError('');
+    },
+    onError: (error: any) => {
+      setFormError(error?.response?.data?.error || 'Failed to assign task');
+    },
+  });
+
+  const updateTaskMutation = useMutation({
+    mutationFn: ({ id, payload }: { id: number; payload: any }) =>
+      axios.patch(`${API_URL}/tasks/${id}`, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['org-tasks'] });
+      setOpenManageTask(false);
+      setSelectedTask(null);
+      setFormError('');
+    },
+    onError: (error: any) => {
+      setFormError(error?.response?.data?.error || 'Failed to update task');
+    },
+  });
+
+  const deleteTaskMutation = useMutation({
+    mutationFn: (id: number) => axios.delete(`${API_URL}/tasks/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['org-tasks'] });
+      setOpenManageTask(false);
+      setSelectedTask(null);
+      setFormError('');
+    },
+    onError: (error: any) => {
+      setFormError(error?.response?.data?.error || 'Failed to delete task');
+    },
   });
 
   useGSAP(() => {
@@ -168,9 +245,15 @@ export default function OrganizationAdmin() {
     <Box ref={containerRef}>
       <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
         <Box className="anim-item">
-          <Typography variant="h2" sx={{ fontSize: '1.5rem', fontWeight: 400 }}>Organization Overview</Typography>
+          <Typography variant="h2" sx={{ fontSize: '1.5rem', fontWeight: 400 }}>
+            {user?.role === 'admin' ? 'Property Administration' : 'Organization Overview'}
+          </Typography>
           <Typography variant="caption" sx={{ color: 'var(--text-muted)' }}>
-            {activeTab === 'properties' ? 'Centralized command for all regional properties' : 'Personnel management for entire organization'}
+            {activeTab === 'properties' 
+              ? 'Centralized command for all regional properties' 
+              : activeTab === 'personnel' 
+              ? (user?.role === 'admin' ? 'Personnel management for your property' : 'Personnel management for entire organization')
+              : 'Emergency task dispatch and tracking log'}
           </Typography>
         </Box>
         <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
@@ -180,18 +263,20 @@ export default function OrganizationAdmin() {
             p: 0.5,
             border: '1px solid rgba(255,255,255,0.05)'
           }}>
-            <Button 
-              size="small" 
-              onClick={() => setActiveTab('properties')}
-              sx={{ 
-                fontSize: '0.65rem', px: 2, py: 0.5, minWidth: 0,
-                color: activeTab === 'properties' ? '#fff' : 'var(--text-muted)',
-                backgroundColor: activeTab === 'properties' ? 'rgba(255,255,255,0.05)' : 'transparent',
-                '&:hover': { backgroundColor: 'rgba(255,255,255,0.08)' }
-              }}
-            >
-              Properties
-            </Button>
+            {user?.role !== 'admin' && (
+              <Button 
+                size="small" 
+                onClick={() => setActiveTab('properties')}
+                sx={{ 
+                  fontSize: '0.65rem', px: 2, py: 0.5, minWidth: 0,
+                  color: activeTab === 'properties' ? '#fff' : 'var(--text-muted)',
+                  backgroundColor: activeTab === 'properties' ? 'rgba(255,255,255,0.05)' : 'transparent',
+                  '&:hover': { backgroundColor: 'rgba(255,255,255,0.08)' }
+                }}
+              >
+                Properties
+              </Button>
+            )}
             <Button 
               size="small" 
               onClick={() => setActiveTab('personnel')}
@@ -203,6 +288,18 @@ export default function OrganizationAdmin() {
               }}
             >
               Personnel
+            </Button>
+            <Button 
+              size="small" 
+              onClick={() => setActiveTab('tasks')}
+              sx={{ 
+                fontSize: '0.65rem', px: 2, py: 0.5, minWidth: 0,
+                color: activeTab === 'tasks' ? '#fff' : 'var(--text-muted)',
+                backgroundColor: activeTab === 'tasks' ? 'rgba(255,255,255,0.05)' : 'transparent',
+                '&:hover': { backgroundColor: 'rgba(255,255,255,0.08)' }
+              }}
+            >
+              Tasks
             </Button>
           </Box>
           {activeTab === 'properties' ? (
@@ -216,7 +313,7 @@ export default function OrganizationAdmin() {
             >
               Add Property
             </Button>
-          ) : (
+          ) : activeTab === 'personnel' ? (
              <Button
               variant="contained"
               size="small"
@@ -226,6 +323,17 @@ export default function OrganizationAdmin() {
               sx={{ background: 'var(--accent-red)', fontSize: '0.75rem', px: 3 }}
             >
               Onboard Personnel
+            </Button>
+          ) : (
+             <Button
+              variant="contained"
+              size="small"
+              startIcon={<AddIcon />}
+              className="anim-item"
+              onClick={() => setOpenAddTask(true)}
+              sx={{ background: 'var(--accent-blue)', fontSize: '0.75rem', px: 3 }}
+            >
+              Assign Task
             </Button>
           )}
         </Stack>
@@ -312,20 +420,28 @@ export default function OrganizationAdmin() {
                 <MenuItem value="security">Security</MenuItem>
                 <MenuItem value="admin">Property Admin</MenuItem>
                 <MenuItem value="responder">First Responder</MenuItem>
-                <MenuItem value="org_admin">Organization Admin</MenuItem>
+                {user?.role !== 'admin' && (
+                  <MenuItem value="org_admin">Organization Admin</MenuItem>
+                )}
               </Select>
             </FormControl>
-            <FormControl fullWidth size="small">
+            <FormControl fullWidth size="small" disabled={user?.role === 'admin'}>
               <InputLabel>Assign to Property</InputLabel>
               <Select
                 value={newPersonnel.propertyId}
                 label="Assign to Property"
                 onChange={(e) => setNewPersonnel({ ...newPersonnel, propertyId: e.target.value })}
               >
-                <MenuItem value=""><em>None (Organization Level)</em></MenuItem>
-                {properties.map((p: any) => (
-                  <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>
-                ))}
+                {user?.role === 'admin' ? (
+                  <MenuItem value={String(user.property_id)}>{user.property_name || 'My Property'}</MenuItem>
+                ) : (
+                  <>
+                    <MenuItem value=""><em>None (Organization Level)</em></MenuItem>
+                    {properties.map((p: any) => (
+                      <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>
+                    ))}
+                  </>
+                )}
               </Select>
             </FormControl>
             <TextField
@@ -381,7 +497,7 @@ export default function OrganizationAdmin() {
                 fullWidth
                 size="small"
               />
-              <FormControl fullWidth size="small">
+               <FormControl fullWidth size="small">
                 <InputLabel>Role</InputLabel>
                 <Select
                   value={selectedPersonnel.role}
@@ -392,20 +508,28 @@ export default function OrganizationAdmin() {
                   <MenuItem value="security">Security</MenuItem>
                   <MenuItem value="admin">Property Admin</MenuItem>
                   <MenuItem value="responder">First Responder</MenuItem>
-                  <MenuItem value="org_admin">Organization Admin</MenuItem>
+                  {user?.role !== 'admin' && (
+                    <MenuItem value="org_admin">Organization Admin</MenuItem>
+                  )}
                 </Select>
               </FormControl>
-              <FormControl fullWidth size="small">
+              <FormControl fullWidth size="small" disabled={user?.role === 'admin'}>
                 <InputLabel>Property Assignment</InputLabel>
                 <Select
                   value={selectedPersonnel.property_id || ''}
                   label="Property Assignment"
                   onChange={(e) => setSelectedPersonnel({ ...selectedPersonnel, property_id: e.target.value })}
                 >
-                  <MenuItem value=""><em>None (Organization Level)</em></MenuItem>
-                  {properties.map((p: any) => (
-                    <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>
-                  ))}
+                  {user?.role === 'admin' ? (
+                    <MenuItem value={user?.property_id}>{user?.property_name || 'My Property'}</MenuItem>
+                  ) : (
+                    <>
+                      <MenuItem value=""><em>None (Organization Level)</em></MenuItem>
+                      {properties.map((p: any) => (
+                        <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>
+                      ))}
+                    </>
+                  )}
                 </Select>
               </FormControl>
               <FormControl fullWidth size="small">
@@ -476,8 +600,12 @@ export default function OrganizationAdmin() {
           <Paper sx={{ p: 2, background: 'rgba(255,255,255,0.015)', border: '1px solid rgba(255,255,255,0.05)' }}>
             <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
               <Box>
-                <Typography variant="overline" sx={{ color: 'var(--text-muted)', fontSize: '0.6rem' }}>Total Properties</Typography>
-                <Typography sx={{ fontSize: '1.8rem', fontWeight: 200 }}>{properties.length}</Typography>
+                <Typography variant="overline" sx={{ color: 'var(--text-muted)', fontSize: '0.6rem' }}>
+                  {user?.role === 'admin' ? 'Active Property' : 'Total Properties'}
+                </Typography>
+                <Typography sx={{ fontSize: user?.role === 'admin' ? '1.1rem' : '1.8rem', fontWeight: 200, textTransform: 'uppercase' }}>
+                  {user?.role === 'admin' ? (user?.property_name || 'My Property') : properties.length}
+                </Typography>
               </Box>
               <PropertyIcon sx={{ color: 'var(--accent-blue)', opacity: 0.5 }} />
             </Stack>
@@ -489,7 +617,9 @@ export default function OrganizationAdmin() {
               <Box>
                 <Typography variant="overline" sx={{ color: 'var(--text-muted)', fontSize: '0.6rem' }}>Active Incidents</Typography>
                 <Typography sx={{ fontSize: '1.8rem', fontWeight: 200, color: 'var(--accent-red)' }}>
-                  {properties.reduce((acc: number, p: any) => acc + (p.active_incidents || 0), 0)}
+                  {user?.role === 'admin' 
+                    ? (properties.find((p: any) => Number(p.id) === Number(user?.property_id))?.active_incidents || 0)
+                    : properties.reduce((acc: number, p: any) => acc + (p.active_incidents || 0), 0)}
                 </Typography>
               </Box>
               <WarningIcon sx={{ color: 'var(--accent-red)', opacity: 0.5 }} />
@@ -569,7 +699,7 @@ export default function OrganizationAdmin() {
                   )}
                 </TableBody>
               </>
-            ) : (
+            ) : activeTab === 'personnel' ? (
               <>
                 <TableHead>
                   <TableRow>
@@ -635,10 +765,281 @@ export default function OrganizationAdmin() {
                   )}
                 </TableBody>
               </>
+            ) : (
+              <>
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>TASK DETAILS</TableCell>
+                    <TableCell sx={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>ASSIGNED TO</TableCell>
+                    <TableCell sx={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>ASSIGNED BY</TableCell>
+                    <TableCell sx={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>PROPERTY</TableCell>
+                    <TableCell sx={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>PRIORITY</TableCell>
+                    <TableCell sx={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>STATUS</TableCell>
+                    <TableCell align="right" sx={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>ACTIONS</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {loadingTasks ? (
+                    <TableRow><TableCell colSpan={7} align="center" sx={{ py: 4 }}>Retrieving tasks...</TableCell></TableRow>
+                  ) : tasks.map((task: any) => (
+                    <TableRow key={task.id} hover sx={{ '&:hover': { backgroundColor: 'rgba(255,255,255,0.01) !important' } }}>
+                      <TableCell sx={{ maxWidth: 220 }}>
+                        <Typography sx={{ fontWeight: 400, fontSize: '0.85rem' }}>{task.description}</Typography>
+                        <Typography variant="caption" sx={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>
+                          Type: {task.task_type?.toUpperCase()} • ID: #{task.id}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography sx={{ fontSize: '0.85rem', fontWeight: 500 }}>{task.assigned_to_name || 'Unassigned'}</Typography>
+                      </TableCell>
+                      <TableCell>
+                        {task.assigned_by_ai ? (
+                          <Chip label="AI SYSTEM" size="small" color="info" sx={{ fontWeight: 700, height: 20, fontSize: '0.55rem', letterSpacing: '0.05em' }} />
+                        ) : (
+                          <Typography sx={{ fontSize: '0.85rem' }}>{task.assigned_by_name || 'System'}</Typography>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Typography sx={{ fontSize: '0.85rem' }}>{task.property_name || 'N/A'}</Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Chip 
+                          label={task.priority?.toUpperCase()} 
+                          size="small" 
+                          color={
+                            task.priority === 'urgent' ? 'error' : 
+                            task.priority === 'high' ? 'warning' : 
+                            task.priority === 'medium' ? 'primary' : 'default'
+                          }
+                          sx={{ fontWeight: 700, height: 20, fontSize: '0.58rem' }}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Chip 
+                          label={task.status?.replace('_', ' ').toUpperCase()} 
+                          size="small" 
+                          variant="outlined"
+                          color={
+                            task.status === 'completed' ? 'success' : 
+                            task.status === 'in_progress' ? 'info' : 
+                            task.status === 'cancelled' ? 'error' : 'default'
+                          }
+                          sx={{ fontWeight: 600, height: 20, fontSize: '0.58rem' }}
+                        />
+                      </TableCell>
+                      <TableCell align="right">
+                        <Button 
+                          size="small" 
+                          variant="outlined" 
+                          sx={{ fontSize: '0.6rem', height: 20 }}
+                          onClick={() => {
+                            setSelectedTask(task);
+                            setOpenManageTask(true);
+                          }}
+                        >
+                          Edit
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {tasks.length === 0 && !loadingTasks && (
+                    <TableRow><TableCell colSpan={7} align="center" sx={{ py: 8, color: 'var(--text-muted)' }}>No tasks assigned in this organization.</TableCell></TableRow>
+                  )}
+                </TableBody>
+              </>
             )}
           </Table>
         </TableContainer>
       </Paper>
+
+      {/* Assign Task Dialog */}
+      <Dialog open={openAddTask} onClose={() => setOpenAddTask(false)} maxWidth="xs" fullWidth>
+        <DialogTitle sx={{ fontWeight: 'bold' }}>Assign Emergency Task</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            {formError && <Alert severity="error" sx={{ fontSize: '0.75rem' }}>{formError}</Alert>}
+            
+            <FormControl size="small" fullWidth required disabled={user?.role === 'admin'}>
+              <InputLabel>Property</InputLabel>
+              <Select
+                value={newTask.propertyId}
+                label="Property"
+                onChange={(e) => setNewTask({ ...newTask, propertyId: e.target.value, assignedTo: '' })}
+              >
+                {user?.role === 'admin' ? (
+                  <MenuItem value={String(user.property_id)}>{user.property_name || 'My Property'}</MenuItem>
+                ) : (
+                  properties.map((prop: any) => (
+                    <MenuItem key={prop.id} value={prop.id}>{prop.name}</MenuItem>
+                  ))
+                )}
+              </Select>
+            </FormControl>
+
+            <FormControl size="small" fullWidth required disabled={!newTask.propertyId}>
+              <InputLabel>Assign To Personnel</InputLabel>
+              <Select
+                value={newTask.assignedTo}
+                label="Assign To Personnel"
+                onChange={(e) => setNewTask({ ...newTask, assignedTo: e.target.value })}
+              >
+                {personnel
+                  .filter((p: any) => Number(p.property_id) === Number(newTask.propertyId) && ['responder', 'security', 'staff'].includes(p.role))
+                  .map((p: any) => (
+                    <MenuItem key={p.id} value={p.id}>{p.name} ({p.role.toUpperCase()})</MenuItem>
+                  ))}
+              </Select>
+            </FormControl>
+
+            <FormControl size="small" fullWidth>
+              <InputLabel>Priority</InputLabel>
+              <Select
+                value={newTask.priority}
+                label="Priority"
+                onChange={(e) => setNewTask({ ...newTask, priority: e.target.value })}
+              >
+                <MenuItem value="low">LOW</MenuItem>
+                <MenuItem value="medium">MEDIUM</MenuItem>
+                <MenuItem value="high">HIGH</MenuItem>
+                <MenuItem value="urgent">URGENT</MenuItem>
+              </Select>
+            </FormControl>
+
+            <TextField
+              label="Task Description"
+              placeholder="Describe instructions for this personnel..."
+              value={newTask.description}
+              onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
+              fullWidth
+              size="small"
+              required
+              multiline
+              rows={3}
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 3 }}>
+          <Button onClick={() => setOpenAddTask(false)} color="inherit" size="small">Cancel</Button>
+          <Button 
+            variant="contained" 
+            size="small"
+            disabled={createTaskMutation.isPending || !newTask.propertyId || !newTask.assignedTo || !newTask.description}
+            onClick={() => createTaskMutation.mutate({
+              propertyId: Number(newTask.propertyId),
+              assignedTo: Number(newTask.assignedTo),
+              priority: newTask.priority,
+              description: newTask.description,
+              taskType: 'general'
+            })}
+          >
+            {createTaskMutation.isPending ? 'Assigning...' : 'Assign Task'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Edit / Manage Task Dialog */}
+      <Dialog open={openManageTask} onClose={() => { setOpenManageTask(false); setSelectedTask(null); }} maxWidth="xs" fullWidth>
+        <DialogTitle sx={{ fontWeight: 'bold' }}>Manage Emergency Task</DialogTitle>
+        <DialogContent>
+          {selectedTask && (
+            <Stack spacing={2} sx={{ mt: 1 }}>
+              {formError && <Alert severity="error" sx={{ fontSize: '0.75rem' }}>{formError}</Alert>}
+              
+              <Typography variant="caption" color="text.secondary">
+                Property: {selectedTask.property_name} • ID: #{selectedTask.id}
+              </Typography>
+
+              <FormControl size="small" fullWidth>
+                <InputLabel>Assigned To</InputLabel>
+                <Select
+                  value={selectedTask.assigned_to || ''}
+                  label="Assigned To"
+                  onChange={(e) => setSelectedTask({ ...selectedTask, assigned_to: e.target.value })}
+                >
+                  {personnel
+                    .filter((p: any) => Number(p.property_id) === Number(selectedTask.property_id) && ['responder', 'security', 'staff'].includes(p.role))
+                    .map((p: any) => (
+                      <MenuItem key={p.id} value={p.id}>{p.name} ({p.role.toUpperCase()})</MenuItem>
+                    ))}
+                </Select>
+              </FormControl>
+
+              <FormControl size="small" fullWidth>
+                <InputLabel>Priority</InputLabel>
+                <Select
+                  value={selectedTask.priority || 'medium'}
+                  label="Priority"
+                  onChange={(e) => setSelectedTask({ ...selectedTask, priority: e.target.value })}
+                >
+                  <MenuItem value="low">LOW</MenuItem>
+                  <MenuItem value="medium">MEDIUM</MenuItem>
+                  <MenuItem value="high">HIGH</MenuItem>
+                  <MenuItem value="urgent">URGENT</MenuItem>
+                </Select>
+              </FormControl>
+
+              <FormControl size="small" fullWidth>
+                <InputLabel>Status</InputLabel>
+                <Select
+                  value={selectedTask.status || 'pending'}
+                  label="Status"
+                  onChange={(e) => setSelectedTask({ ...selectedTask, status: e.target.value })}
+                >
+                  <MenuItem value="pending">PENDING</MenuItem>
+                  <MenuItem value="in_progress">IN PROGRESS</MenuItem>
+                  <MenuItem value="completed">COMPLETED</MenuItem>
+                  <MenuItem value="cancelled">CANCELLED</MenuItem>
+                </Select>
+              </FormControl>
+
+              <TextField
+                label="Task Description"
+                value={selectedTask.description || ''}
+                onChange={(e) => setSelectedTask({ ...selectedTask, description: e.target.value })}
+                fullWidth
+                size="small"
+                required
+                multiline
+                rows={3}
+              />
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 3, justifyContent: 'space-between' }}>
+          <Button 
+            variant="outlined" 
+            color="error" 
+            size="small"
+            disabled={deleteTaskMutation.isPending}
+            onClick={() => {
+              if (window.confirm('Are you sure you want to delete this task?')) {
+                deleteTaskMutation.mutate(selectedTask.id);
+              }
+            }}
+          >
+            Delete
+          </Button>
+          <Box>
+            <Button onClick={() => { setOpenManageTask(false); setSelectedTask(null); }} color="inherit" size="small" sx={{ mr: 1 }}>Cancel</Button>
+            <Button 
+              variant="contained" 
+              size="small"
+              disabled={updateTaskMutation.isPending || !selectedTask?.description}
+              onClick={() => updateTaskMutation.mutate({
+                id: selectedTask.id,
+                payload: {
+                  assignedTo: Number(selectedTask.assigned_to),
+                  priority: selectedTask.priority,
+                  status: selectedTask.status,
+                  description: selectedTask.description
+                }
+              })}
+            >
+              {updateTaskMutation.isPending ? 'Save' : 'Save Changes'}
+            </Button>
+          </Box>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

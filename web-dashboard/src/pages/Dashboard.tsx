@@ -17,6 +17,7 @@ import {
   Business as OrgIcon,
   AdminPanelSettings as PlatformIcon,
   Settings as SettingsIcon,
+  Chat as ChatIcon,
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
@@ -159,8 +160,8 @@ export default function Dashboard() {
         visible: true,
       },
       {
-        title: 'Organization Console',
-        desc: 'Manage multiple buildings, properties, and reports.',
+        title: role === 'admin' ? 'Property Console' : 'Organization Console',
+        desc: role === 'admin' ? 'Manage personnel and tasks for your property.' : 'Manage multiple buildings, properties, and reports.',
         icon: OrgIcon,
         path: '/dashboard/organization',
         color: 'var(--accent-blue)',
@@ -173,6 +174,14 @@ export default function Dashboard() {
         path: '/dashboard/platform',
         color: '#7c3aed',
         visible: role === 'super_admin',
+      },
+      {
+        title: 'Property Chat Room',
+        desc: 'Real-time property-wide communication radio.',
+        icon: ChatIcon,
+        path: '/dashboard/chat',
+        color: '#d946ef',
+        visible: true,
       },
       {
         title: 'System Settings',

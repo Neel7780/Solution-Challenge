@@ -71,7 +71,7 @@ export default function Incidents() {
   const [open, setOpen] = useState(false);
   const [openManage, setOpenManage] = useState(false);
   const [selectedIncident, setSelectedIncident] = useState<Incident | null>(null);
-  const [activeTab, setActiveTab] = useState<'incidents' | 'public-reports'>('incidents');
+  const [activeTab, setActiveTab] = useState<'incidents' | 'history' | 'public-reports'>('incidents');
   const { user } = useAuthStore();
   const { socket } = useSocketStore();
   const queryClient = useQueryClient();
@@ -107,11 +107,15 @@ export default function Incidents() {
   const [zoneId, setZoneId] = useState<number | string>('');
 
   const { data: incidents, isLoading } = useQuery<Incident[]>({
-    queryKey: ['incidents'],
+    queryKey: ['incidents', activeTab],
     queryFn: async () => {
-      const res = await axios.get(`${API_URL}/crisis/active`);
+      const statusParam = activeTab === 'history' ? 'history' : 'active';
+      const res = await axios.get(`${API_URL}/crisis/active`, {
+        params: { status: statusParam }
+      });
       return res.data.incidents;
     },
+    enabled: activeTab === 'incidents' || activeTab === 'history',
   });
 
   const { data: zones = [] } = useQuery({
@@ -245,7 +249,7 @@ export default function Incidents() {
 
       <Tabs
         value={activeTab}
-        onChange={(_, value) => setActiveTab(value)}
+        onChange={(_, value) => setActiveTab(value as any)}
         sx={{ 
           mb: 3, 
           minHeight: 40,
@@ -255,10 +259,11 @@ export default function Incidents() {
         }}
       >
         <Tab value="incidents" label="Active Incidents" />
+        <Tab value="history" label="Incident History" />
         {canReviewPublicReports && <Tab value="public-reports" label="Public Review Queue" />}
       </Tabs>
 
-      {activeTab === 'incidents' && (
+      {(activeTab === 'incidents' || activeTab === 'history') && (
       <Paper
         sx={{
           backgroundColor: 'transparent',

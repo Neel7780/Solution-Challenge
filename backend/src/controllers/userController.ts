@@ -78,7 +78,7 @@ export const createUser = async (req: Request, res: Response) => {
 
   // Scoping
   const finalOrgId = userContext.role === 'super_admin' ? (organizationId || userContext.organizationId) : userContext.organizationId;
-  const finalPropertyId = propertyId || null;
+  const finalPropertyId = userContext.role === 'admin' ? userContext.propertyId : (propertyId || null);
 
   try {
     const passwordHash = await bcrypt.hash(password, 10);
@@ -128,7 +128,7 @@ export const updateUser = async (req: Request, res: Response) => {
 
       // Check permissions and existence
       const checkResult = await client.query(
-        `SELECT organization_id FROM users WHERE id = $1`,
+        `SELECT organization_id, property_id FROM users WHERE id = $1`,
         [id]
       );
 
@@ -142,6 +142,13 @@ export const updateUser = async (req: Request, res: Response) => {
         return res.status(403).json({ error: 'Permission denied' });
       }
 
+      if (userContext.role === 'admin' && checkResult.rows[0].property_id !== userContext.propertyId) {
+        await client.query('ROLLBACK');
+        return res.status(403).json({ error: 'Permission denied: User does not belong to your property' });
+      }
+
+      const finalPropertyId = userContext.role === 'admin' ? userContext.propertyId : propertyId;
+
       // Update user
       const result = await client.query(
         `UPDATE users 
@@ -154,7 +161,7 @@ export const updateUser = async (req: Request, res: Response) => {
              updated_at = CURRENT_TIMESTAMP
          WHERE id = $7
          RETURNING id, name, email, role, property_id, status`,
-        [name, email, phone, role, propertyId, status, id]
+        [name, email, phone, role, finalPropertyId, status, id]
       );
 
       const updatedUser = result.rows[0];
@@ -192,7 +199,7 @@ export const deleteUser = async (req: Request, res: Response) => {
 
   try {
     const checkResult = await query(
-      `SELECT organization_id FROM users WHERE id = $1`,
+      `SELECT organization_id, property_id FROM users WHERE id = $1`,
       [id]
     );
 
@@ -202,6 +209,10 @@ export const deleteUser = async (req: Request, res: Response) => {
 
     if (userContext.role !== 'super_admin' && checkResult.rows[0].organization_id !== userContext.organizationId) {
       return res.status(403).json({ error: 'Permission denied' });
+    }
+
+    if (userContext.role === 'admin' && checkResult.rows[0].property_id !== userContext.propertyId) {
+      return res.status(403).json({ error: 'Permission denied: User does not belong to your property' });
     }
 
     await query(`DELETE FROM users WHERE id = $1`, [id]);
@@ -246,41 +257,57 @@ export const login = async (req: Request, res: Response) => {
     }
 
     // Fetch available property contexts
-    const contextResult = await query(
-      `SELECT up.property_id, up.role, p.name as property_name, p.organization_id
-       FROM user_properties up
-       JOIN properties p ON up.property_id = p.id
-       WHERE up.user_id = $1`,
-      [user.id]
-    );
-
-    let contexts = contextResult.rows;
-
-    // Backward compatibility: some legacy accounts only have users.property_id populated.
-    // If so, create a synthetic context and backfill user_properties.
-    if (contexts.length === 0 && user.property_id && user.role !== 'super_admin') {
-      const propertyResult = await query(
-        `SELECT id, name, organization_id FROM properties WHERE id = $1 LIMIT 1`,
-        [user.property_id]
+    let contexts: any[] = [];
+    if (user.role === 'super_admin') {
+      const allProps = await query(
+        `SELECT id as property_id, 'super_admin' as role, name as property_name, organization_id 
+         FROM properties`
       );
+      contexts = allProps.rows;
+    } else if (user.role === 'org_admin' && user.organization_id) {
+      const orgProps = await query(
+        `SELECT id as property_id, 'org_admin' as role, name as property_name, organization_id 
+         FROM properties 
+         WHERE organization_id = $1`,
+        [user.organization_id]
+      );
+      contexts = orgProps.rows;
+    } else {
+      const contextResult = await query(
+        `SELECT up.property_id, up.role, p.name as property_name, p.organization_id
+         FROM user_properties up
+         JOIN properties p ON up.property_id = p.id
+         WHERE up.user_id = $1`,
+        [user.id]
+      );
+      contexts = contextResult.rows;
 
-      if (propertyResult.rows.length > 0) {
-        const property = propertyResult.rows[0];
-        contexts = [{
-          property_id: property.id,
-          role: user.role,
-          property_name: property.name,
-          organization_id: property.organization_id,
-        }];
-
-        // Self-heal missing mapping so future logins work through user_properties.
-        await query(
-          `INSERT INTO user_properties (user_id, property_id, role)
-           VALUES ($1, $2, $3)
-           ON CONFLICT (user_id, property_id)
-           DO UPDATE SET role = EXCLUDED.role`,
-          [user.id, property.id, user.role]
+      // Backward compatibility: some legacy accounts only have users.property_id populated.
+      // If so, create a synthetic context and backfill user_properties.
+      if (contexts.length === 0 && user.property_id) {
+        const propertyResult = await query(
+          `SELECT id, name, organization_id FROM properties WHERE id = $1 LIMIT 1`,
+          [user.property_id]
         );
+
+        if (propertyResult.rows.length > 0) {
+          const property = propertyResult.rows[0];
+          contexts = [{
+            property_id: property.id,
+            role: user.role,
+            property_name: property.name,
+            organization_id: property.organization_id,
+          }];
+
+          // Self-heal missing mapping so future logins work through user_properties.
+          await query(
+            `INSERT INTO user_properties (user_id, property_id, role)
+             VALUES ($1, $2, $3)
+             ON CONFLICT (user_id, property_id)
+             DO UPDATE SET role = EXCLUDED.role`,
+            [user.id, property.id, user.role]
+          );
+        }
       }
     }
 
@@ -347,6 +374,11 @@ export const login = async (req: Request, res: Response) => {
     user.role = selectedRole;
     user.property_id = selectedPropertyId;
     user.organization_id = selectedOrgId;
+
+    if (selectedPropertyId) {
+      const propResult = await query('SELECT name FROM properties WHERE id = $1', [selectedPropertyId]);
+      user.property_name = propResult.rows[0]?.name || null;
+    }
 
     logger.info(`User logged in: ${resolvedIdentifier} to property ${selectedPropertyId}`);
 
@@ -437,7 +469,17 @@ export const getProfile = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    res.json({ success: true, user: result.rows[0] });
+    const user = result.rows[0];
+    if (req.user) {
+      user.role = req.user.role;
+      user.property_id = req.user.propertyId;
+      user.organization_id = req.user.organizationId;
+
+      const propResult = await query('SELECT name FROM properties WHERE id = $1', [req.user.propertyId]);
+      user.property_name = propResult.rows[0]?.name || null;
+    }
+
+    res.json({ success: true, user });
   } catch (error: any) {
     logger.error('Error fetching profile:', error);
     res.status(500).json({ error: 'Failed to fetch profile' });

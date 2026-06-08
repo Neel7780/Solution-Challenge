@@ -441,7 +441,7 @@ export default function Locations() {
 
                     {/* Rotated Indoor Floor Plan Overlay */}
                     <RotatedImageOverlay
-                      url={`/assets/maps/floor${selectedFloor}.jpg`}
+                      url={`/assets/maps/floor${selectedFloor}.png`}
                       topLeft={topLeft}
                       topRight={topRight}
                       bottomLeft={bottomLeft}
@@ -452,7 +452,7 @@ export default function Locations() {
                   <>
                     {/* Flat Floor Plan ImageOverlay */}
                     <ImageOverlay
-                      url={`/assets/maps/floor${selectedFloor}.jpg`}
+                      url={`/assets/maps/floor${selectedFloor}.png`}
                       bounds={[[0, 0], [GODOT_MAX_Y, GODOT_MAX_X]]}
                       opacity={0.9}
                     />

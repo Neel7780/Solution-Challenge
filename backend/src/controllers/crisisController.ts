@@ -12,6 +12,37 @@ const getClientIp = (req: Request) => {
   return req.ip || req.socket.remoteAddress || 'unknown';
 };
 
+export const autoAssignTasks = async (client: any, incidentId: number, propertyId: number, lat?: number, lon?: number) => {
+  try {
+    const propResult = await client.query('SELECT organization_id FROM properties WHERE id = $1', [propertyId]);
+    const organizationId = propResult.rows[0]?.organization_id || null;
+
+    const staffResult = await client.query(
+      `SELECT id, name, role FROM users
+       WHERE property_id = $1 AND role IN ('security', 'staff', 'responder') AND status = 'active'
+       ORDER BY role ASC`,
+      [propertyId]
+    );
+
+    for (const staff of staffResult.rows) {
+      const locationText = (lat && lon) ? ` near coordinates (${lat}, ${lon})` : '';
+      const taskDesc = staff.role === 'security'
+        ? `Report to incident area${locationText} and secure evacuation routes. Ensure all guests evacuate safely.`
+        : staff.role === 'responder'
+        ? `Respond to crisis${locationText}. Coordinate with dispatch/first responders. Assist trapped guests.`
+        : `Assist guest evacuation and guide occupants to nearest exit. Check all rooms near the affected zone.`;
+
+      await client.query(
+        `INSERT INTO tasks (incident_id, property_id, organization_id, assigned_to, task_type, priority, status, description, assigned_by_ai)
+         VALUES ($1, $2, $3, $4, 'evacuation_response', 'urgent', 'pending', $5, true)`,
+        [incidentId, propertyId, organizationId, staff.id, taskDesc]
+      );
+    }
+  } catch (error) {
+    logger.error('Error auto-assigning tasks:', error);
+  }
+};
+
 export const notifyNearbyUsers = async (io: any, latitude: number, longitude: number, incident: any) => {
   if (!io || !latitude || !longitude) return;
 
@@ -105,6 +136,9 @@ export const reportCrisis = async (req: Request, res: Response) => {
          VALUES ($1, $2, $3, $4, $5, $6, $7)`,
         [incident.id, resolvedPropertyId, 'property', String(resolvedPropertyId), 'push', `EMERGENCY: ${type.toUpperCase()} reported. Please check in immediately.`, 'pending']
       );
+
+      // Auto-assign tasks to active staff/security/responders
+      await autoAssignTasks(client, incident.id, resolvedPropertyId, latitude, longitude);
 
       await client.query('COMMIT');
 
@@ -212,14 +246,19 @@ export const reportPublicCrisis = async (req: Request, res: Response) => {
     const report = result.rows[0];
 
     if (req.io) {
-      req.io.to('role_security').to('role_responder').to('role_admin').emit('public_crisis_reported', {
-        reportId: report.id,
-        propertyId: report.property_id,
-        type: report.incident_type,
-        severity: report.severity,
-        status: report.status,
-        timestamp: new Date().toISOString(),
-      });
+      req.io.to('role_security')
+        .to('role_responder')
+        .to('role_admin')
+        .to('role_org_admin')
+        .to('role_super_admin')
+        .emit('public_crisis_reported', {
+          reportId: report.id,
+          propertyId: report.property_id,
+          type: report.incident_type,
+          severity: report.severity,
+          status: report.status,
+          timestamp: new Date().toISOString(),
+        });
     }
 
     logger.warn(`Public crisis report received: property ${propertyId}, type ${type}, source ${ipAddress}`);
@@ -336,6 +375,8 @@ export const reviewPublicCrisisReport = async (req: Request, res: Response) => {
         ]
       );
 
+      const incident = incidentResult.rows[0];
+
       const reviewResult = await client.query(
         `UPDATE public_crisis_reports
          SET status = 'escalated', reviewed_at = CURRENT_TIMESTAMP
@@ -344,13 +385,19 @@ export const reviewPublicCrisisReport = async (req: Request, res: Response) => {
         [id]
       );
 
-      await client.query('COMMIT');
+      // Auto-assign tasks to active staff/security/responders
+      await autoAssignTasks(client, incident.id, report.property_id, report.latitude, report.longitude);
 
-      const incident = incidentResult.rows[0];
+      await client.query('COMMIT');
 
       if (req.io) {
         req.io.to(`property_${incident.property_id}`).emit('crisis_reported', { incident, timestamp: new Date().toISOString() });
-        req.io.to('role_security').to('role_responder').to('role_admin').emit('new_crisis', { incident, timestamp: new Date().toISOString() });
+        req.io.to('role_security')
+          .to('role_responder')
+          .to('role_admin')
+          .to('role_org_admin')
+          .to('role_super_admin')
+          .emit('new_crisis', { incident, timestamp: new Date().toISOString() });
       }
 
       return res.json({
@@ -372,7 +419,7 @@ export const reviewPublicCrisisReport = async (req: Request, res: Response) => {
 };
 
 export const getActiveIncidents = async (req: Request, res: Response) => {
-  const { type } = req.query;
+  const { type, status } = req.query;
   const userContext = req.user;
 
   if (!userContext) {
@@ -385,8 +432,16 @@ export const getActiveIncidents = async (req: Request, res: Response) => {
       FROM incidents i
       LEFT JOIN users u ON i.reported_by = u.id
       LEFT JOIN zones z ON i.zone_id = z.id
-      WHERE i.status = 'active'
+      WHERE 1=1
     `;
+    
+    if (status === 'history') {
+      baseQuery += ` AND i.status IN ('contained', 'resolved', 'false_alarm')`;
+    } else if (status === 'all') {
+      // no status filter
+    } else {
+      baseQuery += ` AND i.status = 'active'`;
+    }
     const params: any[] = [];
 
     // Scope by access context without requiring incidents.organization_id,
@@ -971,6 +1026,9 @@ export const createAutomatedIncident = async (io: any, data: any) => {
       );
 
       const incident = incidentResult.rows[0];
+
+      // Auto-assign tasks to active staff/security/responders
+      await autoAssignTasks(client, incident.id, propertyId, latitude, longitude);
 
       await client.query('COMMIT');
 

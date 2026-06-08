@@ -52,7 +52,7 @@ export default function PlatformAdmin() {
   const queryClient = useQueryClient();
   const [selectedRequest, setSelectedRequest] = useState<OnboardingRequest | null>(null);
   const [credentials, setCredentials] = useState<{ email: string; password: string } | null>(null);
-  const [activeTab, setActiveTab] = useState<'requests' | 'organizations'>('requests');
+  const [activeTab, setActiveTab] = useState<'requests' | 'organizations' | 'tasks'>('requests');
 
   const { data: requests = [], isLoading: loadingRequests } = useQuery<OnboardingRequest[]>({
     queryKey: ['onboarding-requests'],
@@ -70,6 +70,15 @@ export default function PlatformAdmin() {
       return res.data.organizations;
     },
     enabled: activeTab === 'organizations',
+  });
+
+  const { data: tasks = [], isLoading: loadingTasks } = useQuery({
+    queryKey: ['platform-tasks'],
+    queryFn: async () => {
+      const res = await axios.get(`${API_URL}/tasks`);
+      return res.data.tasks;
+    },
+    enabled: activeTab === 'tasks',
   });
 
   const reviewMutation = useMutation({
@@ -117,7 +126,9 @@ export default function PlatformAdmin() {
           <Typography color="text.secondary">
             {activeTab === 'requests' 
               ? 'Manage organization onboarding requests and system access.' 
-              : 'Strategic oversight of all onboarded enterprise entities.'}
+              : activeTab === 'organizations'
+              ? 'Strategic oversight of all onboarded enterprise entities.'
+              : 'Global monitor of all assigned emergency tasks across properties.'}
           </Typography>
         </Box>
         <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
@@ -150,6 +161,18 @@ export default function PlatformAdmin() {
               }}
             >
               Organizations
+            </Button>
+            <Button 
+              size="small" 
+              onClick={() => setActiveTab('tasks')}
+              sx={{ 
+                fontSize: '0.65rem', px: 2, py: 0.5, minWidth: 0,
+                color: activeTab === 'tasks' ? '#fff' : 'var(--text-muted)',
+                backgroundColor: activeTab === 'tasks' ? 'rgba(255,255,255,0.05)' : 'transparent',
+                '&:hover': { backgroundColor: 'rgba(255,255,255,0.08)' }
+              }}
+            >
+              All Assigned Tasks
             </Button>
           </Box>
         </Stack>
@@ -241,7 +264,7 @@ export default function PlatformAdmin() {
                   )}
                 </TableBody>
               </>
-            ) : (
+            ) : activeTab === 'organizations' ? (
               <>
                 <TableHead>
                   <TableRow>
@@ -293,6 +316,82 @@ export default function PlatformAdmin() {
                     <TableRow>
                       <TableCell colSpan={6} align="center" sx={{ py: 8 }}>
                         <Typography color="text.secondary">No organizations found.</Typography>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </>
+            ) : (
+              <>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Task ID / Description</TableCell>
+                    <TableCell>Organization</TableCell>
+                    <TableCell>Property</TableCell>
+                    <TableCell>Assigned To</TableCell>
+                    <TableCell>Assigned By</TableCell>
+                    <TableCell>Priority</TableCell>
+                    <TableCell>Status</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {loadingTasks ? (
+                    <TableRow><TableCell colSpan={7} align="center">Loading tasks...</TableCell></TableRow>
+                  ) : tasks.map((task: any) => (
+                    <TableRow key={task.id} className="table-row" hover>
+                      <TableCell sx={{ maxWidth: 300 }}>
+                        <Typography sx={{ fontWeight: 600, fontSize: '0.85rem' }}>{task.description}</Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                          Type: {task.task_type?.toUpperCase()} • ID: #{task.id}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>{task.organization_name || 'N/A'}</Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2">{task.property_name || 'N/A'}</Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>{task.assigned_to_name || 'Unassigned'}</Typography>
+                      </TableCell>
+                      <TableCell>
+                        {task.assigned_by_ai ? (
+                          <Chip label="AI SYSTEM" size="small" color="info" sx={{ fontWeight: 700, height: 20, fontSize: '0.55rem', letterSpacing: '0.05em' }} />
+                        ) : (
+                          <Typography variant="body2">{task.assigned_by_name || 'System'}</Typography>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Chip 
+                          label={task.priority?.toUpperCase()} 
+                          size="small" 
+                          color={
+                            task.priority === 'urgent' ? 'error' : 
+                            task.priority === 'high' ? 'warning' : 
+                            task.priority === 'medium' ? 'primary' : 'default'
+                          }
+                          sx={{ fontWeight: 700, height: 20, fontSize: '0.58rem' }}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Chip 
+                          label={task.status?.replace('_', ' ').toUpperCase()} 
+                          size="small" 
+                          variant="outlined"
+                          color={
+                            task.status === 'completed' ? 'success' : 
+                            task.status === 'in_progress' ? 'info' : 
+                            task.status === 'cancelled' ? 'error' : 'default'
+                          }
+                          sx={{ fontWeight: 600, height: 20, fontSize: '0.58rem' }}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {!loadingTasks && tasks.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={7} align="center" sx={{ py: 8 }}>
+                        <Typography color="text.secondary">No tasks assigned in the system.</Typography>
                       </TableCell>
                     </TableRow>
                   )}

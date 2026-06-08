@@ -16,6 +16,8 @@ import notificationRoutes from './routes/notifications';
 import userRoutes from './routes/users';
 import platformRoutes from './routes/platform';
 import simulationRoutes from './routes/simulation';
+import taskRoutes from './routes/tasks';
+import chatRoutes from './routes/chat';
 import logger from './utils/logger';
 import { analyzeSimulation } from './services/simulationAnalysisService';
 import { createAutomatedIncident } from './controllers/crisisController';
@@ -111,7 +113,7 @@ const crisisLimiter = rateLimit({
 
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  max: 1000, // Increased to support frequent polling and dashboard updates
 });
 
 app.use(generalLimiter);
@@ -129,6 +131,8 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/platform', platformRoutes);
 app.use('/api/simulation', simulationRoutes);
+app.use('/api/tasks', taskRoutes);
+app.use('/api/chat', chatRoutes);
 
 app.get('/health', (req: any, res: any) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -491,6 +495,9 @@ io.on('connection', (socket: any) => {
         }
 
         // 3. Auto-assign available staff/security/responders
+        const propResult = await client.query('SELECT organization_id FROM properties WHERE id = $1', [propertyId]);
+        const organizationId = propResult.rows[0]?.organization_id || null;
+
         const staffResult = await client.query(
           `SELECT id, name, role FROM users
            WHERE property_id = $1 AND role IN ('security', 'staff', 'responder') AND status = 'active'
@@ -507,9 +514,9 @@ io.on('connection', (socket: any) => {
             : `Assist guest evacuation and move toward fire sector (${simulationCoordinates.x}, ${simulationCoordinates.y}). Check all rooms on your assigned floor. Guide guests to nearest exit.`;
 
           await client.query(
-            `INSERT INTO tasks (incident_id, property_id, assigned_to, task_type, priority, status, description)
-             VALUES ($1, $2, $3, 'evacuation_response', 'urgent', 'pending', $4)`,
-            [incident.id, propertyId, staff.id, taskDesc]
+            `INSERT INTO tasks (incident_id, property_id, organization_id, assigned_to, task_type, priority, status, description, assigned_by_ai)
+             VALUES ($1, $2, $3, $4, 'evacuation_response', 'urgent', 'pending', $5, true)`,
+            [incident.id, propertyId, organizationId, staff.id, taskDesc]
           );
 
           assignedStaff.push({

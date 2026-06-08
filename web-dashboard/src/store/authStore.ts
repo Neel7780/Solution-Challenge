@@ -27,6 +27,7 @@ interface User {
   property_id: number;
   organization_id?: number;
   room_number?: string;
+  property_name?: string;
 }
 
 interface AuthState {

@@ -27,6 +27,7 @@ import Simulation from './pages/Simulation';
 import ResponderDashboard from './pages/ResponderDashboard';
 import SecurityDashboard from './pages/SecurityDashboard';
 import StaffDashboard from './pages/StaffDashboard';
+import Chat from './pages/Chat';
 
 // Guest Pages
 import GuestLayout from './components/GuestLayout';
@@ -92,6 +93,7 @@ function App() {
           <Route path="settings" element={<Settings />} />
           <Route path="platform" element={<PlatformAdmin />} />
           <Route path="organization" element={<OrganizationAdmin />} />
+          <Route path="chat" element={<Chat />} />
           <Route path="simulation" element={<Simulation />} />
         </Route>
         {/* Redirect old paths to dashboard */}
@@ -111,6 +113,7 @@ function App() {
           <Route path="emergency" element={<GuestEmergency />} />
           <Route path="notifications" element={<GuestNotifications />} />
           <Route path="check-in" element={<GuestCheckIn />} />
+          <Route path="chat" element={<Chat />} />
         </Route>
       </Route>
 

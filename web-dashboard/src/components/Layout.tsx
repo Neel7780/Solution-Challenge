@@ -34,6 +34,7 @@ import {
   Videocam as SimulationIcon,
   LightMode as LightModeIcon,
   DarkMode as DarkModeIcon,
+  Chat as ChatIcon,
 } from '@mui/icons-material';
 import {
   Menu,
@@ -100,12 +101,17 @@ export default function Layout() {
       { text: 'Personnel', icon: PeopleIcon, path: '/dashboard/users' },
       { text: 'Notifications', icon: NotificationsIcon, path: '/dashboard/notifications' },
       { text: 'Simulation', icon: SimulationIcon, path: '/dashboard/simulation' },
+      { text: 'Chat Room', icon: ChatIcon, path: '/dashboard/chat' },
     ];
 
     const menu = [...baseItems];
 
     if (user?.role === 'org_admin' || (user?.role === 'admin' && user?.organization_id)) {
-      menu.push({ text: 'My Organization', icon: OrgIcon, path: '/dashboard/organization' });
+      menu.push({ 
+        text: user?.role === 'admin' ? 'My Property' : 'My Organization', 
+        icon: OrgIcon, 
+        path: '/dashboard/organization' 
+      });
     }
 
     if (user?.role === 'super_admin') {

@@ -40,6 +40,13 @@ export default function GuestCheckIn() {
         }
       })
       .catch(console.error);
+
+    if (user?.id) {
+      const stored = localStorage.getItem(`guest_safety_status_${user.id}`);
+      if (stored === 'safe' || stored === 'needs_help') {
+        setLastStatus(stored);
+      }
+    }
   }, [user]);
 
   useGSAP(() => {
@@ -65,10 +72,16 @@ export default function GuestCheckIn() {
         longitude: shareLocation ? -74.0060 : null,
       });
       setLastStatus(status);
+      if (user?.id) {
+        localStorage.setItem(`guest_safety_status_${user.id}`, status);
+      }
       alert(status === 'safe' ? 'Marked as Safe.' : 'Help request submitted.');
     } catch (err) {
       console.error(err);
       setLastStatus(status);
+      if (user?.id) {
+        localStorage.setItem(`guest_safety_status_${user.id}`, status);
+      }
       alert(`Status recorded as ${status} (Demo Mode)`);
     } finally {
       setIsSubmitting(false);

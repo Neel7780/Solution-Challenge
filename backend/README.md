@@ -28,12 +28,23 @@ This is the backend service for **CrisisRespond**—an enterprise crisis coordin
 Real-time streaming is scoped by organization, property, and user roles to ensure tight multi-tenant data isolation:
 - **`property_[id]`**: Rooms dedicated to a specific physical building. Receives live fire positions, check-in updates, and evacuation notices.
 - **`user_[id]`**: Direct channel targeting a specific responder or guest (e.g. dynamic task dispatch).
-- **`role_admin`, `role_security`, `role_responder`**: Global channels for personnel to synchronize tactical maps.
+- **`role_admin`, `role_security`, `role_responder`, `role_org_admin`, `role_super_admin`**: Global channels for personnel and platform command/administration roles to synchronize tactical maps and receive real-time crisis alerts.
 
 ### Core WebSocket Triggers
 1. **`simulation:fire_crisis`**: Fired when a fire is placed in the simulator. The server creates a critical incident database record, sets the property status to `'evacuating'`, auto-assigns responder duties, and broadcasts a mass alert.
 2. **`simulation:telemetry`**: A periodic heartbeat containing simulated agent details. The server maps agent coordinates back to active database users, translates them to Latitude/Longitude, and records the tracks in the PostGIS spatial table (`location_tracking`).
 3. **`simulation:request_analysis`**: Triggers the AI pipeline to analyze simulation state snapshot metrics, returning casualty risk, structural bottlenecks, and evacuation planning guidelines.
+
+---
+
+## 📡 API Endpoints
+
+### Emergency Tasks API (`/api/tasks`)
+All task endpoints are fully protected, role-scoped, and audit-logged:
+- **`GET /api/tasks`**: Retrieve active tasks. Scoped automatically by organization (for Org Admins) or property (for local admins/personnel). Super Admins see all tasks.
+- **`POST /api/tasks`**: Create a new emergency task. Assigns priorities (`urgent`, `high`, `medium`, `low`) and tasks description.
+- **`PATCH /api/tasks/:id`**: Update task state (`pending`, `in_progress`, `completed`, `cancelled`) or modify task description, priority, and assignees.
+- **`DELETE /api/tasks/:id`**: Delete tasks from the system (restricted to authorized roles).
 
 ---
 

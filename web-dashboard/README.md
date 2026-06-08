@@ -32,6 +32,7 @@ Renders the embedded Godot WebGL simulation (`hotel_fire_simulation.html`) with 
 
 ### 3. Incident Hub (`Incidents.tsx`)
 - Manage reported emergencies, fire alerts, or SOS panics.
+- **Incident History Tab**: Filter and view past, contained, or resolved incidents so that completed incidents remain visible for audit and historical review.
 - Broadcast mass evacuation orders or assign individual duties to responder teams.
 - Review AI-enriched Action Plans and hazard descriptions.
 
@@ -40,8 +41,8 @@ Renders the embedded Godot WebGL simulation (`hotel_fire_simulation.html`) with 
 - Dynamic list of safety checks, guest check-in statuses, and action logs.
 
 ### 5. Multi-Tenant Roles & Admin Panels
-- **Platform Admin (`PlatformAdmin.tsx`)**: Super Admin overview to approve or reject organization requests and manage platform capacity.
-- **Organization Admin (`OrganizationAdmin.tsx`)**: Scoped to a specific hotel or mall organization. Manage multiple properties, onboard new buildings, view org-wide staff lists, and read aggregate reports.
+- **Platform Admin (`PlatformAdmin.tsx`)**: Super Admin overview to approve or reject organization requests, manage platform capacity, and monitor all assigned emergency tasks across properties globally via the "All Assigned Tasks" tab.
+- **Organization Admin (`OrganizationAdmin.tsx`)**: Scoped to a specific hotel or mall organization. Manage properties, onboard buildings, view staff lists, and assign/edit/modify tasks on the "Tasks" panel (including tasks auto-assigned by AI/simulation).
 - **Users Panel (`Users.tsx`)**: Manage local property users, credentials, roles (responder, security, staff, guest), and activation statuses.
 
 ---

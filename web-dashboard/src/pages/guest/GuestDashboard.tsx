@@ -15,6 +15,8 @@ import {
   ListItem,
   ListItemIcon,
   ListItemText,
+  Stack,
+  Chip,
 } from '@mui/material';
 import {
   WarningAmber as WarningIcon,
@@ -47,6 +49,8 @@ export default function GuestDashboard() {
   const [activeIncident, setActiveIncident] = useState<any>(null);
   const [isSendingSOS, setIsSendingSOS] = useState(false);
   const [assignedStaff, setAssignedStaff] = useState<any[]>([]);
+  const [tasks, setTasks] = useState<any[]>([]);
+  const [loadingTasks, setLoadingTasks] = useState(false);
   
   // Toast notifications
   const [toastOpen, setToastOpen] = useState(false);
@@ -74,16 +78,36 @@ export default function GuestDashboard() {
     }
   };
 
-  // Check for active incidents
+  const fetchTasks = async () => {
+    if (!user?.id) return;
+    try {
+      setLoadingTasks(true);
+      const res = await axios.get(`${API_URL}/tasks`);
+      const guestTasks = (res.data.tasks || []).filter(
+        (t: any) => t.assigned_to === user.id
+      );
+      setTasks(guestTasks);
+    } catch (err) {
+      console.error('Failed to fetch guest tasks:', err);
+    } finally {
+      setLoadingTasks(false);
+    }
+  };
+
+  // Check for active incidents and tasks
   useEffect(() => {
     fetchActiveIncident();
+    fetchTasks();
   }, [user]);
 
   // Listen for real-time updates
   useEffect(() => {
     if (!socket) return;
 
-    const handleCrisis = () => fetchActiveIncident();
+    const handleCrisis = () => {
+      fetchActiveIncident();
+      fetchTasks();
+    };
     const handleEnrichment = (data: any) => {
       if (activeIncident && data.incidentId === activeIncident.id) {
         fetchActiveIncident();
@@ -101,11 +125,19 @@ export default function GuestDashboard() {
     };
     socket.on('staff_auto_assigned', handleStaffAssigned);
 
+    // Listen for task assignments
+    const handleTaskAssigned = (data: any) => {
+      fetchTasks();
+      showToast('A new emergency task has been assigned to you.', 'info');
+    };
+    socket.on('task_assigned', handleTaskAssigned);
+
     return () => {
       socket.off('crisis_reported', handleCrisis);
       socket.off('incident_enriched', handleEnrichment);
       socket.off('incident_status_update', handleCrisis);
       socket.off('staff_auto_assigned', handleStaffAssigned);
+      socket.off('task_assigned', handleTaskAssigned);
     };
   }, [socket, activeIncident]);
 
@@ -309,28 +341,104 @@ export default function GuestDashboard() {
         </Typography>
       </Box>
 
+      {/* Assigned Tasks Section */}
+      {tasks.length > 0 && (
+        <Box sx={{ mb: 4 }} className="stagger-item">
+          <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
+            <CheckCircleIcon sx={{ color: 'var(--accent-green)', fontSize: 20 }} /> Your Emergency Tasks
+          </Typography>
+          <Stack spacing={1.5}>
+            {tasks.map((task) => (
+              <Card 
+                key={task.id} 
+                className="glass-strong" 
+                sx={{ 
+                  borderLeft: `4px solid ${task.priority === 'urgent' ? '#ef4444' : task.priority === 'high' ? '#f59e0b' : '#3b82f6'}`,
+                  borderRadius: 2.5 
+                }}
+              >
+                <CardContent sx={{ py: 1.5, px: 2, '&:last-child': { pb: 1.5 } }}>
+                  <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 0.5, color: '#fff' }}>
+                    {task.description}
+                  </Typography>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1 }}>
+                    <Chip 
+                      label={task.status.toUpperCase().replace('_', ' ')} 
+                      size="small" 
+                      color={task.status === 'completed' ? 'success' : task.status === 'in_progress' ? 'warning' : 'primary'}
+                      sx={{ fontSize: '0.62rem', height: 18, fontWeight: 700 }}
+                    />
+                    {task.assigned_by_ai && (
+                      <Chip 
+                        label="AI Assigned" 
+                        size="small" 
+                        variant="outlined"
+                        sx={{ fontSize: '0.62rem', height: 18, borderColor: 'var(--accent-blue)', color: 'var(--accent-blue)', fontWeight: 600 }}
+                      />
+                    )}
+                  </Box>
+                </CardContent>
+              </Card>
+            ))}
+          </Stack>
+        </Box>
+      )}
+
       {/* Quick Actions Grid */}
-      <Typography variant="h6" sx={{ mb: 2 }} className="stagger-item">
+      <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 'bold' }} className="stagger-item">
         Quick Actions
       </Typography>
-      <Grid container spacing={2} className="stagger-item">
+      <Grid container spacing={2} className="stagger-item" sx={{ mb: 4 }}>
         <Grid size={{ xs: 6 }}>
-          <Card className="glass" sx={{ height: '100%' }}>
+          <Card 
+            className="glass" 
+            sx={{ height: '100%', cursor: 'pointer', '&:hover': { transform: 'scale(1.02)' }, transition: 'transform 0.2s ease-in-out' }}
+            onClick={() => {
+              window.location.href = 'tel:+15550199';
+            }}
+          >
             <CardContent sx={{ textAlign: 'center', p: 3 }}>
               <IconButton color="secondary" sx={{ mb: 1, backgroundColor: 'rgba(59, 130, 246, 0.1)' }}>
-                <SecurityIcon />
+                <PhoneIcon />
               </IconButton>
               <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>Call Security</Typography>
             </CardContent>
           </Card>
         </Grid>
         <Grid size={{ xs: 6 }}>
-          <Card className="glass" sx={{ height: '100%' }} onClick={() => navigate('/guest/emergency')}>
+          <Card 
+            className="glass" 
+            sx={{ height: '100%', cursor: 'pointer', '&:hover': { transform: 'scale(1.02)' }, transition: 'transform 0.2s ease-in-out' }}
+            onClick={() => navigate('/guest/chat')}
+          >
             <CardContent sx={{ textAlign: 'center', p: 3 }}>
-              <IconButton color="error" sx={{ mb: 1, backgroundColor: 'rgba(239, 68, 68, 0.1)' }}>
+              <IconButton color="primary" sx={{ mb: 1, backgroundColor: 'rgba(0, 121, 193, 0.1)' }}>
+                <SecurityIcon />
+              </IconButton>
+              <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>Radio Chat</Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid size={{ xs: 12 }}>
+          <Card 
+            className="glass" 
+            sx={{ 
+              borderColor: 'rgba(239, 68, 68, 0.3)', 
+              borderWidth: 1.5,
+              cursor: 'pointer',
+              '&:hover': { transform: 'scale(1.01)' }, 
+              transition: 'transform 0.2s ease-in-out'
+            }}
+            onClick={() => navigate('/guest/emergency')}
+          >
+            <CardContent sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2, p: 2 }}>
+              <IconButton color="error" sx={{ backgroundColor: 'rgba(239, 68, 68, 0.1)' }}>
                 <ReportIcon />
               </IconButton>
-              <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>Report Issue</Typography>
+              <Box>
+                <Typography variant="subtitle2" sx={{ fontWeight: 'bold', textAlign: 'left' }}>Report Property Emergency</Typography>
+                <Typography variant="caption" color="text.secondary">Select hazard type and alert staff</Typography>
+              </Box>
             </CardContent>
           </Card>
         </Grid>
