@@ -35,6 +35,7 @@ import GuestDashboard from './pages/guest/GuestDashboard';
 import GuestEmergency from './pages/guest/GuestEmergency';
 import GuestNotifications from './pages/guest/GuestNotifications';
 import GuestCheckIn from './pages/guest/GuestCheckIn';
+import NotFound from './pages/NotFound';
 
 function getDashboardHomeByRole(role?: string) {
   if (role === 'responder') return '/dashboard/responder';
@@ -118,7 +119,7 @@ function App() {
       </Route>
 
       {/* Catch All */}
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="*" element={<NotFound />} />
     </Routes>
     </>
   );

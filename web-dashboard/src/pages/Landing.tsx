@@ -18,9 +18,11 @@ import {
   Alert,
   IconButton,
   Divider,
+  Drawer,
 } from '@mui/material';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
+import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import {
   ArrowOutward as ArrowOutward,
   PlayArrow as PlayArrow,
@@ -37,6 +39,7 @@ import {
   ArrowForward as ArrowForward,
   CheckCircle as CheckCircle,
   Close as CloseIcon,
+  Menu as MenuIcon,
 } from '@mui/icons-material';
 import axios from 'axios';
 import heroTwinImage from '../assets/hero-twin.jpg';
@@ -101,14 +104,31 @@ export default function Landing() {
   const navigate = useNavigate();
   const pageRef = useRef<HTMLDivElement | null>(null);
   const [openRequest, setOpenRequest] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   useGSAP(() => {
-    gsap.from('.reveal', {
+    gsap.registerPlugin(ScrollTrigger);
+
+    gsap.from('.hero-reveal', {
       y: 22,
       opacity: 0,
       duration: 0.8,
       stagger: 0.08,
       ease: 'power3.out',
+    });
+
+    gsap.utils.toArray('.scroll-reveal').forEach((el: any) => {
+      gsap.from(el, {
+        scrollTrigger: {
+          trigger: el,
+          start: 'top 88%',
+          toggleActions: 'play none none none',
+        },
+        y: 24,
+        opacity: 0,
+        duration: 0.8,
+        ease: 'power3.out',
+      });
     });
 
     gsap.to('.pulse-dot', {
@@ -183,16 +203,16 @@ export default function Landing() {
                 <FavoriteOutlined sx={{ fontSize: 18, color: '#ffffff' }} />
               </Box>
               <Box>
-                <Typography sx={{ fontFamily: 'Inter, sans-serif', fontWeight: 800, fontSize: '0.95rem', letterSpacing: '0.04em', color: '#005a90' }}>
+                <Typography sx={{ fontFamily: 'Inter, sans-serif', fontWeight: 800, fontSize: { xs: '0.8rem', sm: '0.95rem' }, letterSpacing: '0.04em', color: '#005a90' }}>
                   CRISIS <Box component="span" sx={{ color: '#0079c1' }}>RESPOND</Box>
                 </Typography>
-                <Typography sx={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.56rem', color: 'text.secondary', letterSpacing: '0.2em' }}>
+                <Typography sx={{ display: { xs: 'none', sm: 'block' }, fontFamily: 'JetBrains Mono, monospace', fontSize: '0.56rem', color: 'text.secondary', letterSpacing: '0.2em' }}>
                   v3.3 // GIS PLATFORM
                 </Typography>
               </Box>
             </Stack>
 
-            <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
+            <Stack direction="row" spacing={{ xs: 1, sm: 2 }} sx={{ alignItems: 'center' }}>
               <Stack direction="row" spacing={3} sx={{ display: { xs: 'none', md: 'flex' } }}>
                 {[
                   ['Platform', '#features'],
@@ -209,33 +229,176 @@ export default function Landing() {
                   </Button>
                 ))}
               </Stack>
-              <Button onClick={() => navigate('/login')} sx={{ color: 'text.secondary', fontWeight: 500, textTransform: 'none', '&:hover': { color: 'primary.main' } }}>
+              
+              {/* Desktop Action Buttons */}
+              <Stack direction="row" spacing={1.5} sx={{ display: { xs: 'none', md: 'flex' }, alignItems: 'center' }}>
+                <Button onClick={() => navigate('/login')} sx={{ color: 'text.secondary', fontWeight: 500, textTransform: 'none', '&:hover': { color: 'primary.main' } }}>
+                  Sign In
+                </Button>
+                <Button
+                  variant="contained"
+                  onClick={() => setOpenRequest(true)}
+                  size="small"
+                  sx={{
+                    textTransform: 'none',
+                    fontWeight: 600,
+                    fontSize: '0.8125rem',
+                    py: 1,
+                    px: 2,
+                    color: '#ffffff',
+                    backgroundColor: '#0079c1',
+                    boxShadow: 'none',
+                    '&:hover': { backgroundColor: '#005a90' },
+                  }}
+                >
+                  Request Demo
+                </Button>
+              </Stack>
+
+              {/* Hamburger Icon for Mobile */}
+              <IconButton
+                onClick={() => setDrawerOpen(true)}
+                sx={{
+                  display: { xs: 'flex', md: 'none' },
+                  color: '#0079c1',
+                  p: 0.8,
+                }}
+              >
+                <MenuIcon />
+              </IconButton>
+            </Stack>
+          </Stack>
+        </Container>
+
+        {/* Mobile Navigation Drawer */}
+        <Drawer
+          anchor="right"
+          open={drawerOpen}
+          onClose={() => setDrawerOpen(false)}
+          slotProps={{
+            backdrop: {
+              sx: {
+                backdropFilter: 'blur(4px)',
+                backgroundColor: 'rgba(0,0,0,0.1)',
+              }
+            },
+            paper: {
+              sx: {
+                width: 280,
+                background: 'rgba(255, 255, 255, 0.95)',
+                backdropFilter: 'blur(16px)',
+                borderLeft: '1px solid rgba(0, 121, 193, 0.1)',
+                p: 3,
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'space-between',
+              }
+            }
+          }}
+        >
+          <Box>
+            <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 4 }}>
+              <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                <Box sx={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 0.8,
+                  display: 'grid',
+                  placeItems: 'center',
+                  background: 'linear-gradient(140deg, #0079c1, #005a90)',
+                }}>
+                  <FavoriteOutlined sx={{ fontSize: 14, color: '#ffffff' }} />
+                </Box>
+                <Typography sx={{ fontFamily: 'Inter, sans-serif', fontWeight: 800, fontSize: '0.85rem', letterSpacing: '0.04em', color: '#005a90' }}>
+                  CRISIS <Box component="span" sx={{ color: '#0079c1' }}>RESPOND</Box>
+                </Typography>
+              </Stack>
+              <IconButton onClick={() => setDrawerOpen(false)} size="small">
+                <CloseIcon />
+              </IconButton>
+            </Stack>
+
+            <Stack spacing={2}>
+              {[
+                ['Platform', '#features'],
+                ['Ecosystem', '#ecosystem'],
+                ['Architecture', '#architecture'],
+              ].map(([text, link]) => (
+                <Button
+                  key={text}
+                  component="a"
+                  href={link}
+                  onClick={() => setDrawerOpen(false)}
+                  sx={{
+                    justifyContent: 'flex-start',
+                    color: 'text.secondary',
+                    fontWeight: 500,
+                    textTransform: 'none',
+                    fontSize: '1rem',
+                    py: 1,
+                    px: 1.5,
+                    borderRadius: 1.5,
+                    '&:hover': {
+                      color: 'primary.main',
+                      background: 'rgba(0, 121, 193, 0.04)',
+                    }
+                  }}
+                >
+                  {text}
+                </Button>
+              ))}
+            </Stack>
+          </Box>
+
+          <Box sx={{ mt: 'auto', pt: 4, borderTop: '1px solid rgba(0,0,0,0.06)' }}>
+            <Stack spacing={1.5}>
+              <Button
+                fullWidth
+                variant="outlined"
+                onClick={() => {
+                  setDrawerOpen(false);
+                  navigate('/login');
+                }}
+                sx={{
+                  py: 1.2,
+                  textTransform: 'none',
+                  color: '#0079c1',
+                  borderColor: 'rgba(0,121,193,0.3)',
+                  fontWeight: 600,
+                  '&:hover': { borderColor: '#0079c1', background: 'rgba(0,121,193,0.04)' }
+                }}
+              >
                 Sign In
               </Button>
               <Button
+                fullWidth
                 variant="contained"
-                onClick={() => setOpenRequest(true)}
+                onClick={() => {
+                  setDrawerOpen(false);
+                  setOpenRequest(true);
+                }}
                 sx={{
+                  py: 1.2,
                   textTransform: 'none',
                   fontWeight: 600,
                   color: '#ffffff',
                   backgroundColor: '#0079c1',
                   boxShadow: 'none',
-                  '&:hover': { backgroundColor: '#005a90' },
+                  '&:hover': { backgroundColor: '#005a90' }
                 }}
               >
                 Request Demo
               </Button>
             </Stack>
-          </Stack>
-        </Container>
+          </Box>
+        </Drawer>
       </Box>
 
       {/* Hero Section */}
       <Container maxWidth="xl" sx={{ pt: { xs: 15, md: 18 }, pb: 8, position: 'relative', zIndex: 2 }}>
         <Grid container spacing={6} sx={{ alignItems: 'center' }}>
           <Grid size={{ xs: 12, lg: 6 }}>
-            <Box className="reveal" sx={{
+            <Box className="hero-reveal" sx={{
               display: 'inline-flex',
               alignItems: 'center',
               gap: 1,
@@ -251,12 +414,12 @@ export default function Landing() {
               </Typography>
             </Box>
 
-            <Typography className="reveal" sx={{
+            <Typography className="hero-reveal" sx={{
               mt: 3,
               fontFamily: 'Inter, sans-serif',
               fontWeight: 800,
               lineHeight: 1.1,
-              fontSize: { xs: '2.8rem', md: '4.2rem' },
+              fontSize: { xs: '2.2rem', sm: '3.2rem', md: '4.2rem' },
               letterSpacing: '-0.02em',
               color: '#002e4d',
             }}>
@@ -270,12 +433,12 @@ export default function Landing() {
               </Box>
             </Typography>
 
-            <Typography className="reveal" sx={{ mt: 3, maxWidth: 620, color: 'text.secondary', lineHeight: 1.75, fontSize: '1.05rem' }}>
+            <Typography className="hero-reveal" sx={{ mt: 3, maxWidth: 620, color: 'text.secondary', lineHeight: 1.75, fontSize: '1.05rem' }}>
               The GIS-powered emergency operations solution for enterprise properties. 
               Deploy tactical digital twins to EOCs, executives, security personnel, and constituents to synchronize live response in real time.
             </Typography>
 
-            <Stack className="reveal" direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: 4 }}>
+            <Stack className="hero-reveal" direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: 4 }}>
               <Button
                 onClick={() => setOpenRequest(true)}
                 endIcon={<ArrowOutward />}
@@ -287,6 +450,7 @@ export default function Landing() {
                   fontWeight: 600,
                   textTransform: 'none',
                   backgroundColor: '#0079c1',
+                  boxShadow: 'none',
                   '&:hover': { backgroundColor: '#005a90' },
                 }}
               >
@@ -311,7 +475,7 @@ export default function Landing() {
               </Button>
             </Stack>
 
-            <Grid className="reveal" container spacing={2} sx={{ mt: 4, maxWidth: 500 }}>
+            <Grid className="hero-reveal" container spacing={2} sx={{ mt: 4, maxWidth: 500 }}>
               {[
                 ['<800ms', 'Telemetry Latency'],
                 ['99.99%', 'Operations Uptime'],
@@ -319,8 +483,8 @@ export default function Landing() {
               ].map(([value, label]) => (
                 <Grid key={label} size={4}>
                   <Box sx={{ borderLeft: '2px solid #0079c1', pl: 1.5 }}>
-                    <Typography sx={{ fontFamily: 'Inter, sans-serif', fontWeight: 700, fontSize: { xs: '1.1rem', md: '1.3rem' }, color: '#002e4d' }}>{value}</Typography>
-                    <Typography sx={{ mt: 0.5, fontFamily: 'JetBrains Mono, monospace', fontSize: '0.58rem', letterSpacing: '0.12em', color: 'text.secondary' }}>{label}</Typography>
+                    <Typography sx={{ fontFamily: 'Inter, sans-serif', fontWeight: 700, fontSize: { xs: '1.05rem', sm: '1.2rem', md: '1.3rem' }, color: '#002e4d' }}>{value}</Typography>
+                    <Typography sx={{ mt: 0.5, fontFamily: 'JetBrains Mono, monospace', fontSize: { xs: '0.52rem', sm: '0.58rem' }, letterSpacing: '0.12em', color: 'text.secondary' }}>{label}</Typography>
                   </Box>
                 </Grid>
               ))}
@@ -328,7 +492,7 @@ export default function Landing() {
           </Grid>
 
           <Grid size={{ xs: 12, lg: 6 }}>
-            <Paper className="reveal" sx={{
+            <Paper className="hero-reveal" sx={{
               overflow: 'hidden',
               borderRadius: 3,
               border: '1px solid rgba(0, 121, 193, 0.12)',
@@ -345,6 +509,7 @@ export default function Landing() {
 
               <Paper className="panel-float-a" sx={{
                 position: 'absolute',
+                display: { xs: 'none', sm: 'block' },
                 mt: -30,
                 ml: 2,
                 px: 1.4,
@@ -360,6 +525,7 @@ export default function Landing() {
 
               <Paper className="panel-float-b" sx={{
                 position: 'absolute',
+                display: { xs: 'none', sm: 'block' },
                 right: 16,
                 mt: -18,
                 px: 1.4,
@@ -386,10 +552,10 @@ export default function Landing() {
           <Typography sx={{ textAlign: 'center', mb: 4, fontFamily: 'JetBrains Mono, monospace', fontSize: '0.62rem', letterSpacing: '0.22em', color: 'text.secondary', fontWeight: 700 }}>
             POWERING CRISIS RESPONSE FOR GLOBAL PROPERTIES AND PUBLIC INFRASTRUCTURE
           </Typography>
-          <Grid container spacing={2.5}>
+          <Grid container spacing={2.5} sx={{ justifyContent: 'center' }}>
             {trustLogos.map((logo) => (
-              <Grid key={logo.name} size={{ xs: 6, md: 2.4 }}>
-                <Paper className="reveal" sx={{ py: 2, px: 1, textAlign: 'center', bgcolor: '#ffffff', border: '1px solid rgba(0,0,0,0.05)', boxShadow: 'none' }}>
+              <Grid key={logo.name} size={{ xs: 6, sm: 4, md: 2.4 }}>
+                <Paper className="scroll-reveal" sx={{ py: 2, px: 1, textAlign: 'center', bgcolor: '#ffffff', border: '1px solid rgba(0,0,0,0.05)', boxShadow: 'none' }}>
                   <Typography sx={{ fontFamily: 'Inter, sans-serif', fontSize: '0.8rem', letterSpacing: '0.12em', fontWeight: 800, color: '#002e4d' }}>{logo.name}</Typography>
                   <Typography sx={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.52rem', letterSpacing: '0.2em', color: 'text.secondary' }}>{logo.sub}</Typography>
                 </Paper>
@@ -400,18 +566,18 @@ export default function Landing() {
       </Box>
 
       {/* GIS & Evacuation Capabilities / Features */}
-      <Container id="features" maxWidth="xl" sx={{ py: { xs: 10, md: 14 }, position: 'relative', zIndex: 2 }}>
-        <Typography className="reveal" sx={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.65rem', color: '#0079c1', letterSpacing: '0.24em', fontWeight: 700 }}>03 KEY CAPABILITIES</Typography>
-        <Typography className="reveal" sx={{ mt: 2, maxWidth: 760, fontFamily: 'Inter, sans-serif', fontWeight: 800, lineHeight: 1.15, fontSize: { xs: '2rem', md: '3.2rem' }, color: '#002e4d' }}>
+      <Container id="features" maxWidth="xl" sx={{ py: { xs: 8, md: 14 }, position: 'relative', zIndex: 2 }}>
+        <Typography className="scroll-reveal" sx={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.65rem', color: '#0079c1', letterSpacing: '0.24em', fontWeight: 700 }}>03 KEY CAPABILITIES</Typography>
+        <Typography className="scroll-reveal" sx={{ mt: 2, maxWidth: 760, fontFamily: 'Inter, sans-serif', fontWeight: 800, lineHeight: 1.15, fontSize: { xs: '2rem', md: '3.2rem' }, color: '#002e4d' }}>
           A unified <Box component="span" sx={{ color: '#0079c1' }}>operations stack</Box> for any emergency.
         </Typography>
 
         <Grid container spacing={2.5} sx={{ mt: 4.5 }}>
           {moduleFeatures.map((feature) => (
             <Grid key={feature.title} size={{ xs: 12, md: 4 }}>
-              <Paper className="reveal" sx={{
+              <Paper className="scroll-reveal" sx={{
                 height: '100%',
-                p: 3.2,
+                p: { xs: 2.5, sm: 3.2 },
                 borderRadius: 3,
                 border: '1px solid rgba(0,0,0,0.06)',
                 backgroundColor: '#ffffff',
@@ -451,16 +617,16 @@ export default function Landing() {
       {/* Ecosystem Section */}
       <Container id="ecosystem" maxWidth="xl" sx={{ py: { xs: 8, md: 13 }, position: 'relative', zIndex: 2 }}>
         <Box sx={{ textAlign: 'center', mb: 5 }}>
-          <Typography className="reveal" sx={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.65rem', color: '#0079c1', letterSpacing: '0.22em', fontWeight: 700 }}>THE ECOSYSTEM</Typography>
-          <Typography className="reveal" sx={{ mt: 2, fontFamily: 'Inter, sans-serif', fontWeight: 800, lineHeight: 1.15, fontSize: { xs: '2rem', md: '3rem' }, color: '#002e4d' }}>
+          <Typography className="scroll-reveal" sx={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.65rem', color: '#0079c1', letterSpacing: '0.22em', fontWeight: 700 }}>THE ECOSYSTEM</Typography>
+          <Typography className="scroll-reveal" sx={{ mt: 2, fontFamily: 'Inter, sans-serif', fontWeight: 800, lineHeight: 1.15, fontSize: { xs: '2rem', md: '3rem' }, color: '#002e4d' }}>
             One source of truth. <br />
             <Box component="span" sx={{ color: '#0079c1' }}>Every device, every second.</Box>
           </Typography>
         </Box>
 
-        <Paper className="reveal" sx={{ p: 1.2, borderRadius: 3.5, bgcolor: '#f8f9fa', border: '1px solid rgba(0,0,0,0.06)', boxShadow: 'none' }}>
+        <Paper className="scroll-reveal" sx={{ p: 1.2, borderRadius: 3.5, bgcolor: '#f8f9fa', border: '1px solid rgba(0,0,0,0.06)', boxShadow: 'none' }}>
           <Box component="img" src={ecosystemImage} alt="Ecosystem" sx={{ width: '100%', borderRadius: 2.5, display: 'block' }} />
-          <Grid container spacing={2} sx={{ mt: -13, px: { xs: 2, md: 4 }, pb: 2.5, position: 'relative' }}>
+          <Grid container spacing={2} sx={{ mt: { xs: 2, md: -13 }, px: { xs: 1.5, md: 4 }, pb: 2.5, position: 'relative' }}>
             {[
               ['ADMIN COMMAND', 'Operations Dashboard', 'Multi-floor live coordination center', <MonitorHeartOutlined key="admin" />],
               ['CONSTITUENTS', 'Safety Companion Portal', 'One-tap emergency communication', <LanguageOutlined key="guest" />],
@@ -485,23 +651,23 @@ export default function Landing() {
       <Container id="architecture" maxWidth="xl" sx={{ py: { xs: 8, md: 12 }, position: 'relative', zIndex: 2 }}>
         <Grid container spacing={5}>
           <Grid size={{ xs: 12, lg: 6 }}>
-            <Typography className="reveal" sx={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.65rem', color: '#0079c1', letterSpacing: '0.22em', fontWeight: 700 }}>GIS ARCHITECTURE</Typography>
-            <Typography className="reveal" sx={{ mt: 2, fontFamily: 'Inter, sans-serif', fontWeight: 800, lineHeight: 1.15, fontSize: { xs: '2rem', md: '3rem' }, color: '#002e4d' }}>
+            <Typography className="scroll-reveal" sx={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.65rem', color: '#0079c1', letterSpacing: '0.22em', fontWeight: 700 }}>GIS ARCHITECTURE</Typography>
+            <Typography className="scroll-reveal" sx={{ mt: 2, fontFamily: 'Inter, sans-serif', fontWeight: 800, lineHeight: 1.15, fontSize: { xs: '2rem', md: '3rem' }, color: '#002e4d' }}>
               Enterprise-ready <br />
               <Box component="span" sx={{ color: '#0079c1' }}>multi-tenancy.</Box>
             </Typography>
-            <Typography className="reveal" sx={{ mt: 2.5, maxWidth: 580, color: 'text.secondary', lineHeight: 1.75 }}>
+            <Typography className="scroll-reveal" sx={{ mt: 2.5, maxWidth: 580, color: 'text.secondary', lineHeight: 1.75 }}>
               Built for compliance-heavy, high-occupancy corporate properties. Every query is geographically isolated, audit-logged, and optimized for sub-second telemetry streams.
             </Typography>
 
-            <Paper className="reveal" sx={{ mt: 3.5, p: 2.4, borderRadius: 2, bgcolor: '#f4f6f9', border: '1px solid rgba(0,0,0,0.08)', boxShadow: 'none' }}>
+            <Paper className="scroll-reveal" sx={{ mt: 3.5, p: { xs: 2, sm: 2.4 }, borderRadius: 2, bgcolor: '#f4f6f9', border: '1px solid rgba(0,0,0,0.08)', boxShadow: 'none', overflowX: 'auto' }}>
               <Stack direction="row" spacing={0.9} sx={{ alignItems: 'center', mb: 1.5 }}>
                 <Box sx={{ width: 9, height: 9, borderRadius: '50%', bgcolor: '#d32f2f' }} />
                 <Box sx={{ width: 9, height: 9, borderRadius: '50%', bgcolor: '#ed6c02' }} />
                 <Box sx={{ width: 9, height: 9, borderRadius: '50%', bgcolor: '#2e7d32' }} />
                 <Typography sx={{ ml: 1, fontFamily: 'JetBrains Mono, monospace', fontSize: '0.58rem', letterSpacing: '0.16em', color: 'text.secondary', fontWeight: 700 }}>DATABASE.TS</Typography>
               </Stack>
-              <Typography sx={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.76rem', color: '#1e293b', lineHeight: 1.85 }}>
+              <Typography sx={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.76rem', color: '#1e293b', lineHeight: 1.85, whiteSpace: 'nowrap' }}>
                 const incident = await db<br />
                 .queryWithContext(ctx)<br />
                 .from('incidents')<br />
@@ -516,7 +682,7 @@ export default function Landing() {
           <Grid size={{ xs: 12, lg: 6 }}>
             <Stack spacing={2}>
               {architecturePoints.map((point) => (
-                <Paper key={point.title} className="reveal" sx={{ p: 2.6, borderRadius: 2.2, bgcolor: '#ffffff', border: '1px solid rgba(0,0,0,0.06)', boxShadow: '0 4px 20px rgba(0,0,0,0.02)' }}>
+                <Paper key={point.title} className="scroll-reveal" sx={{ p: 2.6, borderRadius: 2.2, bgcolor: '#ffffff', border: '1px solid rgba(0,0,0,0.06)', boxShadow: '0 4px 20px rgba(0,0,0,0.02)' }}>
                   <Stack direction="row" spacing={2}>
                     <Box sx={{ width: 44, height: 44, borderRadius: 1.4, display: 'grid', placeItems: 'center', color: '#0079c1', border: '1px solid rgba(0, 121, 193, 0.25)', bgcolor: 'rgba(0, 121, 193, 0.05)' }}>
                       {point.icon}
@@ -538,7 +704,7 @@ export default function Landing() {
 
       {/* Call to Action & Footer */}
       <Container id="cta" maxWidth="lg" sx={{ pt: 8, pb: 12, position: 'relative', zIndex: 2 }}>
-        <Paper className="reveal" sx={{
+        <Paper className="scroll-reveal" sx={{
           p: { xs: 4, md: 8 },
           textAlign: 'center',
           borderRadius: 3,
@@ -582,10 +748,10 @@ export default function Landing() {
         </Paper>
 
         <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mt: 5, justifyContent: 'space-between', alignItems: 'center' }}>
-          <Typography sx={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.62rem', color: 'text.secondary', letterSpacing: '0.14em', textAlign: { xs: 'center', md: 'left' }, fontWeight: 700 }}>
+          <Typography sx={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.62rem', color: 'text.secondary', letterSpacing: '0.14em', textAlign: 'center', fontWeight: 700, mb: { xs: 1.5, md: 0 } }}>
             © 2026 CRISISRESPOND SYSTEMS INC · ALL RIGHTS RESERVED
           </Typography>
-          <Stack direction="row" spacing={3}>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={{ xs: 1.5, sm: 3 }} sx={{ alignItems: 'center' }}>
             {['Security Operations', 'Regulatory Compliance', 'System Status'].map((item) => (
               <Typography key={item} sx={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.62rem', color: 'text.secondary', letterSpacing: '0.14em', fontWeight: 700, cursor: 'pointer', '&:hover': { color: 'primary.main' } }}>
                 {item}
