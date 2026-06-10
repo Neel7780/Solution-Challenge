@@ -261,8 +261,8 @@ function getFloorOfIncident(incident: any) {
 export default function Locations() {
   const containerRef = useRef(null);
   const [center] = useState<[number, number]>([40.7128, -74.006]); // Default center
-  const { user } = useAuthStore();
-  const propertyId = user?.property_id || 1;
+  const { user, contexts } = useAuthStore();
+  const propertyId = user?.property_id || contexts[0]?.propertyId || 2;
 
   // GIS Controls State
   const [viewMode, setViewMode] = useState<'global' | 'schematic'>('global');

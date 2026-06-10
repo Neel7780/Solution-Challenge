@@ -682,8 +682,12 @@ export const triggerPanic = async (req: Request, res: Response) => {
 };
 
 export const checkIn = async (req: Request, res: Response) => {
-  const { incidentId, status, message, latitude, longitude } = req.body;
-  const userId = req.user!.userId;
+  const { incidentId, status, message, latitude, longitude, userId: targetUserId } = req.body;
+  let userId = req.user!.userId;
+
+  if (targetUserId && ['admin', 'security', 'responder', 'org_admin', 'super_admin'].includes(req.user!.role)) {
+    userId = Number(targetUserId);
+  }
 
   try {
     const result = await query(

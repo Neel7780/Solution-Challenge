@@ -72,7 +72,8 @@ export default function Incidents() {
   const [openManage, setOpenManage] = useState(false);
   const [selectedIncident, setSelectedIncident] = useState<Incident | null>(null);
   const [activeTab, setActiveTab] = useState<'incidents' | 'history' | 'public-reports'>('incidents');
-  const { user } = useAuthStore();
+  const { user, contexts } = useAuthStore();
+  const propertyId = user?.property_id || contexts[0]?.propertyId || 2;
   const { socket } = useSocketStore();
   const queryClient = useQueryClient();
   const containerRef = useRef(null);
@@ -119,9 +120,9 @@ export default function Incidents() {
   });
 
   const { data: zones = [] } = useQuery({
-    queryKey: ['zones', user?.property_id],
+    queryKey: ['zones', propertyId],
     queryFn: async () => {
-      const res = await axios.get(`${API_URL}/locations/zones/${user?.property_id || 1}`);
+      const res = await axios.get(`${API_URL}/locations/zones/${propertyId}`);
       return res.data.zones;
     },
     enabled: open,
@@ -179,7 +180,7 @@ export default function Incidents() {
 
   const handleReport = () => {
     reportMutation.mutate({
-      propertyId: user?.property_id || 1,
+      propertyId,
       type: incidentType,
       severity,
       description,

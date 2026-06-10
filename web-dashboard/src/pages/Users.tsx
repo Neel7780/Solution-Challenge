@@ -58,7 +58,8 @@ interface UserRecord {
 export default function Users() {
   const containerRef = useRef(null);
   const queryClient = useQueryClient();
-  const { user, isSuperAdmin } = useAuthStore();
+  const { user, isSuperAdmin, contexts } = useAuthStore();
+  const propertyId = user?.property_id || contexts[0]?.propertyId || 2;
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'personnel' | 'organizations'>('personnel');
   const [openCreateDialog, setOpenCreateDialog] = useState(false);
@@ -73,7 +74,7 @@ export default function Users() {
     password: '',
     role: 'guest',
     status: 'active',
-    propertyId: String(user?.property_id || 1),
+    propertyId: String(propertyId),
   });
 
   const canManagePersonnel = isSuperAdmin() || user?.role === 'org_admin';
@@ -181,7 +182,7 @@ export default function Users() {
       password: '',
       role: 'guest',
       status: 'active',
-      propertyId: String(user?.property_id || 1),
+      propertyId: String(propertyId),
     });
     setSelectedUser(null);
   };
@@ -196,7 +197,7 @@ export default function Users() {
       password: '',
       role: person.role,
       status: person.status || 'active',
-      propertyId: String(person.property_id || user?.property_id || 1),
+      propertyId: String(person.property_id || propertyId),
     });
     setOpenEditDialog(true);
   };

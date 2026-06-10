@@ -26,8 +26,8 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 export default function Settings() {
   const containerRef = useRef(null);
   const queryClient = useQueryClient();
-  const { user } = useAuthStore();
-  const propertyId = user?.property_id || 1;
+  const { user, contexts } = useAuthStore();
+  const propertyId = user?.property_id || contexts[0]?.propertyId || 2;
   const [propertyName, setPropertyName] = useState('');
   const [address, setAddress] = useState('');
   const [floorPlanData, setFloorPlanData] = useState('');

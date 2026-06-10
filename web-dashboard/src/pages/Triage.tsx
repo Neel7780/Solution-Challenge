@@ -1,4 +1,4 @@
-import React, { useMemo, useRef } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   Box,
   Typography,
@@ -14,6 +14,8 @@ import {
   Avatar,
   IconButton,
   Button,
+  Menu,
+  MenuItem,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import {
@@ -22,8 +24,9 @@ import {
   Help as HelpIcon,
   Search as MissingIcon,
   Message as MessageIcon,
+  Edit as EditIcon,
 } from '@mui/icons-material';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
@@ -75,11 +78,11 @@ const TriageCard = ({ title, count, icon: Icon, color }: TriageCardProps) => (
 
 export default function Triage() {
   const containerRef = useRef(null);
-  const { user } = useAuthStore();
-  const propertyId = user?.property_id || 1;
+  const { user, contexts } = useAuthStore();
+  const propertyId = user?.property_id || contexts[0]?.propertyId || 2;
 
   const { data: triageData } = useQuery<TriageData>({
-    queryKey: ['triageData'],
+    queryKey: ['triageData', propertyId],
     queryFn: async () => {
       const res = await axios.get(`${API_URL}/dashboard/triage/${propertyId}`);
       return res.data.triage;
@@ -88,15 +91,57 @@ export default function Triage() {
     refetchInterval: 10000,
   });
 
-  const { data: safetyRoster = [] } = useQuery<any[]>({
+  const queryClient = useQueryClient();
+
+  const { data: safetyRosterResponse } = useQuery({
     queryKey: ['safety-roster', propertyId],
     queryFn: async () => {
       const res = await axios.get(`${API_URL}/crisis/property/${propertyId}/safety-roster`);
-      return res.data.occupants;
+      return res.data;
     },
     enabled: Boolean(propertyId),
     refetchInterval: 5000,
   });
+
+  const safetyRoster = safetyRosterResponse?.occupants || [];
+  const activeIncidentId = safetyRosterResponse?.incidentId;
+
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const [selectedUserForStatus, setSelectedUserForStatus] = useState<any>(null);
+
+  const handleStatusMenuOpen = (event: React.MouseEvent<HTMLElement>, userItem: any) => {
+    setAnchorEl(event.currentTarget);
+    setSelectedUserForStatus(userItem);
+  };
+
+  const handleStatusMenuClose = () => {
+    setAnchorEl(null);
+    setSelectedUserForStatus(null);
+  };
+
+  const updateStatusMutation = useMutation({
+    mutationFn: async ({ userId, status }: { userId: number; status: string }) => {
+      return axios.post(`${API_URL}/users/checkin`, {
+        userId,
+        status,
+        incidentId: activeIncidentId || 1,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['safety-roster', propertyId] });
+      queryClient.invalidateQueries({ queryKey: ['triageData', propertyId] });
+    },
+  });
+
+  const handleStatusUpdate = (status: string) => {
+    if (selectedUserForStatus) {
+      updateStatusMutation.mutate({
+        userId: selectedUserForStatus.id,
+        status,
+      });
+    }
+    handleStatusMenuClose();
+  };
 
   useGSAP(() => {
     gsap.from('.triage-card', {
@@ -145,7 +190,7 @@ export default function Triage() {
     const headers = ['Name', 'Location/Room', 'Role', 'Safety Status', 'Last Updated', 'Latitude', 'Longitude'];
     const csvContent = [
       headers.join(','),
-      ...users.map(u => [
+      ...users.map((u: any) => [
         `"${u.name}"`,
         `"${u.room}"`,
         `"${u.role}"`,
@@ -223,7 +268,7 @@ export default function Triage() {
               </TableRow>
             </TableHead>
             <TableBody>
-              {users.map((user) => (
+              {users.map((user: any) => (
                 <TableRow key={user.id} className="table-row">
                   <TableCell>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -242,9 +287,19 @@ export default function Triage() {
                     <Typography variant="body2" color="text.secondary">{user.time}</Typography>
                   </TableCell>
                   <TableCell align="right">
-                    <IconButton size="small" sx={{ color: '#3b82f6' }} title={user.latitude && user.longitude ? `${user.latitude}, ${user.longitude}` : 'No GPS'}>
-                      <MessageIcon fontSize="small" />
-                    </IconButton>
+                    <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+                      <IconButton 
+                        size="small" 
+                        sx={{ color: 'var(--accent-gold)' }} 
+                        onClick={(e) => handleStatusMenuOpen(e, user)}
+                        title="Update Safety Status"
+                      >
+                        <EditIcon fontSize="small" />
+                      </IconButton>
+                      <IconButton size="small" sx={{ color: '#3b82f6' }} title={user.latitude && user.longitude ? `${user.latitude}, ${user.longitude}` : 'No GPS'}>
+                        <MessageIcon fontSize="small" />
+                      </IconButton>
+                    </Box>
                   </TableCell>
                 </TableRow>
               ))}
@@ -257,6 +312,40 @@ export default function Triage() {
           </Table>
         </TableContainer>
       </Paper>
+
+      <Menu
+        anchorEl={anchorEl}
+        open={Boolean(anchorEl)}
+        onClose={handleStatusMenuClose}
+        slotProps={{
+          paper: {
+            sx: {
+              background: 'var(--bg-card)',
+              border: '1px solid var(--border-medium)',
+            }
+          }
+        }}
+      >
+        <Typography variant="overline" sx={{ px: 2, py: 0.5, display: 'block', color: 'text.secondary', fontSize: '0.65rem', fontWeight: 700 }}>
+          Change Status
+        </Typography>
+        <MenuItem onClick={() => handleStatusUpdate('safe')} sx={{ gap: 1.5 }}>
+          <SafeIcon sx={{ color: '#22c55e', fontSize: 20 }} />
+          <Typography variant="body2">Safe</Typography>
+        </MenuItem>
+        <MenuItem onClick={() => handleStatusUpdate('distressed')} sx={{ gap: 1.5 }}>
+          <DistressedIcon sx={{ color: '#f59e0b', fontSize: 20 }} />
+          <Typography variant="body2">Distressed</Typography>
+        </MenuItem>
+        <MenuItem onClick={() => handleStatusUpdate('needs_help')} sx={{ gap: 1.5 }}>
+          <HelpIcon sx={{ color: '#ef4444', fontSize: 20 }} />
+          <Typography variant="body2">Needs Help</Typography>
+        </MenuItem>
+        <MenuItem onClick={() => handleStatusUpdate('missing')} sx={{ gap: 1.5 }}>
+          <MissingIcon sx={{ color: '#64748b', fontSize: 20 }} />
+          <Typography variant="body2">Missing</Typography>
+        </MenuItem>
+      </Menu>
     </Box>
   );
 }

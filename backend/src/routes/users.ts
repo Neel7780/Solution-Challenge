@@ -84,6 +84,7 @@ router.post('/panic', authenticate, [
 router.post('/checkin', authenticate, [
   body('incidentId').isInt(),
   body('status').isIn(['safe', 'distressed', 'needs_help']),
+  body('userId').optional().isInt(),
   body('message').optional(),
   body('latitude').optional().isFloat(),
   body('longitude').optional().isFloat(),

@@ -111,10 +111,10 @@ export default function Dashboard() {
   const containerRef = useRef(null);
   const navigate = useNavigate();
   const { socket } = useSocketStore();
-  const { user } = useAuthStore();
+  const { user, contexts } = useAuthStore();
   const queryClient = useQueryClient();
   const [showEvacConfirm, setShowEvacConfirm] = React.useState(false);
-  const propertyId = user?.property_id || 2;
+  const propertyId = user?.property_id || contexts[0]?.propertyId || 2;
 
   const portals = useMemo(() => {
     const role = user?.role;

@@ -55,8 +55,8 @@ export default function Notifications() {
   const [message, setMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const queryClient = useQueryClient();
-  const { user } = useAuthStore();
-  const propertyId = user?.property_id || 1;
+  const { user, contexts } = useAuthStore();
+  const propertyId = user?.property_id || contexts[0]?.propertyId || 2;
 
   const [channels, setChannels] = useState<{ [key: string]: boolean }>({
     push: true,

@@ -1038,6 +1038,7 @@ export const getSafetyRoster = async (req: Request, res: Response) => {
 
     res.json({ 
       success: true, 
+      incidentId: resolvedIncidentId,
       occupants: occupants.rows,
       stats: {
         total: occupants.rows.length,
