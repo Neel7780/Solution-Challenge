@@ -974,20 +974,66 @@ export const updatePropertyStatus = async (req: Request, res: Response) => {
 
 export const getSafetyRoster = async (req: Request, res: Response) => {
   const { propertyId } = req.params;
-  const incidentId = req.query.incidentId;
+  const incidentIdQuery = req.query.incidentId;
 
   try {
-    // Get all users currently registered at this property
+    const resolvedPropertyId = parseInt(propertyId as string);
+
+    // Resolve active incident if not provided
+    let resolvedIncidentId = parseInt(incidentIdQuery as string);
+    if (isNaN(resolvedIncidentId)) {
+      const activeIncRes = await query(
+        `SELECT id FROM incidents WHERE property_id = $1 AND status = 'active' ORDER BY created_at DESC LIMIT 1`,
+        [resolvedPropertyId]
+      );
+      if (activeIncRes.rows.length > 0) {
+        resolvedIncidentId = activeIncRes.rows[0].id;
+      } else {
+        // Fallback to most recent incident
+        const lastIncRes = await query(
+          `SELECT id FROM incidents WHERE property_id = $1 ORDER BY created_at DESC LIMIT 1`,
+          [resolvedPropertyId]
+        );
+        resolvedIncidentId = lastIncRes.rows.length > 0 ? lastIncRes.rows[0].id : 1;
+      }
+    }
+
+    // Get all users currently registered at this property with their latest status and coordinates
     const occupants = await query(
-      `SELECT u.id, u.name, u.room_number, u.role,
-       (SELECT status FROM check_ins ci 
-        WHERE ci.user_id = u.id AND ci.incident_id = $1 
-        ORDER BY ci.created_at DESC LIMIT 1) as safety_status,
-       (SELECT recorded_at FROM location_tracking lt 
-        WHERE lt.user_id = u.id ORDER BY lt.recorded_at DESC LIMIT 1) as last_seen
+      `SELECT u.id, u.name, u.role, u.room_number,
+              coalesce(ci.status, 'missing') as safety_status,
+              coalesce(ci.created_at, lt.recorded_at) as last_seen,
+              coalesce(ci.latitude, lt.latitude) as latitude,
+              coalesce(ci.longitude, lt.longitude) as longitude,
+              ci.message as checkin_message,
+              z.name as zone_name
        FROM users u
-       WHERE u.property_id = $2`,
-      [incidentId, propertyId]
+       LEFT JOIN LATERAL (
+         SELECT status, latitude, longitude, created_at, message
+         FROM check_ins
+         WHERE user_id = u.id AND incident_id = $1
+         ORDER BY created_at DESC
+         LIMIT 1
+       ) ci ON true
+       LEFT JOIN LATERAL (
+         SELECT latitude, longitude, recorded_at, zone_id
+         FROM location_tracking
+         WHERE user_id = u.id
+         ORDER BY recorded_at DESC
+         LIMIT 1
+       ) lt ON true
+       LEFT JOIN zones z ON lt.zone_id = z.id
+       WHERE u.property_id = $2
+       ORDER BY 
+         CASE coalesce(ci.status, 'missing')
+           WHEN 'needs_help' THEN 1
+           WHEN 'distressed' THEN 2
+           WHEN 'missing' THEN 3
+           WHEN 'safe' THEN 4
+           ELSE 5
+         END,
+         u.name ASC`,
+      [resolvedIncidentId, resolvedPropertyId]
     );
 
     res.json({ 
@@ -996,7 +1042,9 @@ export const getSafetyRoster = async (req: Request, res: Response) => {
       stats: {
         total: occupants.rows.length,
         safe: occupants.rows.filter(o => o.safety_status === 'safe').length,
-        unaccounted: occupants.rows.filter(o => !o.safety_status || o.safety_status !== 'safe').length
+        needs_help: occupants.rows.filter(o => o.safety_status === 'needs_help').length,
+        distressed: occupants.rows.filter(o => o.safety_status === 'distressed').length,
+        unaccounted: occupants.rows.filter(o => !o.safety_status || o.safety_status === 'missing').length
       }
     });
   } catch (error: any) {

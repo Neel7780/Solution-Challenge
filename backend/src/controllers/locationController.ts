@@ -3,7 +3,7 @@ import logger from '../utils/logger';
 import type { Request, Response } from 'express';
 
 export const getZones = async (req: Request, res: Response) => {
-  const propertyId = req.user!.propertyId;
+  const propertyId = req.params.propertyId ? parseInt(req.params.propertyId as string) : req.user!.propertyId;
   try {
     const result = await query(
       `SELECT id, name, zone_type, floor_number, capacity, current_occupancy,
@@ -56,7 +56,7 @@ export const getZoneDetails = async (req: Request, res: Response) => {
 };
 
 export const getOccupancy = async (req: Request, res: Response) => {
-  const propertyId = req.user!.propertyId;
+  const propertyId = req.params.propertyId ? parseInt(req.params.propertyId as string) : req.user!.propertyId;
   try {
     const result = await query(
       `SELECT zone_type, SUM(current_occupancy) as total_occupancy, SUM(capacity) as total_capacity
@@ -123,7 +123,7 @@ export const getUsersInZone = async (req: Request, res: Response) => {
 };
 
 export const getAllActiveLocations = async (req: Request, res: Response) => {
-  const propertyId = req.user!.propertyId;
+  const propertyId = req.params.propertyId ? parseInt(req.params.propertyId as string) : req.user!.propertyId;
   try {
     const result = await query(
       `SELECT DISTINCT ON (lt.user_id) u.id, u.name, u.role, u.status as user_status,

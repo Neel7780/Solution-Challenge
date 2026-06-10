@@ -88,14 +88,14 @@ export default function Triage() {
     refetchInterval: 10000,
   });
 
-  const { data: activeUsers = [] } = useQuery<any[]>({
-    queryKey: ['active-users', propertyId],
+  const { data: safetyRoster = [] } = useQuery<any[]>({
+    queryKey: ['safety-roster', propertyId],
     queryFn: async () => {
-      const res = await axios.get(`${API_URL}/locations/active-users/${propertyId}`);
-      return res.data.locations;
+      const res = await axios.get(`${API_URL}/crisis/property/${propertyId}/safety-roster`);
+      return res.data.occupants;
     },
     enabled: Boolean(propertyId),
-    refetchInterval: 10000,
+    refetchInterval: 5000,
   });
 
   useGSAP(() => {
@@ -129,17 +129,17 @@ export default function Triage() {
   ];
 
   const users = useMemo(() => {
-    return activeUsers.map((item: any) => ({
+    return safetyRoster.map((item: any) => ({
       id: item.id,
       name: item.name,
       room: item.room_number || item.zone_name || '-',
-      status: item.user_status || 'safe',
-      time: item.recorded_at ? new Date(item.recorded_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-',
+      status: item.safety_status || 'missing',
+      time: item.last_seen ? new Date(item.last_seen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-',
       role: item.role,
       latitude: item.latitude,
       longitude: item.longitude,
     }));
-  }, [activeUsers]);
+  }, [safetyRoster]);
 
   const exportToCSV = () => {
     const headers = ['Name', 'Location/Room', 'Role', 'Safety Status', 'Last Updated', 'Latitude', 'Longitude'];
@@ -208,13 +208,13 @@ export default function Triage() {
         }}
       >
         <Box sx={{ p: 3, borderBottom: '1px solid var(--border-subtle)' }}>
-          <Typography variant="h6">Live Personnel Roster</Typography>
+          <Typography variant="h6">Live Safety & Accountability Roster</Typography>
         </Box>
         <TableContainer>
           <Table>
             <TableHead>
               <TableRow>
-                <TableCell>Personnel</TableCell>
+                <TableCell>Occupant / Personnel</TableCell>
                 <TableCell>Location / Room</TableCell>
                 <TableCell>Role</TableCell>
                 <TableCell>Safety Status</TableCell>
@@ -250,7 +250,7 @@ export default function Triage() {
               ))}
               {users.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6}>No active personnel locations available.</TableCell>
+                  <TableCell colSpan={6}>No safety roster data available.</TableCell>
                 </TableRow>
               )}
             </TableBody>

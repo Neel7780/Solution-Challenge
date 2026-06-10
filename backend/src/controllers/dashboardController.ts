@@ -4,7 +4,7 @@ import logger from '../utils/logger';
 import type { Request, Response } from 'express';
 
 export const getPropertySettings = async (req: Request, res: Response) => {
-  const propertyId = req.user!.propertyId;
+  const propertyId = req.params.propertyId ? parseInt(req.params.propertyId as string) : req.user!.propertyId;
 
   try {
     const result = await query(
@@ -25,7 +25,7 @@ export const getPropertySettings = async (req: Request, res: Response) => {
 };
 
 export const updatePropertySettings = async (req: Request, res: Response) => {
-  const propertyId = req.user!.propertyId;
+  const propertyId = req.params.propertyId ? parseInt(req.params.propertyId as string) : req.user!.propertyId;
   const { name, address, floorPlanData } = req.body;
 
   try {
@@ -52,7 +52,7 @@ export const updatePropertySettings = async (req: Request, res: Response) => {
 };
 
 export const getOverview = async (req: Request, res: Response) => {
-  const propertyId = req.user!.propertyId;
+  const propertyId = req.params.propertyId ? parseInt(req.params.propertyId as string) : req.user!.propertyId;
   try {
     const client = await pool.connect();
     try {
@@ -120,7 +120,7 @@ export const getOverview = async (req: Request, res: Response) => {
 };
 
 export const getTriageData = async (req: Request, res: Response) => {
-  const propertyId = req.user!.propertyId;
+  const propertyId = req.params.propertyId ? parseInt(req.params.propertyId as string) : req.user!.propertyId;
   try {
     const client = await pool.connect();
     try {
@@ -171,7 +171,7 @@ export const getTriageData = async (req: Request, res: Response) => {
 };
 
 export const getStats = async (req: Request, res: Response) => {
-  const propertyId = req.user!.propertyId;
+  const propertyId = req.params.propertyId ? parseInt(req.params.propertyId as string) : req.user!.propertyId;
   const { period = '24h' } = req.query;
 
   try {
@@ -216,7 +216,7 @@ export const getStats = async (req: Request, res: Response) => {
 };
 
 export const getTimeline = async (req: Request, res: Response) => {
-  const propertyId = req.user!.propertyId;
+  const propertyId = req.params.propertyId ? parseInt(req.params.propertyId as string) : req.user!.propertyId;
   const { limit = 50 } = req.query;
 
   try {
@@ -238,7 +238,7 @@ export const getTimeline = async (req: Request, res: Response) => {
 };
 
 export const getHeatmap = async (req: Request, res: Response) => {
-  const propertyId = req.user!.propertyId;
+  const propertyId = req.params.propertyId ? parseInt(req.params.propertyId as string) : req.user!.propertyId;
   try {
     const result = await query(
       `SELECT z.id, z.name, z.current_occupancy, z.capacity, z.zone_type,
