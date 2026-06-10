@@ -143,11 +143,13 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     });
 
     socket.on('mass_notification', (data) => {
+      const isResolved = typeof data?.message === 'string' &&
+        (/contained|resolved|extinguished|operational/i.test(data.message));
       addNotif({
         type: 'mass',
-        title: 'Mass Notification',
+        title: isResolved ? 'Crisis Resolved' : 'Mass Notification',
         message: data.message,
-        severity: 'high',
+        severity: isResolved ? 'success' : 'high',
       });
     });
 
@@ -166,11 +168,12 @@ export const useSocketStore = create<SocketState>((set, get) => ({
         ...data,
         incidentId,
       });
+      const isResolvedOrContained = data.status === 'resolved' || data.status === 'contained';
       addNotif({
         type: 'status',
-        title: 'Incident Updated',
+        title: isResolvedOrContained ? 'Crisis Resolved' : 'Incident Updated',
         message: `Incident #${incidentId || 'N/A'} status changed to ${data.status}`,
-        severity: 'medium',
+        severity: isResolvedOrContained ? 'success' : 'medium',
       });
     });
 

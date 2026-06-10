@@ -5,7 +5,7 @@ export interface AppNotification {
   type: 'crisis' | 'panic' | 'checkin' | 'mass' | 'status' | 'info';
   title: string;
   message: string;
-  severity: 'critical' | 'high' | 'medium' | 'low' | 'info';
+  severity: 'critical' | 'high' | 'medium' | 'low' | 'info' | 'success';
   timestamp: string;
   read: boolean;
 }

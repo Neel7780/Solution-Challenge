@@ -48,7 +48,15 @@ export default function NotificationToast() {
     >
       <Alert 
         onClose={handleClose} 
-        severity={currentNotif.severity === 'critical' ? 'error' : currentNotif.severity === 'high' ? 'warning' : 'info'}
+        severity={
+          currentNotif.severity === 'critical'
+            ? 'error'
+            : currentNotif.severity === 'high'
+            ? 'warning'
+            : currentNotif.severity === 'success'
+            ? 'success'
+            : 'info'
+        }
         variant="filled"
         sx={{ 
           width: '100%', 
