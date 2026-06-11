@@ -69,6 +69,37 @@ export default function IncidentDetailsScreen({ route, navigation }: IncidentDet
     }
   };
 
+  const promptChangeUserStatus = (userId: number, userName: string) => {
+    Alert.alert(
+      'Update Safety Status',
+      `Select new safety status for ${userName}:`,
+      [
+        { text: 'Safe', onPress: () => updateUserCheckinStatus(userId, 'safe') },
+        { text: 'Distressed', onPress: () => updateUserCheckinStatus(userId, 'distressed') },
+        { text: 'Needs Help', onPress: () => updateUserCheckinStatus(userId, 'needs_help') },
+        { text: 'Cancel', style: 'cancel' }
+      ]
+    );
+  };
+
+  const updateUserCheckinStatus = async (userId: number, status: string) => {
+    setUpdating(true);
+    try {
+      await axios.post(`${API_URL}/users/checkin`, {
+        userId,
+        status,
+        incidentId,
+      });
+      Alert.alert('Success', `Status updated successfully.`);
+      fetchIncidentDetails();
+    } catch (error) {
+      console.error(error);
+      Alert.alert('Error', 'Failed to update safety status.');
+    } finally {
+      setUpdating(false);
+    }
+  };
+
   const getSeverityColor = (severity: string) => {
     switch (severity?.toLowerCase()) {
       case 'critical': return '#d32f2f';
@@ -89,7 +120,14 @@ export default function IncidentDetailsScreen({ route, navigation }: IncidentDet
   return (
     <ScrollView style={styles.container}>
       {/* Header Info */}
-      <View style={[styles.header, { backgroundColor: getSeverityColor(incident.severity) }]}>
+      <View style={[
+        styles.header, 
+        { 
+          backgroundColor: incident.status === 'resolved' || incident.status === 'contained' 
+            ? '#2e7d32' 
+            : getSeverityColor(incident.severity) 
+        }
+      ]}>
         <Text style={styles.headerType}>{incident.incident_type.toUpperCase()}</Text>
         <Text style={styles.headerId}>#{incident.id}</Text>
         <View style={styles.statusBadge}>
@@ -171,6 +209,15 @@ export default function IncidentDetailsScreen({ route, navigation }: IncidentDet
                 <Text style={styles.checkInTime}>
                   {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </Text>
+                {/* Status modifier button for staff/admin */}
+                {(user?.role === 'admin' || user?.role === 'security' || user?.role === 'responder' || user?.role === 'org_admin' || user?.role === 'super_admin') && (
+                  <TouchableOpacity 
+                    onPress={() => promptChangeUserStatus(item.user_id, item.name)}
+                    style={styles.editCheckinButton}
+                  >
+                    <Icon name="edit" size={20} color="#666" />
+                  </TouchableOpacity>
+                )}
               </View>
             ))
           )}
@@ -308,6 +355,10 @@ const styles = StyleSheet.create({
   checkInTime: {
     fontSize: 12,
     color: '#999',
+  },
+  editCheckinButton: {
+    padding: 6,
+    marginLeft: 8,
   },
   emptyText: {
     textAlign: 'center',

@@ -67,7 +67,10 @@ export default function TriageScreen({ navigation }: TriageScreenProps) {
     fetchIncidents();
   };
 
-  const getSeverityColor = (severity: string) => {
+  const getSeverityColor = (severity: string, status?: string) => {
+    if (status === 'resolved' || status === 'contained') {
+      return '#4caf50';
+    }
     switch (severity?.toLowerCase()) {
       case 'critical':
         return '#d32f2f';
@@ -87,7 +90,7 @@ export default function TriageScreen({ navigation }: TriageScreenProps) {
       style={styles.incidentCard}
       onPress={() => navigation.navigate('IncidentDetails', { incidentId: item.id })}
     >
-      <View style={[styles.severityBar, { backgroundColor: getSeverityColor(item.severity) }]} />
+      <View style={[styles.severityBar, { backgroundColor: getSeverityColor(item.severity, item.status) }]} />
       <View style={styles.incidentContent}>
         <View style={styles.incidentHeader}>
           <Text style={styles.incidentType}>{item.incident_type.toUpperCase()}</Text>
@@ -103,8 +106,8 @@ export default function TriageScreen({ navigation }: TriageScreenProps) {
             <Icon name="location-on" size={16} color="#666" />
             <Text style={styles.locationText}>{item.zone_name || 'Generic Location'}</Text>
           </View>
-          <View style={[styles.statusBadge, { borderColor: getSeverityColor(item.severity) }]}>
-            <Text style={[styles.statusText, { color: getSeverityColor(item.severity) }]}>
+          <View style={[styles.statusBadge, { borderColor: getSeverityColor(item.severity, item.status) }]}>
+            <Text style={[styles.statusText, { color: getSeverityColor(item.severity, item.status) }]}>
               {item.status.toUpperCase()}
             </Text>
           </View>

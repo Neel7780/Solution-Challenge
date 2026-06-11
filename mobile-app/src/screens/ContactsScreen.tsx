@@ -82,7 +82,7 @@ export default function ContactsScreen() {
             onPress={() => handleCall(contact.number)}
           >
             <View style={[styles.iconContainer, { backgroundColor: contact.color }]}>
-              <Icon name={contact.icon} size={28} color="#fff" />
+              <Icon name={contact.icon as any} size={28} color="#fff" />
             </View>
             <View style={styles.info}>
               <Text style={styles.name}>{contact.name}</Text>

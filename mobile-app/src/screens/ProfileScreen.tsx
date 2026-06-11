@@ -53,7 +53,7 @@ export default function ProfileScreen() {
 
   const ProfileItem = ({ icon, label, value, editable, onChange, isEditing }: ProfileItemProps) => (
     <View style={styles.profileItem}>
-      <Icon name={icon} size={24} color="#666" />
+      <Icon name={icon as any} size={24} color="#666" />
       <View style={styles.profileItemContent}>
         <Text style={styles.profileLabel}>{label}</Text>
         {isEditing && editable ? (

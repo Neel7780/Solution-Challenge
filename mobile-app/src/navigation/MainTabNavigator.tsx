@@ -20,7 +20,7 @@ export default function MainTabNavigator() {
     <Tab.Navigator
       screenOptions={({ route }) => ({
         tabBarIcon: ({ focused, color, size }) => {
-          let iconName = 'home';
+          let iconName: any = 'home';
 
           if (route.name === 'Home') {
             iconName = 'home';
@@ -59,6 +59,11 @@ export default function MainTabNavigator() {
             name="Status"
             component={StatusScreen as any}
             options={{ title: 'Status' }}
+          />
+          <Tab.Screen
+            name="Map"
+            component={MapScreen as any}
+            options={{ title: 'Evacuation Map' }}
           />
         </>
       ) : (

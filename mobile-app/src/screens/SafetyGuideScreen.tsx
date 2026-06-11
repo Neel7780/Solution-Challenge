@@ -74,7 +74,7 @@ export default function SafetyGuideScreen() {
         <View key={guide.id} style={styles.section}>
           <View style={styles.sectionHeader}>
             <View style={[styles.iconContainer, { backgroundColor: guide.color }]}>
-              <Icon name={guide.icon} size={24} color="#fff" />
+              <Icon name={guide.icon as any} size={24} color="#fff" />
             </View>
             <Text style={[styles.sectionTitle, { color: guide.color }]}>
               {guide.title}

@@ -54,7 +54,10 @@ export default function StatusScreen() {
     }
   };
 
-  const getSeverityColor = (severity: string) => {
+  const getSeverityColor = (severity: string, status?: string) => {
+    if (status === 'resolved' || status === 'contained') {
+      return '#4caf50';
+    }
     switch (severity) {
       case 'critical':
         return '#d32f2f';
@@ -115,7 +118,7 @@ export default function StatusScreen() {
                 <View
                   style={[
                     styles.severityBadge,
-                    { backgroundColor: getSeverityColor(incident.severity) },
+                    { backgroundColor: getSeverityColor(incident.severity, incident.status) },
                   ]}
                 >
                   <Text style={styles.severityText}>{incident.severity.toUpperCase()}</Text>

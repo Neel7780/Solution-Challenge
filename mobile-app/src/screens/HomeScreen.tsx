@@ -23,7 +23,7 @@ interface HomeScreenProps {
   navigation: HomeScreenNavigationProp;
 }
 
-export default function HomeScreen({ navigation }: HomeScreenProps) {
+export default function HomeScreen({ navigation }: any) {
   const { user } = useAuth();
   const { connected } = useSocket();
   const [activeIncident, setActiveIncident] = useState<any>(null);
@@ -148,6 +148,13 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
               <Text style={styles.checkInText}>Need Help</Text>
             </TouchableOpacity>
           </View>
+          <TouchableOpacity
+            style={styles.mapRouteButton}
+            onPress={() => navigation.navigate('Map')}
+          >
+            <Icon name="directions-run" size={20} color="#fff" />
+            <Text style={styles.mapRouteText}>View Evacuation Map & Route</Text>
+          </TouchableOpacity>
         </View>
       )}
 
@@ -180,7 +187,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
           <Icon name="notifications" size={32} color="#1976d2" />
           <Text style={styles.actionText}>Active Alerts</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.actionCard} onPress={() => Alert.alert('Evacuation Map', 'Please follow the physical green exit signs in the hallways to the nearest assembly point.')}>
+        <TouchableOpacity style={styles.actionCard} onPress={() => navigation.navigate('Map')}>
           <Icon name="map" size={32} color="#d32f2f" />
           <Text style={styles.actionText}>Exit Routes</Text>
         </TouchableOpacity>
@@ -351,5 +358,20 @@ const styles = StyleSheet.create({
   },
   activityText: {
     color: '#666',
+  },
+  mapRouteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#d32f2f',
+    paddingVertical: 12,
+    borderRadius: 8,
+    justifyContent: 'center',
+    marginTop: 12,
+  },
+  mapRouteText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    marginLeft: 8,
+    fontSize: 14,
   },
 });
