@@ -183,7 +183,7 @@ export default function HomeScreen({ navigation }: any) {
           <Icon name="chat" size={32} color="#7b1fa2" />
           <Text style={styles.actionText}>Message Staff</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.actionCard} onPress={() => navigation.navigate('Status')}>
+        <TouchableOpacity style={styles.actionCard} onPress={() => navigation.navigate('Alerts')}>
           <Icon name="notifications" size={32} color="#1976d2" />
           <Text style={styles.actionText}>Active Alerts</Text>
         </TouchableOpacity>

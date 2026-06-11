@@ -6,7 +6,7 @@ import {
   Text,
   TouchableOpacity,
 } from 'react-native';
-import MapView, { Marker, Callout, Polyline } from 'react-native-maps';
+import MapView, { PROVIDER_GOOGLE, Marker, Callout, Polyline } from 'react-native-maps';
 import { MaterialIcons as Icon } from '@expo/vector-icons';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
@@ -82,6 +82,7 @@ export default function MapScreen({ navigation }: any) {
   const [incidents, setIncidents] = useState<any[]>([]);
   const [zones, setZones] = useState<any[]>([]);
   const [guestCoords, setGuestCoords] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [activeUsers, setActiveUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
   const propertyId = user?.property_id || 2;
@@ -91,30 +92,44 @@ export default function MapScreen({ navigation }: any) {
     fetchZones();
   }, [propertyId]);
 
-  // Poll for location updates of simulated guest
+  // Poll for location updates of simulated guest and active users if responder
   useEffect(() => {
     let intervalId: any;
     
-    const fetchGuestLocationHistory = async () => {
-      if (!user?.id && !user?._id) return;
-      try {
-        const uId = user.id || user._id;
-        const res = await axios.get(`${API_URL}/locations/history/${uId}`);
-        const history = res.data.history;
-        if (history && history.length > 0) {
-          const georef = getGeoreferencedLatLng(history[0].latitude, history[0].longitude);
-          setGuestCoords(georef);
+    const isResponder = user?.role === 'responder' || user?.role === 'security' || user?.role === 'staff' || user?.role === 'admin' || user?.role === 'org_admin' || user?.role === 'super_admin';
+
+    const fetchLocationData = async () => {
+      // Fetch own guest simulation location
+      if (user?.id || user?._id) {
+        try {
+          const uId = user.id || user._id;
+          const res = await axios.get(`${API_URL}/locations/history/${uId}`);
+          const history = res.data.history;
+          if (history && history.length > 0) {
+            const georef = getGeoreferencedLatLng(history[0].latitude, history[0].longitude);
+            setGuestCoords(georef);
+          }
+        } catch (err) {
+          console.log('Error fetching location history on mobile map:', err);
         }
-      } catch (err) {
-        console.log('Error fetching location history on mobile map:', err);
+      }
+
+      // Fetch all active users if responder
+      if (isResponder) {
+        try {
+          const res = await axios.get(`${API_URL}/locations/active-users/${propertyId}`);
+          setActiveUsers(res.data.locations || []);
+        } catch (err) {
+          console.log('Error fetching active users on mobile map:', err);
+        }
       }
     };
 
-    fetchGuestLocationHistory();
-    intervalId = setInterval(fetchGuestLocationHistory, 5000);
+    fetchLocationData();
+    intervalId = setInterval(fetchLocationData, 5000);
 
     return () => clearInterval(intervalId);
-  }, [user]);
+  }, [user, propertyId]);
 
   const fetchIncidents = async () => {
     try {
@@ -224,6 +239,7 @@ export default function MapScreen({ navigation }: any) {
   return (
     <View style={styles.container}>
       <MapView
+        provider={PROVIDER_GOOGLE}
         style={styles.map}
         initialRegion={{
           latitude: displayLocation.latitude,
@@ -233,6 +249,10 @@ export default function MapScreen({ navigation }: any) {
         }}
         showsUserLocation={true}
         showsMyLocationButton={true}
+        zoomEnabled={true}
+        scrollEnabled={true}
+        pitchEnabled={true}
+        rotateEnabled={true}
       >
         {/* Custom Marker for Simulated guest location */}
         {guestCoords && (
@@ -247,6 +267,21 @@ export default function MapScreen({ navigation }: any) {
             </View>
           </Marker>
         )}
+
+        {/* Active Users for Responders */}
+        {activeUsers.filter(u => u.user_id !== (user?.id || user?._id)).map((u) => {
+          const coords = getGeoreferencedLatLng(u.latitude, u.longitude);
+          const isDistressed = u.user_status === 'distressed' || u.user_status === 'trapped' || u.user_status === 'needs_help';
+          return (
+            <Marker
+              key={`active-user-${u.id}`}
+              coordinate={coords}
+              pinColor={isDistressed ? '#d32f2f' : '#3b82f6'}
+              title={u.name}
+              description={`Role: ${u.role} | Status: ${u.user_status}`}
+            />
+          );
+        })}
 
         {/* Active Emergency Markers */}
         {incidents.map((incident) => {
@@ -317,6 +352,13 @@ export default function MapScreen({ navigation }: any) {
           <Text style={styles.evacuationInstructions}>
             Follow the green evacuation path towards {nearestExit.name}.
           </Text>
+          <TouchableOpacity 
+            style={styles.navButton} 
+            onPress={() => navigation.navigate('Navigation')}
+          >
+            <Icon name="navigation" size={16} color="#fff" style={{ marginRight: 6 }} />
+            <Text style={styles.navButtonText}>Start Turn-by-Turn Navigation</Text>
+          </TouchableOpacity>
           <View style={styles.safetyTipRow}>
             <Icon name="warning" size={14} color="#fbbf24" />
             <Text style={styles.safetyTipText}>Do not use elevators. Stay low to avoid smoke.</Text>
@@ -346,7 +388,7 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   map: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
   },
   callout: {
     padding: 8,
@@ -483,5 +525,20 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     marginLeft: 4,
+  },
+  navButton: {
+    backgroundColor: '#10b981',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 8,
+    marginTop: 10,
+    marginBottom: 8,
+  },
+  navButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 14,
   },
 });

@@ -8,6 +8,7 @@ import { RootStackParamList } from './src/types';
 import { AuthProvider } from './src/context/AuthContext';
 import { SocketProvider } from './src/context/SocketContext';
 import { LocationProvider } from './src/context/LocationContext';
+import { NotificationProvider } from './src/context/NotificationContext';
 
 import LoginScreen from './src/screens/LoginScreen';
 import MainTabNavigator from './src/navigation/MainTabNavigator';
@@ -15,6 +16,7 @@ import PanicScreen from './src/screens/PanicScreen';
 import ContactsScreen from './src/screens/ContactsScreen';
 import SafetyGuideScreen from './src/screens/SafetyGuideScreen';
 import IncidentDetailsScreen from './src/screens/IncidentDetailsScreen';
+import NavigationScreen from './src/screens/NavigationScreen';
 
 const Stack = createStackNavigator<RootStackParamList>();
 
@@ -22,9 +24,10 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <AuthProvider>
-        <SocketProvider>
-          <LocationProvider>
-            <NavigationContainer>
+        <NotificationProvider>
+          <SocketProvider>
+            <LocationProvider>
+              <NavigationContainer>
               <Stack.Navigator initialRouteName="Login" screenOptions={{ headerShown: false }}>
                 <Stack.Screen name="Login" component={LoginScreen as any} />
                 <Stack.Screen name="Main" component={MainTabNavigator as any} />
@@ -66,11 +69,22 @@ export default function App() {
                     headerTintColor: '#fff'
                   }} 
                 />
+                <Stack.Screen 
+                  name="Navigation" 
+                  component={NavigationScreen as any} 
+                  options={{ 
+                    headerShown: true, 
+                    title: 'Evacuation Navigation',
+                    headerStyle: { backgroundColor: '#10b981' },
+                    headerTintColor: '#fff'
+                  }} 
+                />
               </Stack.Navigator>
               <StatusBar style="auto" />
             </NavigationContainer>
-          </LocationProvider>
-        </SocketProvider>
+            </LocationProvider>
+          </SocketProvider>
+        </NotificationProvider>
       </AuthProvider>
     </SafeAreaProvider>
   );

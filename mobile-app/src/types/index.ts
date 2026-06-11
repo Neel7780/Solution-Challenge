@@ -46,6 +46,7 @@ export type RootStackParamList = {
   EmergencyContacts: undefined;
   SafetyGuide: undefined;
   IncidentDetails: { incidentId: number };
+  Navigation: undefined;
 };
 
 export type MainTabParamList = {
@@ -54,4 +55,5 @@ export type MainTabParamList = {
   Triage: undefined;
   Map: undefined;
   Profile: undefined;
+  Alerts: undefined;
 };

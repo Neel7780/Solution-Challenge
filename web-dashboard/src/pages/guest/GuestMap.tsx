@@ -15,13 +15,14 @@ import {
   Warning as WarningIcon,
   Explore as ExploreIcon,
 } from '@mui/icons-material';
-import { MapContainer, TileLayer, Marker, Popup, Circle, Polyline, useMap } from 'react-leaflet';
+import { MapContainer, Marker, Popup, Polyline, useMap, ImageOverlay } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import 'leaflet-imageoverlay-rotated';
+import 'leaflet/dist/leaflet.css';
 import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
 import { useAuthStore } from '../../store/authStore';
+import { findClosestNode, findShortestPath, generateVoiceInstructions, Hazard } from '../../utils/pathfinding';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
@@ -41,6 +42,13 @@ export const MAP_BOUNDS = {
   yMax: 13.0
 };
 
+export const IMAGE_BOUNDS = {
+  xMin: -9.0,
+  xMax: 5.0,
+  yMin: -15.0,
+  yMax: 10.0
+};
+
 export function godotToLatLng(x: number, y: number) {
   const theta = PROPERTY_CONFIG.ROTATION_RAD;
   const cosTheta = Math.cos(theta);
@@ -55,85 +63,69 @@ export function godotToLatLng(x: number, y: number) {
   return [lat, lng] as [number, number];
 }
 
-export const getGeoreferencedLatLng = (item: any) => {
+export function latLngToGodot(lat: number, lng: number) {
+  const theta = PROPERTY_CONFIG.ROTATION_RAD;
+  const cosTheta = Math.cos(theta);
+  const sinTheta = Math.sin(theta);
+
+  // Relative offsets in degrees
+  const dLat = lat - PROPERTY_CONFIG.ANCHOR_LAT;
+  const dLng = lng - PROPERTY_CONFIG.ANCHOR_LNG;
+
+  // Relative offsets in meters
+  const northOffset = dLat / PROPERTY_CONFIG.SCALE_LAT;
+  const eastOffset = dLng / PROPERTY_CONFIG.SCALE_LNG;
+
+  // Rotate back (inverse rotation)
+  const x = eastOffset * cosTheta - northOffset * sinTheta;
+  const y = -eastOffset * sinTheta - northOffset * cosTheta;
+
+  return [x, y] as [number, number];
+}
+
+export const GODOT_MAX_X = 800;
+export const GODOT_MAX_Y = 600;
+
+export function godotToSchematic(x: number, y: number) {
+  const pixelX = ((x - IMAGE_BOUNDS.xMin) / (IMAGE_BOUNDS.xMax - IMAGE_BOUNDS.xMin)) * GODOT_MAX_X;
+  const pixelY = (1 - ((y - IMAGE_BOUNDS.yMin) / (IMAGE_BOUNDS.yMax - IMAGE_BOUNDS.yMin))) * GODOT_MAX_Y;
+  return [pixelY, pixelX] as [number, number];
+}
+
+export const getSchematicLatLng = (item: any) => {
   const lat = Number(item.latitude);
   const lng = Number(item.longitude);
 
   if (isNaN(lat) || isNaN(lng)) {
-    return [PROPERTY_CONFIG.ANCHOR_LAT, PROPERTY_CONFIG.ANCHOR_LNG] as [number, number];
+    return godotToSchematic(0, 0);
   }
 
+  // 1. Real GPS coordinates
   if (lat > 40.0 && lat < 41.5 && lng > -74.5 && lng < -73.0) {
-    return [lat, lng] as [number, number];
+    const [x, y] = latLngToGodot(lat, lng);
+    return godotToSchematic(x, y);
   }
 
+  // 2. Godot world coordinates
   if (lat >= -50 && lat <= 50 && lng >= -50 && lng <= 50) {
-    return godotToLatLng(lat, lng);
+    return godotToSchematic(lat, lng);
   }
 
-  // Legacy pixel translation
+  // 3. Legacy pixel coordinates
   const worldX = -9.0 + (lng / 800) * 14.0;
   const worldY = -15.0 + (lat / 600) * 25.0;
-  return godotToLatLng(worldX, worldY);
+  return godotToSchematic(worldX, worldY);
 };
-
-// Rotated ImageOverlay wrapper for React-Leaflet
-interface RotatedImageOverlayProps {
-  url: string;
-  topLeft: [number, number];
-  topRight: [number, number];
-  bottomLeft: [number, number];
-  opacity?: number;
-}
-
-function RotatedImageOverlay({
-  url,
-  topLeft,
-  topRight,
-  bottomLeft,
-  opacity = 1.0,
-}: RotatedImageOverlayProps) {
-  const map = useMap();
-  const overlayRef = useRef<any>(null);
-
-  useEffect(() => {
-    if (!(L.imageOverlay as any).rotated) {
-      console.error('Leaflet.ImageOverlay.Rotated plugin is not loaded');
-      return;
-    }
-
-    const topleftLatLng = L.latLng(topLeft);
-    const toprightLatLng = L.latLng(topRight);
-    const bottomleftLatLng = L.latLng(bottomLeft);
-
-    const overlay = (L.imageOverlay as any).rotated(
-      url,
-      topleftLatLng,
-      toprightLatLng,
-      bottomleftLatLng,
-      {
-        opacity,
-        interactive: false,
-      }
-    ).addTo(map);
-
-    overlayRef.current = overlay;
-
-    return () => {
-      if (overlayRef.current && map) {
-        map.removeLayer(overlayRef.current);
-      }
-    };
-  }, [map, url, topLeft, topRight, bottomLeft, opacity]);
-
-  return null;
-}
 
 // Map center autofit
 function FitBoundsComponent({ bounds }: { bounds: L.LatLngBoundsExpression }) {
   const map = useMap();
   useEffect(() => {
-    map.fitBounds(bounds);
+    try {
+      map.fitBounds(bounds, { maxZoom: 20, padding: [30, 30] });
+    } catch (e) {
+      console.error('FitBounds failed:', e);
+    }
   }, [map, bounds]);
   return null;
 }
@@ -225,6 +217,9 @@ export default function GuestMap() {
   const { user } = useAuthStore();
   const propertyId = user?.property_id || 2;
   const [selectedFloor, setSelectedFloor] = useState('1');
+  const [calculatedRoute, setCalculatedRoute] = useState<[number, number][] | null>(null);
+  const [routeInstructions, setRouteInstructions] = useState<string[]>([]);
+  const hasSpokenRef = useRef(false);
 
   // Set default floor from room number on mount
   useEffect(() => {
@@ -273,18 +268,15 @@ export default function GuestMap() {
   // Current georeferenced position of the user
   const userPosition = useMemo(() => {
     if (locationHistory.length > 0) {
-      return getGeoreferencedLatLng(locationHistory[0]);
+      return getSchematicLatLng(locationHistory[0]);
     }
-    // Fallback default: anchor point
-    return [PROPERTY_CONFIG.ANCHOR_LAT, PROPERTY_CONFIG.ANCHOR_LNG] as [number, number];
+    // Fallback default
+    return godotToSchematic(0, 0);
   }, [locationHistory]);
 
   const mapCenter = userPosition;
 
-  // Map Bounds for overlay
-  const topLeft = useMemo(() => godotToLatLng(MAP_BOUNDS.xMin, MAP_BOUNDS.yMin), []);
-  const topRight = useMemo(() => godotToLatLng(MAP_BOUNDS.xMax, MAP_BOUNDS.yMin), []);
-  const bottomLeft = useMemo(() => godotToLatLng(MAP_BOUNDS.xMin, MAP_BOUNDS.yMax), []);
+
 
   // Safe Exit Assembly Points (Dynamic from DB + Mock Fallback)
   const assemblyPoints = useMemo(() => {
@@ -328,7 +320,7 @@ export default function GuestMap() {
       { id: 'mock-a', name: 'SAFE ASSEMBLY GATE A (NORTH)', latitude: PROPERTY_CONFIG.ANCHOR_LAT + 0.0012, longitude: PROPERTY_CONFIG.ANCHOR_LNG - 0.0012, capacity: 400, occupancy: 0 },
       { id: 'mock-b', name: 'SAFE ASSEMBLY GATE B (SOUTH)', latitude: PROPERTY_CONFIG.ANCHOR_LAT - 0.0012, longitude: PROPERTY_CONFIG.ANCHOR_LNG + 0.0012, capacity: 600, occupancy: 0 }
     ];
-  }, [zones, userPosition]);
+  }, [zones]);
 
   // Find nearest exit to the guest
   const nearestExit = useMemo(() => {
@@ -337,7 +329,10 @@ export default function GuestMap() {
     let minDistance = Infinity;
 
     assemblyPoints.forEach((exit: any) => {
-      const dist = getDistanceInMeters(userPosition[0], userPosition[1], exit.latitude, exit.longitude);
+      const exitPos = getSchematicLatLng(exit);
+      const dx = userPosition[1] - exitPos[1];
+      const dy = userPosition[0] - exitPos[0];
+      const dist = Math.sqrt(dx*dx + dy*dy); // Distance in pixels
       if (dist < minDistance) {
         minDistance = dist;
         nearest = exit;
@@ -351,6 +346,56 @@ export default function GuestMap() {
   }, [assemblyPoints, userPosition]);
 
   const activeIncident = incidents.length > 0 ? incidents[0] : null;
+
+  // Calculate proper route
+  useEffect(() => {
+    const getRoute = async () => {
+      if (!activeIncident || !userPosition) return;
+      
+      const hazards: Hazard[] = incidents.map((inc: any) => {
+        let x = 0, y = 0;
+        if (inc.latitude && inc.longitude) {
+           const [gx, gy] = godotToLatLng(Number(inc.latitude), Number(inc.longitude));
+           x = gx; y = gy;
+        }
+        return { x, y, floor: Number(selectedFloor), radius: 5.0 };
+      });
+
+      const userGodotX = IMAGE_BOUNDS.xMin + (userPosition[1] / GODOT_MAX_X) * (IMAGE_BOUNDS.xMax - IMAGE_BOUNDS.xMin);
+      const userGodotY = IMAGE_BOUNDS.yMin + ((GODOT_MAX_Y - userPosition[0]) / GODOT_MAX_Y) * (IMAGE_BOUNDS.yMax - IMAGE_BOUNDS.yMin);
+      
+      const startNode = findClosestNode(userGodotX, userGodotY, Number(selectedFloor));
+      
+      if (startNode) {
+         const route = findShortestPath(startNode.id, hazards);
+         if (route && route.path) {
+           const coords = route.path.map((n: any) => {
+              return godotToSchematic(n.x, n.y);
+           });
+           setCalculatedRoute(coords);
+
+           const instructions = generateVoiceInstructions(route.path);
+           setRouteInstructions(instructions);
+
+           if (!hasSpokenRef.current && instructions.length > 0 && 'speechSynthesis' in window) {
+              const utterance = new SpeechSynthesisUtterance(instructions[0]);
+              window.speechSynthesis.speak(utterance);
+              hasSpokenRef.current = true;
+           }
+
+         } else {
+           setCalculatedRoute(null);
+           setRouteInstructions(['Shelter in place immediately. All routes are blocked.']);
+           if (!hasSpokenRef.current && 'speechSynthesis' in window) {
+              const utterance = new SpeechSynthesisUtterance('Shelter in place immediately. All routes are blocked.');
+              window.speechSynthesis.speak(utterance);
+              hasSpokenRef.current = true;
+           }
+         }
+      }
+    };
+    getRoute();
+  }, [userPosition, activeIncident, incidents, selectedFloor]);
 
   if (loadingLocation || loadingZones || loadingIncidents) {
     return (
@@ -406,21 +451,15 @@ export default function GuestMap() {
       {/* Main Map Container */}
       <MapContainer
         center={mapCenter}
-        zoom={18}
-        style={{ height: '100%', width: '100%', borderRadius: 12 }}
+        zoom={0}
+        minZoom={-2}
+        crs={L.CRS.Simple}
+        style={{ height: '100%', width: '100%', borderRadius: 12, backgroundColor: '#0f172a' }}
       >
-        <TileLayer
-          attribution='&copy; OpenStreetMap contributors'
-          url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
-        />
-
-        {/* Rotated Floor Plan overlay */}
-        <RotatedImageOverlay
+        <ImageOverlay
           url={`/assets/maps/floor${selectedFloor}.png`}
-          topLeft={topLeft}
-          topRight={topRight}
-          bottomLeft={bottomLeft}
-          opacity={0.85}
+          bounds={[[0, 0], [GODOT_MAX_Y, GODOT_MAX_X]]}
+          opacity={0.9}
         />
 
         {/* User Marker (Pulse) */}
@@ -433,7 +472,7 @@ export default function GuestMap() {
 
         {/* Active Emergency Marker */}
         {activeIncident && (
-          <Marker position={getGeoreferencedLatLng(activeIncident)} icon={incidentIcon}>
+          <Marker position={getSchematicLatLng(activeIncident)} icon={incidentIcon}>
             <Popup>
               <Typography variant="subtitle2" sx={{ color: '#ef4444', fontWeight: 700 }}>
                 🚨 {activeIncident.incident_type.toUpperCase()} HAZARD
@@ -445,7 +484,7 @@ export default function GuestMap() {
 
         {/* Exit Gate Assembly Points */}
         {assemblyPoints.map((exit: any) => (
-          <Marker key={exit.id} position={[exit.latitude, exit.longitude]} icon={exitIcon}>
+          <Marker key={exit.id} position={getSchematicLatLng(exit)} icon={exitIcon}>
             <Popup>
               <Typography variant="subtitle2" sx={{ color: '#10b981', fontWeight: 700 }}>{exit.name}</Typography>
               <Typography variant="caption" color="text.secondary">Capacity: {exit.capacity} people</Typography>
@@ -454,19 +493,35 @@ export default function GuestMap() {
         ))}
 
         {/* Evacuation Guideline Polyline (Directions to nearest exit) */}
-        {nearestExit && activeIncident && (
-          <Polyline
-            positions={[userPosition, [nearestExit.latitude, nearestExit.longitude]]}
-            pathOptions={{
-              color: '#10b981',
-              weight: 4,
-              dashArray: '8, 12',
-              opacity: 0.9,
-            }}
-          />
+        {calculatedRoute && calculatedRoute.length > 0 ? (
+          <>
+            <Polyline
+              positions={calculatedRoute as any}
+              pathOptions={{
+                color: '#10b981',
+                weight: 5,
+                dashArray: '8, 12',
+                opacity: 0.9,
+              }}
+            />
+            <FitBoundsComponent bounds={calculatedRoute} />
+          </>
+        ) : (
+          nearestExit && activeIncident && (
+            <>
+              <Polyline
+                positions={[userPosition, getSchematicLatLng(nearestExit)]}
+                pathOptions={{
+                  color: '#10b981',
+                  weight: 4,
+                  dashArray: '8, 12',
+                  opacity: 0.9,
+                }}
+              />
+              <FitBoundsComponent bounds={[userPosition, getSchematicLatLng(nearestExit)]} />
+            </>
+          )
         )}
-
-        <FitBoundsComponent bounds={[userPosition, ...assemblyPoints.map((e: any) => [e.latitude, e.longitude] as [number, number])]} />
       </MapContainer>
 
       {/* Floating Evacuation Status Panel */}
@@ -496,7 +551,7 @@ export default function GuestMap() {
                 </Box>
                 {nearestExit && (
                   <Chip
-                    label={`${nearestExit.distance} meters away`}
+                    label={`Nearest exit located`}
                     size="small"
                     sx={{
                       backgroundColor: 'rgba(16, 185, 129, 0.2)',
@@ -513,13 +568,30 @@ export default function GuestMap() {
                   Directions to safe exit:
                 </Typography>
                 <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.85rem' }}>
-                  {nearestExit 
-                    ? `Follow the green dashed evacuation path towards ${nearestExit.name}.`
-                    : 'Follow the evacuation signs towards the nearest exit stairwell.'}
+                  {routeInstructions.length > 0 
+                    ? routeInstructions[0]
+                    : nearestExit 
+                      ? `Follow the green dashed evacuation path towards ${nearestExit.name}.`
+                      : 'Follow the evacuation signs towards the nearest exit stairwell.'}
                 </Typography>
                 <Typography variant="body2" sx={{ color: '#fbbf24', fontWeight: 600, mt: 1, display: 'flex', alignItems: 'center', gap: 0.5, fontSize: '0.8rem' }}>
                   <WarningIcon sx={{ fontSize: 16 }} /> Do not use elevators. Stay low to avoid smoke.
                 </Typography>
+                {routeInstructions.length > 0 && (
+                   <Chip 
+                     label="🔊 Play Voice Instructions" 
+                     color="primary" 
+                     size="small" 
+                     onClick={() => {
+                        if ('speechSynthesis' in window) {
+                          window.speechSynthesis.cancel();
+                          const utterance = new SpeechSynthesisUtterance(routeInstructions[0]);
+                          window.speechSynthesis.speak(utterance);
+                        }
+                     }}
+                     sx={{ mt: 1.5, fontWeight: 700, cursor: 'pointer' }}
+                   />
+                )}
               </Box>
             </Box>
           ) : (

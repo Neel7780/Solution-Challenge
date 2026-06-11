@@ -4,6 +4,7 @@ import { useAuth } from './AuthContext';
 import * as Notifications from 'expo-notifications';
 import { SOCKET_URL } from '../config';
 import { SocketContextType } from '../types';
+import { useNotifications } from './NotificationContext';
 
 const SocketContext = createContext<SocketContextType>({} as SocketContextType);
 
@@ -15,6 +16,7 @@ export const SocketProvider = ({ children }: SocketProviderProps) => {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [connected, setConnected] = useState<boolean>(false);
   const { token, user } = useAuth();
+  const { addNotification } = useNotifications();
 
   useEffect(() => {
     if (token && user) {
@@ -56,17 +58,35 @@ export const SocketProvider = ({ children }: SocketProviderProps) => {
     // Listen for crisis alerts
     newSocket.on('crisis_reported', (data: any) => {
       showNotification('🚨 EMERGENCY ALERT 🚨', `${data.incident.incident_type.toUpperCase()}: ${data.incident.description}`);
+      addNotification({
+        type: 'crisis',
+        title: 'Emergency Alert',
+        message: `${data.incident.incident_type.toUpperCase()}: ${data.incident.description}`,
+        severity: 'critical'
+      });
     });
 
     // Listen for nearby crisis
     newSocket.on('nearby_crisis', (data: any) => {
       showNotification('⚠️ CRITICAL ALERT ⚠️', data.message);
+      addNotification({
+        type: 'crisis',
+        title: 'Critical Nearby Incident',
+        message: data.message,
+        severity: 'high'
+      });
     });
 
     // Listen for AI enrichment
     newSocket.on('incident_enriched', (data: any) => {
       if (data.enrichment?.massAlertMessage) {
         showNotification('Emergency Update', data.enrichment.massAlertMessage);
+        addNotification({
+          type: 'info',
+          title: 'Emergency Update',
+          message: data.enrichment.massAlertMessage,
+          severity: 'medium'
+        });
       }
     });
 
@@ -74,8 +94,20 @@ export const SocketProvider = ({ children }: SocketProviderProps) => {
     newSocket.on('property_status_update', (data: any) => {
       if (data.status === 'evacuating') {
         showNotification('🛑 EVACUATION ORDER 🛑', 'IMMEDIATE EVACUATION ORDERED. Proceed to nearest safe exit.');
+        addNotification({
+          type: 'status',
+          title: 'Evacuation Order',
+          message: 'IMMEDIATE EVACUATION ORDERED. Proceed to nearest safe exit.',
+          severity: 'critical'
+        });
       } else if (data.status === 'operational') {
         showNotification('✅ Status Update', 'The property has returned to operational status.');
+        addNotification({
+          type: 'status',
+          title: 'Property Status Update',
+          message: 'The property has returned to operational status.',
+          severity: 'success'
+        });
       }
     });
 
@@ -83,12 +115,24 @@ export const SocketProvider = ({ children }: SocketProviderProps) => {
     newSocket.on('incident_status_update', (data: any) => {
       if (data.status === 'resolved') {
         showNotification('Emergency Resolved', `Incident #${data.incidentId} has been resolved.`);
+        addNotification({
+          type: 'status',
+          title: 'Emergency Resolved',
+          message: `Incident #${data.incidentId} has been resolved.`,
+          severity: 'success'
+        });
       }
     });
 
     // Listen for mass notifications
     newSocket.on('mass_notification', (data: any) => {
       showNotification('Emergency Notice', data.message);
+      addNotification({
+        type: 'mass',
+        title: 'Emergency Notice',
+        message: data.message,
+        severity: 'high'
+      });
     });
 
     // Listen for panic alerts
@@ -96,6 +140,12 @@ export const SocketProvider = ({ children }: SocketProviderProps) => {
       const isResponder = ['security', 'responder', 'admin', 'staff', 'org_admin', 'super_admin'].includes(user?.role || '');
       if (isResponder) {
         showNotification('🆘 PANIC ALERT 🆘', `Panic button triggered by ${data.userName || 'a guest'}`);
+        addNotification({
+          type: 'panic',
+          title: 'Panic Triggered',
+          message: `Panic button triggered by ${data.userName || 'a guest'}`,
+          severity: 'critical'
+        });
       }
     });
 

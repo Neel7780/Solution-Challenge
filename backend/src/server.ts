@@ -22,6 +22,7 @@ import logger from './utils/logger';
 import { analyzeSimulation } from './services/simulationAnalysisService';
 import { createAutomatedIncident } from './controllers/crisisController';
 import { enrichIncident } from './services/intelligenceService';
+import navigationRoutes from './routes/navigation';
 
 process.on('unhandledRejection', (reason, promise) => {
   console.error('Unhandled Rejection at:', promise, 'reason:', reason);
@@ -133,6 +134,7 @@ app.use('/api/platform', platformRoutes);
 app.use('/api/simulation', simulationRoutes);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/chat', chatRoutes);
+app.use('/api/navigation', navigationRoutes);
 
 app.get('/health', (req: any, res: any) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -698,6 +700,92 @@ io.on('connection', (socket: any) => {
       });
     } catch (error) {
       logger.error('Location update error:', error);
+    }
+  });
+
+  socket.on('calculate_route', async (data: any) => {
+    try {
+      const { userId, x, y, floor, propertyId } = data;
+      if (x === undefined || y === undefined || floor === undefined || !propertyId) return;
+
+      const { pool } = await import('./database/connection.js');
+      const client = await pool.connect();
+      try {
+        const activeIncidentsRes = await client.query(
+          `SELECT id, latitude, longitude, description FROM incidents 
+           WHERE property_id = $1 AND status = 'active'`,
+          [propertyId]
+        );
+
+        const { findClosestNode, findShortestPath, generateVoiceInstructions } = await import('./utils/pathfinding.js');
+        const { latLngToGodot } = await import('./utils/georef.js');
+
+        const hazards: any[] = [];
+        for (const row of activeIncidentsRes.rows) {
+          const lat = Number(row.latitude);
+          const lng = Number(row.longitude);
+          if (!isNaN(lat) && !isNaN(lng)) {
+            const godotCoords = latLngToGodot(lat, lng);
+            let hazardFloor = 1;
+            if (row.description.includes('floor 2') || row.description.includes('Floor 2') || row.description.includes('F2') || row.description.includes('R20')) {
+              hazardFloor = 2;
+            }
+            hazards.push({
+              x: godotCoords.x,
+              y: godotCoords.y,
+              floor: hazardFloor,
+              radius: 5.0,
+            });
+          }
+        }
+
+        const startNode = findClosestNode(Number(x), Number(y), Number(floor));
+        if (startNode) {
+          const route = findShortestPath(startNode.id, hazards);
+          if (route) {
+            const instructions = generateVoiceInstructions(route.path);
+            socket.emit('route_calculated', {
+              success: true,
+              shelterInPlace: false,
+              path: route.path,
+              distance: route.distance,
+              instructions,
+            });
+          } else {
+            socket.emit('route_calculated', {
+              success: true,
+              shelterInPlace: true,
+              path: [],
+              distance: 0,
+              instructions: ['ALL EXIT PATHS BLOCKED. Shelter in place immediately, seal the door, and wait for emergency responders.'],
+            });
+          }
+        }
+      } finally {
+        client.release();
+      }
+    } catch (err) {
+      logger.error('Error in calculate_route socket handler:', err);
+    }
+  });
+
+  socket.on('evacuation_status_update', async (data: any) => {
+    try {
+      const { userId, name, status, currentWaypoint, targetExit, propertyId } = data;
+      io.to(`property_${propertyId}`)
+        .to('role_admin')
+        .to('role_security')
+        .to('role_responder')
+        .emit('occupant_nav_status', {
+          userId,
+          name,
+          status,
+          currentWaypoint,
+          targetExit,
+          timestamp: new Date().toISOString(),
+        });
+    } catch (err) {
+      logger.error('Error in evacuation_status_update socket handler:', err);
     }
   });
 

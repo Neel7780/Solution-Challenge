@@ -27,6 +27,8 @@ import gsap from 'gsap';
 import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
 import { useAuthStore } from '../store/authStore';
+import { useSocketStore } from '../store/socketStore';
+import { findClosestNode, findShortestPath, Hazard } from '../utils/pathfinding';
 
 // Fix Leaflet's default marker icons in React
 import L from 'leaflet';
@@ -54,6 +56,13 @@ export const MAP_BOUNDS = {
   xMax: 8.0,
   yMin: -18.0,
   yMax: 13.0
+};
+
+export const IMAGE_BOUNDS = {
+  xMin: -9.0,
+  xMax: 5.0,
+  yMin: -15.0,
+  yMax: 10.0
 };
 
 export const GODOT_MAX_X = 800;
@@ -123,33 +132,35 @@ export function latLngToGodot(lat: number, lng: number) {
   return [x, y] as [number, number];
 }
 
-// Convert coordinates robustly to flat schematic coordinate [y, x]
+export function godotToSchematic(x: number, y: number) {
+  const pixelX = ((x - IMAGE_BOUNDS.xMin) / (IMAGE_BOUNDS.xMax - IMAGE_BOUNDS.xMin)) * GODOT_MAX_X;
+  const pixelY = (1 - ((y - IMAGE_BOUNDS.yMin) / (IMAGE_BOUNDS.yMax - IMAGE_BOUNDS.yMin))) * GODOT_MAX_Y;
+  return [pixelY, pixelX] as [number, number];
+}
+
 export const getSchematicLatLng = (item: any) => {
   const lat = Number(item.latitude);
   const lng = Number(item.longitude);
 
   if (isNaN(lat) || isNaN(lng)) {
-    return [
-      (MAP_BOUNDS.yMin + MAP_BOUNDS.yMax) / 2,
-      (MAP_BOUNDS.xMin + MAP_BOUNDS.xMax) / 2
-    ] as [number, number];
+    return godotToSchematic(0, 0);
   }
 
-  // 1. Real GPS coordinates: invert to get Godot world units [x, y], then return [y, x]
+  // 1. Real GPS coordinates
   if (lat > 40.0 && lat < 41.5 && lng > -74.5 && lng < -73.0) {
     const [x, y] = latLngToGodot(lat, lng);
-    return [y, x] as [number, number];
+    return godotToSchematic(x, y);
   }
 
-  // 2. Godot world coordinates: return [y, x] (lat is x, lng is y)
+  // 2. Godot world coordinates
   if (lat >= -50 && lat <= 50 && lng >= -50 && lng <= 50) {
-    return [lng, lat] as [number, number];
+    return godotToSchematic(lat, lng);
   }
 
   // 3. Legacy pixel coordinates
   const worldX = -9.0 + (lng / 800) * 14.0;
   const worldY = -15.0 + (lat / 600) * 25.0;
-  return [worldY, worldX] as [number, number];
+  return godotToSchematic(worldX, worldY);
 };
 
 // Component to dynamically fit layout bounds
@@ -244,10 +255,74 @@ const exitIcon = new L.Icon({
   shadowSize: [41, 41]
 });
 
+function getOccupantIcon(user: any, navStatus?: any) {
+  const role = (user.role || 'guest').toLowerCase();
+  const status = (navStatus?.status || user.user_status || '').toLowerCase();
+
+  if (status === 'distressed' || status === 'trapped' || status === 'needs_help') {
+    return new L.Icon({
+      iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
+      shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+      iconSize: [25, 41],
+      iconAnchor: [12, 41],
+      popupAnchor: [1, -34],
+      shadowSize: [41, 41]
+    });
+  }
+
+  if (status === 'safe' || status === 'reached_exit') {
+    return new L.Icon({
+      iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png',
+      shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+      iconSize: [25, 41],
+      iconAnchor: [12, 41],
+      popupAnchor: [1, -34],
+      shadowSize: [41, 41]
+    });
+  }
+
+  if (role === 'security' || role === 'staff') {
+    return new L.Icon({
+      iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
+      shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+      iconSize: [25, 41],
+      iconAnchor: [12, 41],
+      popupAnchor: [1, -34],
+      shadowSize: [41, 41]
+    });
+  }
+
+  if (role === 'responder' || role === 'admin') {
+    return new L.Icon({
+      iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-gold.png',
+      shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+      iconSize: [25, 41],
+      iconAnchor: [12, 41],
+      popupAnchor: [1, -34],
+      shadowSize: [41, 41]
+    });
+  }
+
+  return new L.Icon({
+    iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-orange.png',
+    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34],
+    shadowSize: [41, 41]
+  });
+}
+
 function getFloorOfUser(user: any) {
   const name = (user.zone_name || '').toLowerCase();
   if (name.includes('floor 2') || name.startsWith('2') || name.includes('room 2') || name.includes('suite 2')) return '2';
   if (name.includes('floor 3') || name.startsWith('3') || name.includes('room 3') || name.includes('suite 3')) return '3';
+  
+  // Try to infer from coordinates if zone_name is missing
+  const lat = Number(user.latitude);
+  const lng = Number(user.longitude);
+  // Using Godot coordinates where Y > 0 is roughly Floor 2 in this prototype? Or just default to 1. 
+  // Actually the DB might not have accurate floor mapping, so if role='guest', let's just make them visible on the current floor or floor 1.
   return '1';
 }
 
@@ -271,6 +346,11 @@ export default function Locations() {
   const [showZones, setShowZones] = useState(true);
   const [showRoutes, setShowRoutes] = useState(true);
   const [selectedFloor, setSelectedFloor] = useState('1');
+
+  const { socket } = useSocketStore();
+  const [liveUsers, setLiveUsers] = useState<any[]>([]);
+  const [occupantNavStatuses, setOccupantNavStatuses] = useState<{ [userId: string]: any }>({});
+  const [calculatedRoutes, setCalculatedRoutes] = useState<{ [incidentId: string]: [number, number][] }>({});
 
   // Fetch Zones
   const { data: zones = [], isLoading: loadingZones } = useQuery({
@@ -304,6 +384,111 @@ export default function Locations() {
     refetchInterval: 10000,
   });
 
+  useEffect(() => {
+    if (activeUsers && activeUsers.length > 0) {
+      setLiveUsers(activeUsers);
+    }
+  }, [activeUsers]);
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleLocationUpdate = (data: any) => {
+      setLiveUsers(prev => {
+        const userId = Number(data.userId);
+        const index = prev.findIndex(u => Number(u.user_id || u.id) === userId);
+        const now = new Date().toISOString();
+
+        if (index !== -1) {
+          const updated = [...prev];
+          updated[index] = {
+            ...updated[index],
+            latitude: data.latitude,
+            longitude: data.longitude,
+            recorded_at: now,
+          };
+          return updated;
+        } else {
+          return [...prev, {
+            id: userId,
+            user_id: userId,
+            name: `Occupant #${userId}`,
+            role: 'guest',
+            latitude: data.latitude,
+            longitude: data.longitude,
+            recorded_at: now,
+            user_status: 'evacuating',
+          }];
+        }
+      });
+    };
+
+    const handleNavStatusUpdate = (data: any) => {
+      setOccupantNavStatuses(prev => ({
+        ...prev,
+        [String(data.userId)]: {
+          name: data.name,
+          status: data.status,
+          currentWaypoint: data.currentWaypoint,
+          targetExit: data.targetExit,
+          timestamp: data.timestamp,
+        }
+      }));
+    };
+
+    socket.on('user_location_update', handleLocationUpdate);
+    socket.on('occupant_nav_status', handleNavStatusUpdate);
+
+    return () => {
+      socket.off('user_location_update', handleLocationUpdate);
+      socket.off('occupant_nav_status', handleNavStatusUpdate);
+    };
+  }, [socket]);
+
+  // Calculate proper navigation routes for incidents
+  useEffect(() => {
+    const calcRoutes = async () => {
+      const newRoutes: { [id: string]: [number, number][] } = {};
+      
+      const hazards: Hazard[] = incidents.map((inc: any) => {
+        let x = 0, y = 0;
+        if (inc.latitude && inc.longitude) {
+           const [gx, gy] = latLngToGodot(Number(inc.latitude), Number(inc.longitude));
+           x = gx; y = gy;
+        }
+        const floor = Number(getFloorOfIncident(inc));
+        return { x, y, floor, radius: 5.0 };
+      });
+
+      for (const incident of incidents) {
+        if (!incident.latitude || !incident.longitude) continue;
+        const [incX, incY] = latLngToGodot(Number(incident.latitude), Number(incident.longitude));
+        const floor = getFloorOfIncident(incident);
+        
+        const startNode = findClosestNode(incX, incY, Number(floor));
+        if (startNode) {
+           const route = findShortestPath(startNode.id, hazards);
+           if (route && route.path) {
+             const coords = route.path.map((n: any) => {
+                if (viewMode === 'global') {
+                  const [lat, lng] = godotToLatLng(n.x, n.y);
+                  return [lat, lng] as [number, number];
+                } else {
+                  return godotToSchematic(n.x, n.y);
+                }
+             });
+             newRoutes[incident.id] = coords;
+           }
+        }
+      }
+      setCalculatedRoutes(newRoutes);
+    };
+
+    if (incidents.length > 0) {
+      calcRoutes();
+    }
+  }, [incidents, viewMode]);
+
   useGSAP(() => {
     gsap.from('.anim-panel', {
       y: 20,
@@ -323,9 +508,9 @@ export default function Locations() {
     return center;
   }, [incidents, center]);
 
-  const topLeft = useMemo(() => godotToLatLng(MAP_BOUNDS.xMin, MAP_BOUNDS.yMin), []);
-  const topRight = useMemo(() => godotToLatLng(MAP_BOUNDS.xMax, MAP_BOUNDS.yMin), []);
-  const bottomLeft = useMemo(() => godotToLatLng(MAP_BOUNDS.xMin, MAP_BOUNDS.yMax), []);
+  const topLeft = useMemo(() => godotToLatLng(IMAGE_BOUNDS.xMin, IMAGE_BOUNDS.yMin), []);
+  const topRight = useMemo(() => godotToLatLng(IMAGE_BOUNDS.xMax, IMAGE_BOUNDS.yMin), []);
+  const bottomLeft = useMemo(() => godotToLatLng(IMAGE_BOUNDS.xMin, IMAGE_BOUNDS.yMax), []);
 
   // Map database zones by ID for fast lookup
   const zonesById = useMemo(() => {
@@ -392,14 +577,32 @@ export default function Locations() {
   }, [incidents, zonesById, selectedFloor]);
 
   const filteredUsers = useMemo(() => {
-    return activeUsers.filter((u: any) => {
+    return liveUsers.filter((u: any) => {
       const zone = zonesById[u.zone_id];
       if (zone) {
         return String(zone.floor_number || 1) === selectedFloor;
       }
-      return getFloorOfUser(u) === selectedFloor;
+      const getFloorOfUser = (user: any) => {
+        if (!user.zone_name) {
+          return true;
+        }
+        const zName = String(user.zone_name).toLowerCase();
+        
+        // Explicit floor 2 markers
+        if (zName.includes('20') || zName.includes('floor 2') || zName.includes('level 2')) {
+          return selectedFloor === '2';
+        }
+        // Explicit floor 1 markers
+        if (zName.includes('10') || zName.includes('floor 1') || zName.includes('lobby') || zName.includes('restaurant') || zName.includes('gym') || zName.includes('safe')) {
+          return selectedFloor === '1';
+        }
+        
+        // If not strictly on another floor, just show them so they aren't lost
+        return true;
+      };
+      return true; 
     });
-  }, [activeUsers, zonesById, selectedFloor]);
+  }, [liveUsers, zonesById, selectedFloor]);
 
   const filteredZones = useMemo(() => {
     return zones.filter((z: any) => String(z.floor_number || 1) === selectedFloor);
@@ -416,8 +619,7 @@ export default function Locations() {
           <Paper
             className="anim-panel"
             sx={{
-              p: 2,
-              height: 'calc(100vh - 180px)',
+              height: 'calc(100vh - 120px)',
               minHeight: 500,
               backgroundColor: 'var(--bg-card)',
               border: '1px solid var(--border-medium)',
@@ -490,6 +692,18 @@ export default function Locations() {
 
                 {/* Evacuation Paths to Exit Assembly Areas */}
                 {showRoutes && filteredIncidents.map((incident: any) => {
+                  const pathCoords = calculatedRoutes[incident.id];
+                  if (pathCoords && pathCoords.length > 0) {
+                    return (
+                      <Polyline
+                        key={`paths-${incident.id}`}
+                        positions={pathCoords as any}
+                        pathOptions={{ color: '#2e7d32', weight: 4, dashArray: '6, 12', opacity: 0.9 }}
+                      />
+                    );
+                  }
+                  
+                  // Fallback to straight lines if route not calculated yet
                   const incPos = viewMode === 'global' ? getGeoreferencedLatLng(incident) : getSchematicLatLng(incident);
                   return assemblyPoints.map((exit: any) => {
                     const exitPos = viewMode === 'global' ? [exit.latitude, exit.longitude] as [number, number] : getSchematicLatLng(exit);
@@ -522,17 +736,41 @@ export default function Locations() {
                 {/* Tracked Personnel */}
                 {showPersonnel && filteredUsers.map((user: any) => {
                   const pos = viewMode === 'global' ? getGeoreferencedLatLng(user) : getSchematicLatLng(user);
+                  const navStatus = occupantNavStatuses[String(user.id || user.user_id)];
+                  const safetyStatus = navStatus?.status || user.user_status || 'evacuating';
+                  
                   return (
                     <Marker 
                       key={`user-${user.id}`} 
                       position={pos}
-                      icon={personIcon}
+                      icon={getOccupantIcon(user, navStatus)}
                     >
                       <Popup>
                         <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>{user.name}</Typography>
-                        <Typography variant="body2">Role: {user.role}</Typography>
-                        <Typography variant="body2">Status: <span style={{ color: user.user_status === 'safe' ? '#2e7d32' : '#ed6c02' }}>{user.user_status}</span></Typography>
-                        <Typography variant="caption" color="text.secondary">
+                        <Typography variant="body2">Role: {user.role.toUpperCase()}</Typography>
+                        <Typography variant="body2">
+                          Safety Status: <span style={{ 
+                            fontWeight: 'bold',
+                            color: (safetyStatus === 'reached_exit' || safetyStatus === 'safe') 
+                              ? '#2e7d32' 
+                              : (safetyStatus === 'trapped' || safetyStatus === 'needs_help' || safetyStatus === 'distressed')
+                              ? '#d32f2f'
+                              : '#ed6c02'
+                          }}>
+                            {safetyStatus.replace('_', ' ').toUpperCase()}
+                          </span>
+                        </Typography>
+                        {navStatus?.currentWaypoint && (
+                          <Typography variant="body2">
+                            Current Node: <strong>{navStatus.currentWaypoint}</strong>
+                          </Typography>
+                        )}
+                        {navStatus?.targetExit && (
+                          <Typography variant="body2">
+                            Target Exit: <strong>{navStatus.targetExit}</strong>
+                          </Typography>
+                        )}
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
                           Last Update: {new Date(user.recorded_at).toLocaleTimeString()}
                         </Typography>
                       </Popup>
@@ -637,7 +875,7 @@ export default function Locations() {
         </Grid>
 
         <Grid size={{ xs: 12, lg: 4 }}>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, height: 'calc(100vh - 180px)', overflow: 'auto' }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, height: 'calc(100vh - 120px)', overflow: 'auto' }}>
             <Paper
               className="anim-panel"
               sx={{
@@ -710,6 +948,66 @@ export default function Locations() {
                 ))}
                 {filteredUsers.length === 0 && !loadingUsers && (
                   <Typography variant="body2" color="text.secondary">No active personnel detected on Level {selectedFloor}.</Typography>
+                )}
+              </List>
+            </Paper>
+            <Paper
+              className="anim-panel"
+              sx={{
+                p: 3,
+                backgroundColor: 'var(--bg-card)',
+                border: '1px solid var(--border-medium)',
+                boxShadow: 'var(--shadow-soft)',
+                display: 'flex',
+                flexDirection: 'column',
+                maxHeight: 400,
+                overflow: 'auto',
+              }}
+            >
+              <Typography variant="h6" sx={{ mb: 2 }}>Occupant Evacuation Status Board</Typography>
+              <List disablePadding>
+                {liveUsers.map((u: any) => {
+                  const nav = occupantNavStatuses[String(u.id || u.user_id)];
+                  const safetyStatus = nav?.status || u.user_status || 'evacuating';
+                  
+                  let displayStatus = 'Evacuating';
+                  let statusColor = '#ed6c02'; // Orange for evacuating
+                  if (safetyStatus === 'reached_exit' || safetyStatus === 'safe') {
+                    displayStatus = 'Safe at Assembly Area';
+                    statusColor = '#2e7d32'; // Green
+                  } else if (safetyStatus === 'trapped' || safetyStatus === 'needs_help' || safetyStatus === 'distressed') {
+                    displayStatus = 'Trapped near Hazard Zone';
+                    statusColor = '#d32f2f'; // Red
+                  } else if (nav?.currentWaypoint) {
+                    displayStatus = `Evacuating via ${nav.currentWaypoint}`;
+                  }
+
+                  return (
+                    <ListItem key={u.id || u.user_id} disableGutters sx={{ borderBottom: '1px solid var(--border-subtle)', py: 1 }}>
+                      <ListItemText
+                        primary={<Typography sx={{ fontWeight: 600, fontSize: '0.9rem' }}>{u.name}</Typography>}
+                        secondary={
+                          <Typography variant="caption" color="text.secondary">
+                            Role: {u.role.toUpperCase()} • Last Active: {new Date(u.recorded_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </Typography>
+                        }
+                      />
+                      <Chip
+                        size="small"
+                        label={displayStatus}
+                        sx={{
+                          fontSize: '0.68rem',
+                          fontWeight: 700,
+                          backgroundColor: `${statusColor}15`,
+                          color: statusColor,
+                          border: `1px solid ${statusColor}`,
+                        }}
+                      />
+                    </ListItem>
+                  );
+                })}
+                {liveUsers.length === 0 && (
+                  <Typography variant="body2" color="text.secondary">No active occupants tracked.</Typography>
                 )}
               </List>
             </Paper>

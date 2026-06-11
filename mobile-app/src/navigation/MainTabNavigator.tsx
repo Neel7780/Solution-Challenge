@@ -3,17 +3,20 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { MaterialIcons as Icon } from '@expo/vector-icons';
 import { MainTabParamList } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { useNotifications } from '../context/NotificationContext';
 
 import HomeScreen from '../screens/HomeScreen';
 import StatusScreen from '../screens/StatusScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import TriageScreen from '../screens/TriageScreen';
 import MapScreen from '../screens/MapScreen';
+import AlertsScreen from '../screens/AlertsScreen';
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
 export default function MainTabNavigator() {
   const { user } = useAuth();
+  const { unreadCount } = useNotifications();
   const isResponder = user?.role === 'responder' || user?.role === 'security' || user?.role === 'staff' || user?.role === 'admin' || user?.role === 'org_admin' || user?.role === 'super_admin';
 
   return (
@@ -30,6 +33,8 @@ export default function MainTabNavigator() {
             iconName = 'list-alt';
           } else if (route.name === 'Map') {
             iconName = 'map';
+          } else if (route.name === 'Alerts') {
+            iconName = 'notifications';
           } else if (route.name === 'Profile') {
             iconName = 'person';
           }
@@ -54,6 +59,14 @@ export default function MainTabNavigator() {
             name="Home"
             component={HomeScreen as any}
             options={{ title: 'Crisis Response' }}
+          />
+          <Tab.Screen
+            name="Alerts"
+            component={AlertsScreen as any}
+            options={{ 
+              title: 'Emergency Alerts',
+              tabBarBadge: unreadCount > 0 ? unreadCount : undefined
+            }}
           />
           <Tab.Screen
             name="Status"

@@ -4,35 +4,28 @@
     "slug": "crisis-response-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "splash": {
-      "image": "./assets/splash.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#d32f2f"
-    },
     "assetBundlePatterns": [
       "**/*"
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.crisisresponse.mobile"
+      "bundleIdentifier": "com.crisisresponse.mobile",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#d32f2f"
-      },
       "package": "com.crisisresponse.mobile",
       "permissions": [
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
-        "VIBRATE"
+        "VIBRATE",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
       ]
     },
-    "web": {
-      "favicon": "./assets/favicon.png"
-    },
+    "web": {},
     "plugins": [
       [
         "expo-location",
@@ -42,10 +35,13 @@
       ],
       [
         "expo-notifications",
-        {
-          "sounds": ["./assets/alert.wav"]
-        }
+        {}
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "89e69e47-762a-4508-a7b0-261f177d14ac"
+      }
+    }
   }
 }
