@@ -244,8 +244,7 @@ export const aiPrioritizeTasks = async (req: Request, res: Response) => {
 
     const data = await aiResponse.json();
     let content = data.choices[0].message.content;
-    
-    let updates = [];
+    let updates: any[] = [];
     try {
       const parsed = JSON.parse(content);
       if (Array.isArray(parsed)) updates = parsed;
