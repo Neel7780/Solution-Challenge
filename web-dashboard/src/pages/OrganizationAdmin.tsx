@@ -47,7 +47,20 @@ import {
   FormControl,
 } from '@mui/material';
 
+import { useSocketStore } from '../store/socketStore';
+import { useCrisisStore } from '../store/crisisStore';
+import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
+import L from 'leaflet';
+import markerIcon from 'leaflet/dist/images/marker-icon.png';
+import markerShadow from 'leaflet/dist/images/marker-shadow.png';
 
+let DefaultIcon = L.icon({
+  iconUrl: markerIcon,
+  shadowUrl: markerShadow,
+  iconAnchor: [12, 41]
+});
+L.Marker.prototype.options.icon = DefaultIcon;
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
@@ -55,9 +68,20 @@ export default function OrganizationAdmin() {
   const containerRef = useRef(null);
   const queryClient = useQueryClient();
   const { user, switchContext } = useAuthStore();
-  const [activeTab, setActiveTab] = useState<'properties' | 'personnel' | 'tasks'>(
-    user?.role === 'admin' ? 'personnel' : 'properties'
+  const [activeTab, setActiveTab] = useState<'properties' | 'personnel' | 'tasks' | 'overview'>(
+    'overview'
   );
+  
+  const activeIncident = useCrisisStore((state) => state.activeIncident);
+  
+  // Ensure tasks and personnel load when looking at overview
+  React.useEffect(() => {
+    if (activeTab === 'overview') {
+      queryClient.invalidateQueries({ queryKey: ['org-tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['org-personnel'] });
+    }
+  }, [activeTab]);
+
   const [openAddProperty, setOpenAddProperty] = useState(false);
   const [openAddPersonnel, setOpenAddPersonnel] = useState(false);
   const [openManagePersonnel, setOpenManagePersonnel] = useState(false);
@@ -163,7 +187,7 @@ export default function OrganizationAdmin() {
       const res = await axios.get(`${API_URL}/users`);
       return res.data.users;
     },
-    enabled: activeTab === 'personnel' || activeTab === 'tasks' || openAddTask || openManageTask,
+    enabled: activeTab === 'personnel' || activeTab === 'tasks' || activeTab === 'overview' || openAddTask || openManageTask,
   });
 
   // Fetch tasks belonging to this organization
@@ -173,7 +197,7 @@ export default function OrganizationAdmin() {
       const res = await axios.get(`${API_URL}/tasks`);
       return res.data.tasks;
     },
-    enabled: activeTab === 'tasks',
+    enabled: activeTab === 'tasks' || activeTab === 'overview',
   });
 
   const createTaskMutation = useMutation({
@@ -222,6 +246,16 @@ export default function OrganizationAdmin() {
     },
   });
 
+  const aiPrioritizeTasksMutation = useMutation({
+    mutationFn: () => axios.post(`${API_URL}/tasks/ai-prioritize`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['org-tasks'] });
+    },
+    onError: (error: any) => {
+      console.error('Failed to auto-sort tasks with AI:', error);
+    },
+  });
+
   useGSAP(() => {
 
     gsap.from('.anim-item', {
@@ -253,55 +287,14 @@ export default function OrganizationAdmin() {
               ? 'Centralized command for all regional properties' 
               : activeTab === 'personnel' 
               ? (user?.role === 'admin' ? 'Personnel management for your property' : 'Personnel management for entire organization')
+              : activeTab === 'overview'
+              ? 'Tactical command center & AI verification'
               : 'Emergency task dispatch and tracking log'}
-          </Typography>
-        </Box>
-        <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
-          <Box sx={{ 
-            backgroundColor: 'rgba(255,255,255,0.02)', 
-            borderRadius: 1, 
-            p: 0.5,
-            border: '1px solid rgba(255,255,255,0.05)'
-          }}>
-            {user?.role !== 'admin' && (
-              <Button 
-                size="small" 
-                onClick={() => setActiveTab('properties')}
-                sx={{ 
-                  fontSize: '0.65rem', px: 2, py: 0.5, minWidth: 0,
-                  color: activeTab === 'properties' ? '#fff' : 'var(--text-muted)',
-                  backgroundColor: activeTab === 'properties' ? 'rgba(255,255,255,0.05)' : 'transparent',
-                  '&:hover': { backgroundColor: 'rgba(255,255,255,0.08)' }
-                }}
-              >
-                Properties
-              </Button>
-            )}
-            <Button 
-              size="small" 
-              onClick={() => setActiveTab('personnel')}
-              sx={{ 
-                fontSize: '0.65rem', px: 2, py: 0.5, minWidth: 0,
-                color: activeTab === 'personnel' ? '#fff' : 'var(--text-muted)',
-                backgroundColor: activeTab === 'personnel' ? 'rgba(255,255,255,0.05)' : 'transparent',
-                '&:hover': { backgroundColor: 'rgba(255,255,255,0.08)' }
-              }}
-            >
-              Personnel
-            </Button>
-            <Button 
-              size="small" 
-              onClick={() => setActiveTab('tasks')}
-              sx={{ 
-                fontSize: '0.65rem', px: 2, py: 0.5, minWidth: 0,
-                color: activeTab === 'tasks' ? '#fff' : 'var(--text-muted)',
-                backgroundColor: activeTab === 'tasks' ? 'rgba(255,255,255,0.05)' : 'transparent',
-                '&:hover': { backgroundColor: 'rgba(255,255,255,0.08)' }
-              }}
-            >
-              Tasks
-            </Button>
-          </Box>
+          </p>
+        </div>
+        <div style={{ display: "flex", flexDirection: "row", gap: "16px", alignItems: "center" }}>
+          <div style={{ display: 'none' }}></div>
+          <div style={{ display: 'none' }}>
           {activeTab === 'properties' ? (
             <Button
               variant="outlined"
@@ -336,8 +329,9 @@ export default function OrganizationAdmin() {
               Assign Task
             </Button>
           )}
-        </Stack>
-      </Box>
+        </div>
+      </div>
+      </div>
 
       {/* Add Property Dialog */}
       <Dialog open={openAddProperty} onClose={() => setOpenAddProperty(false)} maxWidth="xs" fullWidth>
@@ -594,57 +588,174 @@ export default function OrganizationAdmin() {
 
 
 
-      {/* Cross-Property Stats */}
-      <Grid container spacing={2} sx={{ mb: 4 }}>
-        <Grid size={{ xs: 12, sm: 4 }} className="anim-item">
-          <Paper sx={{ p: 2, background: 'rgba(255,255,255,0.015)', border: '1px solid rgba(255,255,255,0.05)' }}>
-            <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
-              <Box>
-                <Typography variant="overline" sx={{ color: 'var(--text-muted)', fontSize: '0.6rem' }}>
-                  {user?.role === 'admin' ? 'Active Property' : 'Total Properties'}
-                </Typography>
-                <Typography sx={{ fontSize: user?.role === 'admin' ? '1.1rem' : '1.8rem', fontWeight: 200, textTransform: 'uppercase' }}>
-                  {user?.role === 'admin' ? (user?.property_name || 'My Property') : properties.length}
-                </Typography>
-              </Box>
-              <PropertyIcon sx={{ color: 'var(--accent-blue)', opacity: 0.5 }} />
-            </Stack>
-          </Paper>
-        </Grid>
-        <Grid size={{ xs: 12, sm: 4 }} className="anim-item">
-          <Paper sx={{ p: 2, background: 'rgba(255,255,255,0.015)', border: '1px solid rgba(255,255,255,0.05)' }}>
-            <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
-              <Box>
-                <Typography variant="overline" sx={{ color: 'var(--text-muted)', fontSize: '0.6rem' }}>Active Incidents</Typography>
-                <Typography sx={{ fontSize: '1.8rem', fontWeight: 200, color: 'var(--accent-red)' }}>
-                  {user?.role === 'admin' 
-                    ? (properties.find((p: any) => Number(p.id) === Number(user?.property_id))?.active_incidents || 0)
-                    : properties.reduce((acc: number, p: any) => acc + (p.active_incidents || 0), 0)}
-                </Typography>
-              </Box>
-              <WarningIcon sx={{ color: 'var(--accent-red)', opacity: 0.5 }} />
-            </Stack>
-          </Paper>
-        </Grid>
-        <Grid size={{ xs: 12, sm: 4 }} className="anim-item">
-          <Paper sx={{ p: 2, background: 'rgba(255,255,255,0.015)', border: '1px solid rgba(255,255,255,0.05)' }}>
-            <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
-              <Box>
-                <Typography variant="overline" sx={{ color: 'var(--text-muted)', fontSize: '0.6rem' }}>Total Personnel</Typography>
-                <Typography sx={{ fontSize: '1.8rem', fontWeight: 200 }}>
-                   {personnel.length || properties.reduce((acc: number, p: any) => acc + (p.staff_count || 0), 0)}
-                </Typography>
-              </Box>
-              <PeopleIcon sx={{ color: 'var(--accent-green)', opacity: 0.5 }} />
-            </Stack>
-          </Paper>
-        </Grid>
-      </Grid>
+      {/* Live Safety Stats Priority Overview */}
+      <div style={{ display: "flex", flexWrap: "wrap", margin: "-8px", width: "calc(100% + 16px)", marginBottom: "32px" }}>
+        <div className="anim-item" style={{ width: "33.333%", padding: "8px" }}>
+          <div style={{ padding: "16px", background: "var(--gp-card-bg)", border: "1px solid var(--gp-border)", borderRadius: "1.5rem" }}>
+            <div style={{ display: "flex", flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <p style={{ color: "var(--gp-text-secondary)", fontSize: "0.6rem", textTransform: "uppercase", margin: 0 }}>
+                  Total People
+                </p>
+                <p style={{ fontSize: "1.8rem", fontWeight: 200, textTransform: "uppercase", color: "var(--gp-text-primary)", margin: 0 }}>
+                  {personnel.length || 0}
+                </p>
+              </div>
+              <PeopleIcon sx={{ color: 'var(--accent-blue)', opacity: 0.5 }} />
+            </div>
+          </div>
+        </div>
+        <div className="anim-item" style={{ width: "33.333%", padding: "8px" }}>
+          <div style={{ padding: "16px", background: "var(--gp-card-bg)", border: "1px solid var(--gp-border)", borderRadius: "1.5rem" }}>
+            <div style={{ display: "flex", flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <p style={{ color: "var(--gp-text-secondary)", fontSize: "0.6rem", textTransform: "uppercase", margin: 0 }}>Safety Status (Guests)</p>
+                <p style={{ fontSize: "1.8rem", fontWeight: 200, color: activeIncident ? "var(--accent-red)" : "var(--accent-green)", margin: 0 }}>
+                  {activeIncident ? `${personnel.filter((p:any) => p.role === 'guest' && p.status === 'active').length} EVACUATING` : 'ALL SAFE'}
+                </p>
+              </div>
+              <GuestIcon sx={{ color: activeIncident ? 'var(--accent-red)' : 'var(--accent-green)', opacity: 0.5 }} />
+            </div>
+          </div>
+        </div>
+        <div className="anim-item" style={{ width: "33.333%", padding: "8px" }}>
+          <div style={{ padding: "16px", background: "var(--gp-card-bg)", border: "1px solid var(--gp-border)", borderRadius: "1.5rem" }}>
+            <div style={{ display: "flex", flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <p style={{ color: "var(--gp-text-secondary)", fontSize: "0.6rem", textTransform: "uppercase", margin: 0 }}>SOS / Personnel Status</p>
+                <p style={{ fontSize: "1.8rem", fontWeight: 200, color: tasks.filter((t:any) => t.priority === 'urgent' && t.status !== 'completed').length > 0 ? '#ef4444' : '#f59e0b', margin: 0 }}>
+                  {tasks.filter((t:any) => t.priority === 'urgent' && t.status !== 'completed').length} URGENT
+                </p>
+              </div>
+              <WarningIcon sx={{ color: tasks.filter((t:any) => t.priority === 'urgent' && t.status !== 'completed').length > 0 ? '#ef4444' : '#f59e0b', opacity: 0.5 }} />
+            </div>
+          </div>
+        </div>
+      </div>
 
-      {/* Property/Personnel Roster */}
-      <Paper className="anim-item" sx={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.04)', borderRadius: 1 }}>
-        <TableContainer>
-          <Table size="small">
+      {/* Property/Personnel/AI Roster */}
+      {activeTab === 'overview' ? (
+        <div className="anim-item" style={{ display: 'grid', gridTemplateColumns: '2fr 1.5fr', gap: '24px' }}>
+          <div style={{ background: '#111', borderRadius: '12px', padding: '24px', border: '1px solid #333' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h3 style={{ margin: 0, color: '#fff', fontSize: '1.2rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Live Tactical Map</h3>
+              <Chip label="LIVE SENSORS LINKED" size="small" sx={{ background: 'rgba(16,185,129,0.1)', color: '#10b981', fontWeight: 800, borderRadius: '4px' }} />
+            </div>
+            <div style={{ height: '500px', width: '100%', borderRadius: '8px', overflow: 'hidden', border: '1px solid #222' }}>
+              <MapContainer center={[40.7128, -74.0060]} zoom={18} style={{ height: '100%', width: '100%' }}>
+                <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" attribution="&copy; OpenStreetMap contributors" />
+                
+                {activeIncident && (
+                  <Marker position={[40.7129, -74.0061]}>
+                    <Popup>🔥 EMERGENCY: {activeIncident.incident_type.toUpperCase()}</Popup>
+                  </Marker>
+                )}
+
+                {personnel.filter((p: any) => p.role === 'guest' && p.status === 'active').map((guest: any, idx: number) => (
+                  <Marker key={`guest-${guest.id}`} position={[40.7128, -74.0060 + (idx * 0.0001)]}>
+                    <Popup>Guest {guest.name}<br/>Room: {guest.room_number || 'N/A'}<br/>Status: TRACKING</Popup>
+                  </Marker>
+                ))}
+
+                {tasks.filter((t: any) => t.status === 'in_progress' || t.status === 'pending').map((task: any, idx: number) => (
+                  <Marker key={`staff-${task.id}`} position={[40.7127, -74.0059 + (idx * 0.0001)]}>
+                    <Popup>👮 Staff: {task.assigned_to_name || 'Unassigned'}<br/>Task: {task.description}</Popup>
+                  </Marker>
+                ))}
+              </MapContainer>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', height: '580px' }}>
+            {/* Verdict Box */}
+            <div style={{ background: '#111', borderRadius: '12px', padding: '20px', border: '1px solid #333', flexShrink: 0 }}>
+              <h3 style={{ margin: 0, color: '#ef4444', fontSize: '1rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '12px' }}>
+                AI Council Verdict
+              </h3>
+              {activeIncident ? (
+                <div style={{ background: '#000', padding: '12px', borderRadius: '8px', borderLeft: `4px solid ${activeIncident.severity === 'critical' ? '#ef4444' : '#f59e0b'}` }}>
+                  <p style={{ margin: 0, color: '#fff', fontSize: '1rem', fontWeight: 600 }}>{activeIncident.mass_alert_message}</p>
+                  <p style={{ margin: '4px 0 0 0', color: '#ccc', fontSize: '0.85rem' }}>{activeIncident.description}</p>
+                  <div style={{ marginTop: '8px', display: 'flex', gap: '8px' }}>
+                    <Chip size="small" label={`SEVERITY: ${activeIncident.severity?.toUpperCase() || 'CRITICAL'}`} sx={{ background: '#333', color: '#fff', borderRadius: '4px', fontSize: '0.7rem' }}/>
+                    <Chip size="small" label="AUTHORITIES DISPATCHED" sx={{ background: 'rgba(239,68,68,0.2)', color: '#ef4444', borderRadius: '4px', fontWeight: 'bold', fontSize: '0.7rem' }}/>
+                  </div>
+                </div>
+              ) : (
+                <p style={{ color: '#666', margin: 0, fontSize: '0.9rem' }}>Waiting for Backend telemetry...</p>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', gap: '24px', flex: 1, minHeight: 0 }}>
+              {/* Priority Queue (Urgent Tasks / Immediates) */}
+              <div style={{ background: '#111', borderRadius: '12px', padding: '20px', border: '1px solid #ef4444', flex: 1, display: 'flex', flexDirection: 'column' }}>
+                <h3 style={{ margin: 0, color: '#ef4444', fontSize: '0.95rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ width: '8px', height: '8px', background: '#ef4444', borderRadius: '50%', animation: 'pulse-bg 1s infinite alternate' }}></span>
+                  Priority Queue (Immediates)
+                  <Button 
+                    size="small" 
+                    onClick={() => aiPrioritizeTasksMutation.mutate()}
+                    disabled={aiPrioritizeTasksMutation.isPending}
+                    sx={{ ml: 'auto', background: 'var(--accent-blue)', color: '#fff', fontSize: '0.65rem', fontWeight: 'bold', '&:hover': { background: '#2563eb' } }}>
+                    {aiPrioritizeTasksMutation.isPending ? 'Sorting...' : 'AI Auto-Sort'}
+                  </Button>
+                </h3>
+                <div style={{ overflowY: 'auto', flex: 1, paddingRight: '8px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {tasks.filter((t: any) => t.priority === 'urgent' && t.status !== 'completed').map((task: any, i: number) => (
+                    <div key={i} style={{ background: 'rgba(239, 68, 68, 0.1)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                        <strong style={{ color: '#ef4444', fontSize: '0.85rem' }}>{task.assigned_to_name || 'UNASSIGNED'}</strong>
+                        <span style={{ color: '#ef4444', fontSize: '0.75rem', fontWeight: 'bold' }}>URGENT</span>
+                      </div>
+                      <p style={{ color: '#fff', fontSize: '0.8rem', margin: 0 }}>{task.description}</p>
+                    </div>
+                  ))}
+                  {tasks.filter((t: any) => t.priority === 'urgent' && t.status !== 'completed').length === 0 && (
+                    <p style={{ color: '#666', fontSize: '0.85rem', margin: 0 }}>No immediate actions pending.</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Full Live Roster */}
+              <div style={{ background: '#111', borderRadius: '12px', padding: '20px', border: '1px solid #333', flex: 1.5, display: 'flex', flexDirection: 'column' }}>
+                <h3 style={{ margin: 0, color: '#3b82f6', fontSize: '0.95rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '12px' }}>
+                  Live Roster & Tracking
+                </h3>
+                <div style={{ overflowY: 'auto', flex: 1, paddingRight: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {personnel.map((p: any, i: number) => {
+                    let statusColor = '#10b981';
+                    let statusText = 'SAFE';
+                    if (p.role === 'guest') {
+                      if (p.status === 'inactive') { statusColor = '#666'; statusText = 'CHECKED OUT'; }
+                      else if (activeIncident) { statusColor = '#f59e0b'; statusText = 'EVACUATING'; }
+                    } else {
+                      statusColor = '#3b82f6'; statusText = 'ACTIVE DUTY';
+                      // If they have an active task
+                      if (tasks.some((t:any) => t.assigned_to === p.id && t.status !== 'completed')) {
+                        statusText = 'ON MISSION';
+                        statusColor = '#8b5cf6';
+                      }
+                    }
+
+                    return (
+                      <div key={i} style={{ background: '#000', padding: '8px 12px', borderRadius: '6px', border: '1px solid #222', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <strong style={{ color: '#fff', fontSize: '0.85rem', display: 'block' }}>{p.name}</strong>
+                          <span style={{ color: '#888', fontSize: '0.75rem' }}>{p.role.toUpperCase()} {p.room_number ? `• Rm ${p.room_number}` : ''}</span>
+                        </div>
+                        <Chip size="small" label={statusText} sx={{ background: `rgba(${statusColor === '#ef4444' ? '239,68,68' : statusColor === '#f59e0b' ? '245,158,11' : statusColor === '#10b981' ? '16,185,129' : statusColor === '#8b5cf6' ? '139,92,246' : statusColor === '#3b82f6' ? '59,130,246' : '100,100,100'}, 0.2)`, color: statusColor, fontSize: '0.65rem', height: '20px', fontWeight: 'bold' }} />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="anim-item" style={{ background: "var(--gp-card-bg)", border: "1px solid var(--gp-border)", borderRadius: "1.5rem", padding: "1.5rem" }}>
+          <TableContainer>
+            <Table size="small">
             {activeTab === 'properties' ? (
               <>
                 <TableHead>
@@ -850,7 +961,8 @@ export default function OrganizationAdmin() {
             )}
           </Table>
         </TableContainer>
-      </Paper>
+      </div>
+      )}
 
       {/* Assign Task Dialog */}
       <Dialog open={openAddTask} onClose={() => setOpenAddTask(false)} maxWidth="xs" fullWidth>

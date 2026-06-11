@@ -1,0 +1,1041 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CrisisRespond — AI Evacuation Visualizer</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg-primary: #0a0e1a;
+            --bg-secondary: #111827;
+            --bg-card: #1a1f35;
+            --bg-card-hover: #222845;
+            --accent: #6366f1;
+            --accent-glow: rgba(99, 102, 241, 0.3);
+            --danger: #ef4444;
+            --danger-glow: rgba(239, 68, 68, 0.4);
+            --warning: #f59e0b;
+            --success: #10b981;
+            --success-glow: rgba(16, 185, 129, 0.3);
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --border: #1e293b;
+            --you-color: #a855f7;
+            --you-glow: rgba(168, 85, 247, 0.5);
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-card) 100%);
+            border-bottom: 1px solid var(--border);
+            padding: 16px 32px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            backdrop-filter: blur(20px);
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .logo {
+            font-size: 22px;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--accent), #a855f7);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -0.5px;
+        }
+
+        .status-badge {
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            animation: pulse-badge 2s infinite;
+        }
+
+        .status-badge.danger {
+            background: rgba(239, 68, 68, 0.15);
+            color: var(--danger);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        .status-badge.safe {
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--success);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        @keyframes pulse-badge {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            padding: 8px 18px;
+            border-radius: 8px;
+            border: none;
+            font-family: 'Inter', sans-serif;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #dc2626, #ef4444);
+            color: white;
+        }
+
+        .btn-danger:hover {
+            box-shadow: 0 0 20px var(--danger-glow);
+            transform: translateY(-1px);
+        }
+
+        .btn-reset {
+            background: var(--bg-card);
+            color: var(--text-secondary);
+            border: 1px solid var(--border);
+        }
+
+        .btn-reset:hover {
+            background: var(--bg-card-hover);
+            color: var(--text-primary);
+        }
+
+        /* Main Layout */
+        .main {
+            display: grid;
+            grid-template-columns: 1fr 360px;
+            gap: 0;
+            height: calc(100vh - 65px);
+        }
+
+        /* Floor Map Area */
+        .map-area {
+            padding: 24px;
+            overflow-y: auto;
+        }
+
+        .floor-selector {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+
+        .floor-tab {
+            padding: 10px 24px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: var(--bg-card);
+            color: var(--text-secondary);
+            font-family: 'Inter', sans-serif;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .floor-tab.active {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+            box-shadow: 0 0 20px var(--accent-glow);
+        }
+
+        .floor-tab.has-fire {
+            border-color: var(--danger);
+            color: var(--danger);
+            animation: pulse-badge 1.5s infinite;
+        }
+
+        .floor-tab.has-fire.active {
+            background: var(--danger);
+            color: white;
+            box-shadow: 0 0 20px var(--danger-glow);
+        }
+
+        /* Floor Map SVG */
+        .floor-map {
+            background: var(--bg-secondary);
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            width: 100%;
+            aspect-ratio: 16/9;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .floor-map svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Section styling */
+        .section-rect {
+            stroke-width: 2;
+            rx: 8;
+            ry: 8;
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+
+        .section-rect.safe {
+            fill: rgba(16, 185, 129, 0.08);
+            stroke: rgba(16, 185, 129, 0.3);
+        }
+
+        .section-rect.safe:hover {
+            fill: rgba(16, 185, 129, 0.15);
+        }
+
+        .section-rect.fire {
+            fill: rgba(239, 68, 68, 0.12);
+            stroke: rgba(239, 68, 68, 0.6);
+            animation: fire-pulse 1.5s infinite;
+        }
+
+        @keyframes fire-pulse {
+            0%, 100% { fill: rgba(239, 68, 68, 0.12); }
+            50% { fill: rgba(239, 68, 68, 0.25); }
+        }
+
+        .section-label {
+            fill: var(--text-primary);
+            font-size: 14px;
+            font-weight: 700;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .section-sublabel {
+            fill: var(--text-muted);
+            font-size: 11px;
+            font-family: 'Inter', sans-serif;
+        }
+
+        /* Rooms */
+        .room-rect {
+            fill: rgba(99, 102, 241, 0.1);
+            stroke: rgba(99, 102, 241, 0.25);
+            stroke-width: 1;
+            rx: 4;
+            ry: 4;
+        }
+
+        .room-label {
+            fill: var(--text-secondary);
+            font-size: 11px;
+            font-weight: 500;
+            font-family: 'Inter', sans-serif;
+            text-anchor: middle;
+            dominant-baseline: central;
+        }
+
+        /* Exit markers */
+        .exit-marker {
+            transition: all 0.3s;
+        }
+
+        .exit-icon {
+            stroke-width: 2;
+            rx: 4;
+            ry: 4;
+        }
+
+        .exit-icon.clear {
+            fill: rgba(16, 185, 129, 0.2);
+            stroke: var(--success);
+        }
+
+        .exit-icon.blocked {
+            fill: rgba(239, 68, 68, 0.2);
+            stroke: var(--danger);
+            animation: fire-pulse 1s infinite;
+        }
+
+        .exit-label {
+            font-size: 10px;
+            font-weight: 600;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .exit-label.clear { fill: var(--success); }
+        .exit-label.blocked { fill: var(--danger); }
+
+        /* Guest dots */
+        .guest-dot {
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+
+        .guest-dot.normal {
+            fill: var(--accent);
+            filter: drop-shadow(0 0 4px var(--accent-glow));
+        }
+
+        .guest-dot.danger {
+            fill: var(--danger);
+            filter: drop-shadow(0 0 6px var(--danger-glow));
+            animation: pulse-dot 1s infinite;
+        }
+
+        .guest-dot.you {
+            fill: var(--you-color);
+            filter: drop-shadow(0 0 10px var(--you-glow));
+            animation: pulse-you 1.5s infinite;
+        }
+
+        @keyframes pulse-dot {
+            0%, 100% { r: 7; }
+            50% { r: 10; }
+        }
+
+        @keyframes pulse-you {
+            0%, 100% { r: 9; opacity: 1; }
+            50% { r: 13; opacity: 0.8; }
+        }
+
+        .guest-label {
+            font-size: 10px;
+            font-weight: 600;
+            font-family: 'Inter', sans-serif;
+            fill: var(--text-primary);
+        }
+
+        /* Route lines */
+        .route-line {
+            stroke-width: 3;
+            fill: none;
+            stroke-dasharray: 8, 4;
+            animation: dash-flow 0.8s linear infinite;
+        }
+
+        .route-line.normal {
+            stroke: var(--success);
+            opacity: 0.5;
+        }
+
+        .route-line.you {
+            stroke: var(--you-color);
+            opacity: 0.9;
+            stroke-width: 4;
+            filter: drop-shadow(0 0 6px var(--you-glow));
+        }
+
+        @keyframes dash-flow {
+            to { stroke-dashoffset: -12; }
+        }
+
+        /* Fire effect */
+        .fire-icon {
+            font-size: 28px;
+            animation: fire-flicker 0.5s infinite alternate;
+        }
+
+        @keyframes fire-flicker {
+            0% { opacity: 0.7; transform: scale(1); }
+            100% { opacity: 1; transform: scale(1.1); }
+        }
+
+        /* Sidebar */
+        .sidebar {
+            background: var(--bg-secondary);
+            border-left: 1px solid var(--border);
+            overflow-y: auto;
+            padding: 20px;
+        }
+
+        .sidebar-title {
+            font-size: 13px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+        }
+
+        /* Your Card */
+        .you-card {
+            background: linear-gradient(135deg, rgba(168, 85, 247, 0.12), rgba(99, 102, 241, 0.08));
+            border: 1px solid rgba(168, 85, 247, 0.3);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 20px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .you-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--you-color), var(--accent));
+        }
+
+        .you-card .you-name {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--you-color);
+            margin-bottom: 4px;
+        }
+
+        .you-card .you-room {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-bottom: 12px;
+        }
+
+        .you-card .you-route {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            padding: 12px;
+        }
+
+        .you-card .route-label {
+            font-size: 11px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 6px;
+        }
+
+        .you-card .route-exit {
+            font-size: 18px;
+            font-weight: 800;
+            color: var(--success);
+        }
+
+        .you-card .route-type {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        .btn-sos {
+            background: linear-gradient(135deg, #ef4444, #b91c1c);
+            color: white;
+            border: 1px solid rgba(239, 68, 68, 0.5);
+            width: 100%;
+            margin-top: 10px;
+            font-weight: 700;
+        }
+
+        .btn-sos:hover {
+            box-shadow: 0 0 15px var(--danger-glow);
+        }
+
+        /* AI Summary Card */
+        .ai-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+
+        .ai-card .ai-title {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--warning);
+            margin-bottom: 8px;
+        }
+
+        .ai-card .ai-reasoning {
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+            font-style: italic;
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 14px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: 800;
+        }
+
+        .stat-value.danger { color: var(--danger); }
+        .stat-value.safe { color: var(--success); }
+        .stat-value.warning { color: var(--warning); }
+        .stat-value.accent { color: var(--accent); }
+
+        .stat-label {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        /* Guest List */
+        .guest-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .guest-item {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 12px 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.2s;
+        }
+
+        .guest-item:hover {
+            background: var(--bg-card-hover);
+            border-color: var(--accent);
+        }
+
+        .guest-item.you-item {
+            border-color: rgba(168, 85, 247, 0.4);
+            background: rgba(168, 85, 247, 0.05);
+        }
+
+        .guest-info .g-name {
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .guest-info .g-room {
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        .guest-exit {
+            text-align: right;
+        }
+
+        .guest-exit .g-exit {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--success);
+        }
+
+        .guest-exit .g-status {
+            font-size: 18px;
+        }
+
+        /* Simulate Panel */
+        .simulate-panel {
+            margin-top: 20px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+        }
+
+        .simulate-panel select {
+            width: 100%;
+            padding: 8px 12px;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-family: 'Inter', sans-serif;
+            font-size: 13px;
+            margin-bottom: 10px;
+            cursor: pointer;
+        }
+
+        .simulate-panel .btn {
+            width: 100%;
+        }
+
+        /* Connection indicator */
+        .connection-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 6px;
+        }
+
+        .connection-dot.connected { background: var(--success); box-shadow: 0 0 6px var(--success-glow); }
+        .connection-dot.disconnected { background: var(--danger); }
+
+        .connection-text {
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <div class="header-left">
+        <span class="logo">CrisisRespond</span>
+        <span class="status-badge safe" id="statusBadge">ALL CLEAR</span>
+        <span class="connection-text"><span class="connection-dot disconnected" id="connDot"></span><span id="connText">Connecting...</span></span>
+    </div>
+    <div class="header-actions">
+        <button class="btn btn-reset" onclick="resetScenario()">🔄 Reset</button>
+    </div>
+</div>
+
+<div class="main">
+    <div class="map-area">
+        <div class="floor-selector" id="floorSelector"></div>
+        <div class="floor-map" id="floorMap"></div>
+    </div>
+
+    <div class="sidebar">
+        <!-- Your Card -->
+        <div class="you-card" id="youCard">
+            <div class="you-name">Loading...</div>
+        </div>
+
+        <!-- Council Verdict -->
+        <div class="sidebar-title">⚖️ Council Verdict</div>
+        <div class="ai-card" id="aiCard">
+            <div class="ai-title">Synthesizer Agent</div>
+            <div class="ai-reasoning">Waiting for consensus...</div>
+        </div>
+
+        <!-- Personnel Tasks -->
+        <div class="sidebar-title">👮 Personnel Assignments</div>
+        <div class="guest-list" id="personnelList" style="margin-bottom: 20px;"></div>
+
+        <!-- Stats -->
+        <div class="sidebar-title">📊 Stats</div>
+        <div class="stats-grid" id="statsGrid"></div>
+
+        <!-- Guest List -->
+        <div class="sidebar-title">👥 All Guests & SOS</div>
+        <div class="guest-list" id="guestList"></div>
+
+        <!-- Simulate Panel -->
+        <div class="simulate-panel">
+            <div class="sidebar-title">🔥 Simulate Fire</div>
+            <select id="simSection"></select>
+            <button class="btn btn-danger" onclick="simulateFire()">🔥 Trigger Fire</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let state = null;
+    let currentFloor = 2;
+    let ws = null;
+
+    // Layout constants for SVG
+    const MAP = { width: 900, height: 500, pad: 40 };
+
+    // Section visual positions per floor (x, y, w, h)
+    function getSectionLayout(floorData) {
+        const sections = floorData.sections;
+        const w = (MAP.width - MAP.pad * 3) / 2;
+        const h = MAP.height - MAP.pad * 2;
+        return sections.map((s, i) => ({
+            ...s,
+            x: MAP.pad + i * (w + MAP.pad),
+            y: MAP.pad,
+            w: w,
+            h: h
+        }));
+    }
+
+    // Room positions within a section
+    function getRoomPositions(section, layout) {
+        const rooms = section.rooms;
+        const cols = 2;
+        const rows = Math.ceil(rooms.length / cols);
+        const roomW = 70;
+        const roomH = 40;
+        const gapX = 15;
+        const gapY = 15;
+        const startX = layout.x + (layout.w - (cols * roomW + (cols-1) * gapX)) / 2;
+        const startY = layout.y + 60;
+
+        return rooms.map((r, i) => ({
+            id: r,
+            x: startX + (i % cols) * (roomW + gapX),
+            y: startY + Math.floor(i / cols) * (roomH + gapY),
+            w: roomW,
+            h: roomH
+        }));
+    }
+
+    // Exit positions
+    function getExitPositions(section, layout, hotelExits, blockedSet) {
+        const exits = [];
+        const primaryExit = section.primary_exit;
+        const secondaryExit = section.secondary_exit;
+
+        exits.push({
+            id: primaryExit,
+            name: hotelExits[primaryExit]?.name || primaryExit,
+            x: layout.x + 30,
+            y: layout.y + layout.h - 40,
+            blocked: blockedSet.has(primaryExit)
+        });
+
+        exits.push({
+            id: secondaryExit,
+            name: hotelExits[secondaryExit]?.name || secondaryExit,
+            x: layout.x + layout.w - 30,
+            y: layout.y + layout.h - 40,
+            blocked: blockedSet.has(secondaryExit)
+        });
+
+        return exits;
+    }
+
+    function renderFloorMap() {
+        if (!state) return;
+
+        const floorData = state.hotel.floors.find(f => f.floor === currentFloor);
+        if (!floorData) return;
+
+        const fireSet = new Set(state.classification.fire_sections);
+        const blockedSet = new Set(state.classification.blocked_exits);
+        const layouts = getSectionLayout(floorData);
+
+        let svg = `<svg viewBox="0 0 ${MAP.width} ${MAP.height}" xmlns="http://www.w3.org/2000/svg">`;
+
+        // Grid pattern
+        svg += `<defs>
+            <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+                <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
+            </pattern>
+        </defs>
+        <rect width="100%" height="100%" fill="url(#grid)"/>`;
+
+        // Floor label
+        svg += `<text x="${MAP.width/2}" y="22" text-anchor="middle" fill="#64748b" font-size="13" font-weight="700" font-family="Inter">FLOOR ${currentFloor}</text>`;
+
+        // Draw sections
+        layouts.forEach((layout, i) => {
+            const section = floorData.sections[i];
+            const hasFire = fireSet.has(section.id);
+            const cssClass = hasFire ? 'fire' : 'safe';
+
+            // Section background
+            svg += `<rect class="section-rect ${cssClass}" x="${layout.x}" y="${layout.y}" width="${layout.w}" height="${layout.h}" />`;
+
+            // Section label
+            const labelSuffix = hasFire ? ' 🔥 FIRE' : '';
+            svg += `<text class="section-label" x="${layout.x + layout.w/2}" y="${layout.y + 28}" text-anchor="middle">${section.name}${labelSuffix}</text>`;
+            svg += `<text class="section-sublabel" x="${layout.x + layout.w/2}" y="${layout.y + 44}" text-anchor="middle">${section.id}</text>`;
+
+            // Draw rooms
+            const roomPositions = getRoomPositions(section, layout);
+            roomPositions.forEach(room => {
+                svg += `<rect class="room-rect" x="${room.x}" y="${room.y}" width="${room.w}" height="${room.h}" />`;
+                svg += `<text class="room-label" x="${room.x + room.w/2}" y="${room.y + room.h/2}">${room.id}</text>`;
+            });
+
+            // Draw exits
+            const exitPositions = getExitPositions(section, layout, state.hotel.exits, blockedSet);
+            exitPositions.forEach(exit => {
+                const cls = exit.blocked ? 'blocked' : 'clear';
+                const icon = exit.blocked ? '✕' : '🚪';
+                svg += `<rect class="exit-icon ${cls}" x="${exit.x - 18}" y="${exit.y - 12}" width="36" height="24" />`;
+                svg += `<text class="exit-label ${cls}" x="${exit.x}" y="${exit.y + 4}" text-anchor="middle" font-size="11">${icon} ${exit.id}</text>`;
+                svg += `<text x="${exit.x}" y="${exit.y + 20}" text-anchor="middle" fill="#64748b" font-size="9" font-family="Inter">${exit.name}</text>`;
+            });
+
+            // Draw guests in this section on this floor
+            const sectionGuests = state.guestRoutes.filter(g => g.section === section.id);
+            sectionGuests.forEach((guest, gi) => {
+                // Find room position
+                const roomPos = roomPositions.find(r => r.id === guest.room);
+                if (!roomPos) return;
+
+                const gx = roomPos.x + roomPos.w / 2;
+                const gy = roomPos.y + roomPos.h + 18;
+                const isYou = state.hotel.guests.find(g2 => g2.id === guest.guest_id)?.is_you;
+                const dotClass = isYou ? 'you' : (guest.in_danger ? 'danger' : 'normal');
+
+                // Draw route line from guest to their assigned exit
+                const plan = state.evacuationPlan.find(p => p.section_id === section.id);
+                if (plan) {
+                    // Find the exit position
+                    const targetExit = exitPositions.find(e => e.id === plan.assigned_exit);
+                    if (!targetExit) {
+                        // Exit is in another section — draw to section edge
+                        const edgeX = layout.x + layout.w;
+                        const edgeY = layout.y + layout.h / 2;
+                        svg += `<line class="route-line ${isYou ? 'you' : 'normal'}" x1="${gx}" y1="${gy}" x2="${edgeX}" y2="${edgeY}" />`;
+                    } else {
+                        svg += `<line class="route-line ${isYou ? 'you' : 'normal'}" x1="${gx}" y1="${gy}" x2="${targetExit.x}" y2="${targetExit.y - 12}" />`;
+                    }
+                }
+
+                // Guest dot
+                svg += `<circle class="guest-dot ${dotClass}" cx="${gx}" cy="${gy}" r="${isYou ? 9 : 6}" />`;
+
+                // Guest label
+                const label = isYou ? '★ YOU' : guest.guest_name.split(' ')[0];
+                svg += `<text class="guest-label" x="${gx}" y="${gy - 14}" text-anchor="middle">${label}</text>`;
+            });
+        });
+
+        svg += `</svg>`;
+        document.getElementById('floorMap').innerHTML = svg;
+    }
+
+    function renderFloorSelector() {
+        if (!state) return;
+        const fireSet = new Set(state.classification.fire_sections);
+        const container = document.getElementById('floorSelector');
+        container.innerHTML = '';
+
+        state.hotel.floors.forEach(floor => {
+            const hasFire = floor.sections.some(s => fireSet.has(s.id));
+            const btn = document.createElement('button');
+            btn.className = `floor-tab ${floor.floor === currentFloor ? 'active' : ''} ${hasFire ? 'has-fire' : ''}`;
+            btn.textContent = `Floor ${floor.floor}${hasFire ? ' 🔥' : ''}`;
+            btn.onclick = () => {
+                currentFloor = floor.floor;
+                renderFloorSelector();
+                renderFloorMap();
+            };
+            container.appendChild(btn);
+        });
+    }
+
+    function renderYouCard() {
+        if (!state) return;
+        const youGuest = state.hotel.guests.find(g => g.is_you);
+        const youRoute = state.guestRoutes.find(g => g.guest_id === youGuest?.id);
+        if (!youGuest || !youRoute) return;
+
+        const dangerClass = youRoute.in_danger ? 'color: var(--danger)' : '';
+        document.getElementById('youCard').innerHTML = `
+            <div class="you-name">★ ${youGuest.name}</div>
+            <div class="you-room">Room ${youGuest.room} · Floor ${youGuest.floor} · Section ${youRoute.section}</div>
+            <div class="you-route">
+                <div class="route-label">Your evacuation exit</div>
+                <div class="route-exit" style="${dangerClass}">${youRoute.in_danger ? '🆘 ' : '✅ '}${youRoute.exit_name}</div>
+                <div class="route-type">Route: ${youRoute.route_type} ${youRoute.in_danger ? '— YOU ARE IN THE FIRE ZONE' : ''}</div>
+            </div>
+            <button class="btn btn-sos" onclick="triggerSOS('${youGuest.id}', '${youGuest.room}')">🚨 SEND SOS</button>
+        `;
+    }
+
+    async function triggerSOS(guestId, room) {
+        const msg = prompt("Describe your emergency:");
+        if (!msg) return;
+        const btn = document.querySelector('.btn-sos');
+        btn.textContent = "SENDING SOS...";
+        btn.disabled = true;
+
+        await fetch('/api/trigger-sos', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ guest_id: guestId, room, message: msg })
+        });
+        
+        btn.textContent = "🚨 SOS SENT";
+        btn.style.background = 'var(--danger)';
+    }
+
+    function renderAICard() {
+        if (!state || !state.councilVerdict) return;
+        const v = state.councilVerdict;
+        const color = v.overall_severity === 'CRITICAL' ? 'var(--danger)' : (v.overall_severity === 'WARNING' ? 'var(--warning)' : 'var(--success)');
+        
+        document.getElementById('aiCard').innerHTML = `
+            <div class="ai-title" style="color: ${color}">⚡ ${v.overall_severity}</div>
+            <div class="ai-reasoning">"${v.executive_summary}"</div>
+            <div style="margin-top: 10px; font-size: 12px; color: var(--text-muted)">
+                Authorities Notified: <strong style="color: ${v.action_required_by_authorities ? 'var(--danger)' : 'var(--success)'}">${v.action_required_by_authorities ? 'YES' : 'NO'}</strong>
+            </div>
+        `;
+    }
+
+    function renderPersonnelList() {
+        if (!state || !state.personnelAssignments) return;
+        const container = document.getElementById('personnelList');
+        container.innerHTML = '';
+
+        state.personnelAssignments.forEach(p => {
+            const pColor = p.priority === 'HIGH' ? 'var(--danger)' : (p.priority === 'MEDIUM' ? 'var(--warning)' : 'var(--success)');
+            container.innerHTML += `
+                <div class="guest-item">
+                    <div class="guest-info">
+                        <div class="g-name" style="color: var(--accent)">${p.role}</div>
+                        <div class="g-room">Zone: ${p.assigned_zone}</div>
+                    </div>
+                    <div class="guest-exit" style="text-align: right; max-width: 120px;">
+                        <div class="g-exit" style="color: ${pColor}; font-size: 10px;">${p.priority} PRIORITY</div>
+                        <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px; line-height: 1.2;">${p.task_description}</div>
+                    </div>
+                </div>
+            `;
+        });
+    }
+
+    function renderStats() {
+        if (!state) return;
+        const c = state.classification;
+        const g = state.guestRoutes;
+        document.getElementById('statsGrid').innerHTML = `
+            <div class="stat-card"><div class="stat-value danger">${c.fire_sections.length}</div><div class="stat-label">Fire Sections</div></div>
+            <div class="stat-card"><div class="stat-value warning">${c.blocked_exits.length}</div><div class="stat-label">Blocked Exits</div></div>
+            <div class="stat-card"><div class="stat-value safe">${c.safe_exits.length}</div><div class="stat-label">Safe Exits</div></div>
+            <div class="stat-card"><div class="stat-value accent">${g.length}</div><div class="stat-label">Total Guests</div></div>
+        `;
+    }
+
+    function renderGuestList() {
+        if (!state) return;
+        const container = document.getElementById('guestList');
+        container.innerHTML = '';
+
+        state.guestRoutes.forEach(g => {
+            const isYou = state.hotel.guests.find(g2 => g2.id === g.guest_id)?.is_you;
+            
+            // Check SOS status
+            const sos = state.sosAssessments?.find(s => s.guest_id === g.guest_id);
+            const sosLabel = sos ? `<div style="color: var(--danger); font-size: 10px; font-weight: bold; margin-top: 4px;">🚨 SOS: ${sos.status}</div>` : '';
+
+            const statusIcon = (g.in_danger || sos) ? '🆘' : '✅';
+            container.innerHTML += `
+                <div class="guest-item ${isYou ? 'you-item' : ''}" onclick="currentFloor=${g.floor}; renderFloorSelector(); renderFloorMap();">
+                    <div class="guest-info">
+                        <div class="g-name">${isYou ? '★ ' : ''}${g.guest_name}</div>
+                        <div class="g-room">Room ${g.room} · Floor ${g.floor}</div>
+                        ${sosLabel}
+                    </div>
+                    <div class="guest-exit">
+                        <div class="g-status">${statusIcon}</div>
+                        <div class="g-exit">→ ${g.exit_name}</div>
+                    </div>
+                </div>
+            `;
+        });
+    }
+
+    function renderSimulatePanel() {
+        if (!state) return;
+        const select = document.getElementById('simSection');
+        select.innerHTML = '';
+        state.hotel.floors.forEach(f => {
+            f.sections.forEach(s => {
+                select.innerHTML += `<option value="${s.id}">${s.name} (${s.id})</option>`;
+            });
+        });
+    }
+
+    function updateStatusBadge() {
+        if (!state) return;
+        const badge = document.getElementById('statusBadge');
+        if (state.classification.fire_sections.length > 0) {
+            badge.textContent = `🔥 ${state.classification.severity} — EMERGENCY`;
+            badge.className = 'status-badge danger';
+        } else {
+            badge.textContent = 'ALL CLEAR';
+            badge.className = 'status-badge safe';
+        }
+    }
+
+    function renderAll() {
+        updateStatusBadge();
+        renderFloorSelector();
+        renderFloorMap();
+        renderYouCard();
+        renderAICard();
+        renderPersonnelList();
+        renderStats();
+        renderGuestList();
+        renderSimulatePanel();
+    }
+
+    // API calls
+    async function simulateFire() {
+        const sectionId = document.getElementById('simSection').value;
+        const res = await fetch('/api/simulate-fire', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ section_id: sectionId, severity: 'CRITICAL' })
+        });
+        const data = await res.json();
+        state = data.state;
+        renderAll();
+    }
+
+    async function resetScenario() {
+        const res = await fetch('/api/reset', { method: 'POST' });
+        const data = await res.json();
+        state = data.state;
+        renderAll();
+    }
+
+    // WebSocket connection
+    function connectWS() {
+        ws = new WebSocket(`ws://${window.location.host}`);
+        ws.onopen = () => {
+            document.getElementById('connDot').className = 'connection-dot connected';
+            document.getElementById('connText').textContent = 'Live';
+        };
+        ws.onmessage = (event) => {
+            const msg = JSON.parse(event.data);
+            if (msg.type === 'UPDATE') {
+                state = msg.data;
+                renderAll();
+            }
+        };
+        ws.onclose = () => {
+            document.getElementById('connDot').className = 'connection-dot disconnected';
+            document.getElementById('connText').textContent = 'Reconnecting...';
+            setTimeout(connectWS, 2000);
+        };
+    }
+
+    // Initial load
+    (async () => {
+        const res = await fetch('/api/state');
+        state = await res.json();
+        renderAll();
+        connectWS();
+    })();
+</script>
+
+</body>
+</html>

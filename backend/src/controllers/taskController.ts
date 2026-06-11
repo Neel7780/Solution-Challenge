@@ -187,3 +187,93 @@ export const deleteTask = async (req: Request, res: Response) => {
     res.status(500).json({ error: 'Failed to delete task' });
   }
 };
+
+export const aiPrioritizeTasks = async (req: Request, res: Response) => {
+  const userContext = req.user;
+  if (!userContext) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  try {
+    // 1. Fetch all pending/in_progress tasks for the user's scope
+    let baseQuery = `SELECT * FROM tasks WHERE status IN ('pending', 'in_progress')`;
+    const params: any[] = [];
+
+    if (userContext.role !== 'super_admin') {
+      if (userContext.role === 'org_admin') {
+        params.push(userContext.organizationId);
+        baseQuery += ` AND (organization_id = $${params.length} OR property_id IN (SELECT id FROM properties WHERE organization_id = $${params.length}))`;
+      } else {
+        params.push(userContext.propertyId);
+        baseQuery += ` AND property_id = $${params.length}`;
+      }
+    }
+
+    const tasksResult = await query(baseQuery, params);
+    const tasks = tasksResult.rows;
+
+    if (tasks.length === 0) {
+      return res.json({ success: true, message: 'No active tasks to prioritize.' });
+    }
+
+    // 2. Call the new AI Model (mixtral-8x7b-32768) to sort and prioritize
+    const prompt = `
+    You are an emergency management AI. Your job is to analyze a list of active tasks and reassign their priority based on urgency and risk to human life.
+    Priority levels allowed: 'low', 'medium', 'high', 'urgent'.
+    Always prioritize tasks involving "fire", "trapped", "medical", or "evacuation" as 'urgent'.
+    
+    Here are the tasks:
+    ${JSON.stringify(tasks.map(t => ({ id: t.id, description: t.description, current_priority: t.priority })))}
+    
+    Output ONLY a JSON array of objects with the structure: [{"id": 1, "priority": "urgent"}, ...]. Do NOT include any markdown formatting or explanation.
+    `;
+
+    const aiResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'mixtral-8x7b-32768',
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.1,
+        response_format: { type: 'json_object' }
+      })
+    });
+
+    const data = await aiResponse.json();
+    let content = data.choices[0].message.content;
+    
+    let updates = [];
+    try {
+      const parsed = JSON.parse(content);
+      if (Array.isArray(parsed)) updates = parsed;
+      else if (parsed.tasks) updates = parsed.tasks;
+      else updates = Object.values(parsed)[0] as any[];
+    } catch (e) {
+      logger.error('Failed to parse AI priority JSON', e);
+      return res.status(500).json({ error: 'AI failed to format priorities correctly.' });
+    }
+
+    // 3. Update the tasks in the database
+    for (const update of updates) {
+      if (update.id && update.priority) {
+        await query('UPDATE tasks SET priority = $1 WHERE id = $2', [update.priority, update.id]);
+        
+        // Broadcast the update to the specific property via Socket IO
+        const taskRow = tasks.find(t => t.id === update.id);
+        if (taskRow && req.io) {
+          req.io.to(`property_${taskRow.property_id}`).emit('task_updated_property', {
+            task: { ...taskRow, priority: update.priority }
+          });
+        }
+      }
+    }
+
+    res.json({ success: true, message: 'Tasks prioritized successfully by AI.' });
+  } catch (error: any) {
+    logger.error('Error in aiPrioritizeTasks:', error);
+    res.status(500).json({ error: 'Failed to prioritize tasks' });
+  }
+};

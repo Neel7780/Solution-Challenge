@@ -1,0 +1,975 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CrisisRespond — Floor Plan Editor</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg-primary: #0a0e1a;
+            --bg-secondary: #111827;
+            --bg-card: #1a1f35;
+            --accent: #6366f1;
+            --accent-glow: rgba(99, 102, 241, 0.3);
+            --danger: #ef4444;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --you-color: #a855f7;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --border: #1e293b;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+        }
+
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, var(--bg-secondary), var(--bg-card));
+            border-bottom: 1px solid var(--border);
+            padding: 14px 28px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 20px;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--accent), var(--you-color));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .header-actions { display: flex; gap: 10px; }
+
+        .btn {
+            padding: 8px 18px;
+            border-radius: 8px;
+            border: none;
+            font-family: 'Inter', sans-serif;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-accent { background: var(--accent); color: white; }
+        .btn-accent:hover { box-shadow: 0 0 20px var(--accent-glow); transform: translateY(-1px); }
+        .btn-success { background: var(--success); color: white; }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn-ghost { background: var(--bg-card); color: var(--text-secondary); border: 1px solid var(--border); }
+        .btn-ghost:hover { background: #222845; color: white; }
+
+        /* Steps Indicator */
+        .steps {
+            display: flex;
+            justify-content: center;
+            gap: 0;
+            padding: 20px 28px;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .step {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 20px;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-muted);
+            position: relative;
+        }
+
+        .step.active { color: var(--accent); }
+        .step.done { color: var(--success); }
+
+        .step-num {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 700;
+            border: 2px solid var(--text-muted);
+        }
+
+        .step.active .step-num { border-color: var(--accent); background: rgba(99,102,241,0.15); color: var(--accent); }
+        .step.done .step-num { border-color: var(--success); background: rgba(16,185,129,0.15); color: var(--success); }
+
+        .step-arrow {
+            color: var(--text-muted);
+            font-size: 18px;
+            padding: 0 8px;
+        }
+
+        /* Main Content */
+        .main { display: flex; height: calc(100vh - 120px); }
+
+        /* Canvas Area */
+        .canvas-area {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            position: relative;
+        }
+
+        /* Upload Zone */
+        .upload-zone {
+            width: 100%;
+            max-width: 700px;
+            border: 2px dashed var(--border);
+            border-radius: 16px;
+            padding: 80px 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: var(--bg-secondary);
+        }
+
+        .upload-zone:hover {
+            border-color: var(--accent);
+            background: rgba(99, 102, 241, 0.05);
+        }
+
+        .upload-zone.dragover {
+            border-color: var(--accent);
+            background: rgba(99, 102, 241, 0.1);
+            transform: scale(1.01);
+        }
+
+        .upload-icon { font-size: 56px; margin-bottom: 16px; }
+        .upload-title { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
+        .upload-sub { font-size: 14px; color: var(--text-muted); margin-bottom: 20px; }
+
+        .upload-formats {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .format-tag {
+            padding: 4px 12px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            background: var(--bg-card);
+            color: var(--text-muted);
+            border: 1px solid var(--border);
+        }
+
+        /* Editor Canvas */
+        .editor-wrap {
+            position: relative;
+            display: none;
+            width: 100%;
+            height: 100%;
+        }
+
+        .editor-canvas {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            background: var(--bg-secondary);
+        }
+
+        .editor-canvas img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            display: block;
+            user-select: none;
+            -webkit-user-drag: none;
+        }
+
+        .editor-canvas canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            cursor: crosshair;
+        }
+
+        /* Toolbar */
+        .toolbar {
+            position: absolute;
+            top: 12px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 4px;
+            background: rgba(17, 24, 39, 0.95);
+            backdrop-filter: blur(20px);
+            padding: 6px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            z-index: 10;
+        }
+
+        .tool-btn {
+            padding: 8px 14px;
+            border-radius: 8px;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            font-family: 'Inter', sans-serif;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .tool-btn:hover { background: var(--bg-card); color: var(--text-primary); }
+        .tool-btn.active { background: var(--accent); color: white; }
+
+        /* Sidebar Panel */
+        .sidebar {
+            width: 340px;
+            background: var(--bg-secondary);
+            border-left: 1px solid var(--border);
+            overflow-y: auto;
+            padding: 20px;
+        }
+
+        .sidebar-section {
+            margin-bottom: 20px;
+        }
+
+        .sidebar-title {
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-muted);
+            margin-bottom: 10px;
+        }
+
+        .info-field {
+            margin-bottom: 12px;
+        }
+
+        .info-field label {
+            display: block;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+        }
+
+        .info-field input, .info-field select {
+            width: 100%;
+            padding: 8px 12px;
+            background: var(--bg-card);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-family: 'Inter', sans-serif;
+            font-size: 13px;
+        }
+
+        .info-field input:focus, .info-field select:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-glow);
+        }
+
+        /* Placed Items List */
+        .placed-item {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px 12px;
+            margin-bottom: 6px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+        }
+
+        .placed-item .item-icon { font-size: 16px; margin-right: 8px; }
+        .placed-item .item-name { font-weight: 600; }
+        .placed-item .item-pos { color: var(--text-muted); font-size: 11px; }
+
+        .delete-btn {
+            background: none;
+            border: none;
+            color: var(--danger);
+            cursor: pointer;
+            font-size: 14px;
+            padding: 4px;
+        }
+
+        /* Preview Mode */
+        .preview-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+        }
+
+        .preview-overlay.show { display: flex; }
+
+        .preview-header {
+            padding: 16px;
+            display: flex;
+            justify-content: space-between;
+            width: 90%;
+            max-width: 1000px;
+        }
+
+        .preview-map {
+            width: 90%;
+            max-width: 1000px;
+            aspect-ratio: 16/10;
+            border-radius: 16px;
+            overflow: hidden;
+            position: relative;
+            border: 2px solid var(--border);
+        }
+
+        .preview-map img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            opacity: 0.6;
+        }
+
+        .preview-map canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Guest View Banner */
+        .guest-banner {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(17, 24, 39, 0.95);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--success);
+            border-radius: 16px;
+            padding: 16px 32px;
+            text-align: center;
+            z-index: 10;
+            box-shadow: 0 0 30px rgba(16, 185, 129, 0.2);
+        }
+
+        .guest-banner .banner-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--success);
+            margin-bottom: 4px;
+        }
+
+        .guest-banner .banner-exit {
+            font-size: 22px;
+            font-weight: 800;
+            color: var(--text-primary);
+        }
+
+        /* JSON Output */
+        .json-output {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 12px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            color: var(--success);
+            max-height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <span class="logo">CrisisRespond — Floor Plan Editor</span>
+    <div class="header-actions">
+        <button class="btn btn-ghost" onclick="window.location.href='/'">← Back to Dashboard</button>
+        <button class="btn btn-accent" onclick="previewGuestView()">👁️ Guest Preview</button>
+        <button class="btn btn-success" onclick="exportConfig()">💾 Save & Export</button>
+    </div>
+</div>
+
+<div class="steps">
+    <div class="step active" id="step1"><span class="step-num">1</span> Upload Floor Plan</div>
+    <span class="step-arrow">→</span>
+    <div class="step" id="step2"><span class="step-num">2</span> Mark Sections & Exits</div>
+    <span class="step-arrow">→</span>
+    <div class="step" id="step3"><span class="step-num">3</span> Add Rooms & Details</div>
+    <span class="step-arrow">→</span>
+    <div class="step" id="step4"><span class="step-num">4</span> Preview & Save</div>
+</div>
+
+<div class="main">
+    <div class="canvas-area">
+        <!-- Upload Zone -->
+        <div class="upload-zone" id="uploadZone">
+            <div class="upload-icon">🗺️</div>
+            <div class="upload-title">Upload Floor Plan</div>
+            <div class="upload-sub">Upload an image to convert into an interactive map</div>
+            <input type="file" id="fileInput" accept="image/*" style="display:none">
+        </div>
+
+        <!-- Editor -->
+        <div class="editor-wrap" id="editorWrap">
+            <div class="toolbar" id="toolbar">
+                <button class="tool-btn active" data-tool="section" onclick="setTool('section')">🔲 Section</button>
+                <button class="tool-btn" data-tool="room" onclick="setTool('room')">🏠 Room</button>
+                <button class="tool-btn" data-tool="exit" onclick="setTool('exit')">🚪 Exit</button>
+                <button class="tool-btn" data-tool="corridor" onclick="setTool('corridor')">🛤️ Walk Area</button>
+                <div style="width: 1px; height: 20px; background: #334155; margin: 0 4px;"></div>
+                <button class="tool-btn" id="aiAutoMapBtn" style="color: #a855f7;" onclick="autoMapWithAI()">✨ AI Auto-Map</button>
+            </div>
+            <div class="editor-canvas" id="editorCanvas">
+                <img id="floorImage" src="">
+                <canvas id="drawCanvas"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="sidebar">
+        <!-- Info -->
+        <div class="sidebar-section">
+            <div class="sidebar-title">📋 Floor Info</div>
+            <div class="info-field">
+                <label>Floor Number</label>
+                <input type="number" id="floorNum" value="2">
+            </div>
+        </div>
+
+        <!-- Current Tool Info -->
+        <div class="sidebar-section" id="toolInfo">
+            <div class="sidebar-title">🔲 Section Tool</div>
+            <p style="font-size: 12px; color: var(--text-muted);">Draw boundary for a fire zone.</p>
+        </div>
+
+        <!-- Placed Items -->
+        <div class="sidebar-section">
+            <div class="sidebar-title">📌 Placed Items</div>
+            <div id="placedItems"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Guest Preview Overlay -->
+<div class="preview-overlay" id="previewOverlay">
+    <div class="preview-header">
+        <span style="font-size: 18px; font-weight: 700;">👁️ Interactive Map Preview</span>
+        <button class="btn btn-danger" onclick="closePreview()">✕ Close Map</button>
+    </div>
+    <div class="preview-map" id="leafletMap" style="background: #1e293b;"></div>
+    <div class="guest-banner">
+        <div class="banner-title">YOUR NEAREST EVACUATION ROUTE</div>
+        <div class="banner-exit" id="bannerExit">Calculating route...</div>
+    </div>
+</div>
+
+<script>
+    let currentTool = 'section';
+    let floorPlanImage = null;
+    let isDrawing = false;
+    let drawStart = null;
+    let placedItems = [];
+    let itemCounter = { section: 0, exit: 0, room: 0, corridor: 0 };
+
+    const colors = {
+        section: { fill: 'rgba(239, 68, 68, 0.1)', stroke: '#ef4444', strokeW: 2 },
+        room: { fill: 'rgba(99, 102, 241, 0.1)', stroke: '#6366f1', strokeW: 1.5 },
+        exit: { fill: 'rgba(16, 185, 129, 0.3)', stroke: '#10b981', strokeW: 3 },
+        corridor: { fill: 'rgba(245, 158, 11, 0.15)', stroke: '#f59e0b', strokeW: 2 }
+    };
+
+    const icons = { section: '🔲', exit: '🚪', room: '🏠', corridor: '🛤️' };
+
+    // --- Drag and Drop File Upload ---
+    const uploadZone = document.getElementById('uploadZone');
+    const fileInput = document.getElementById('fileInput');
+
+    uploadZone.onclick = () => fileInput.click();
+    fileInput.onchange = (e) => handleFile(e.target.files[0]);
+
+    uploadZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        uploadZone.style.borderColor = '#6366f1';
+        uploadZone.style.background = 'rgba(99, 102, 241, 0.1)';
+    });
+
+    uploadZone.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        uploadZone.style.borderColor = '#1e293b';
+        uploadZone.style.background = 'transparent';
+    });
+
+    uploadZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        uploadZone.style.borderColor = '#1e293b';
+        uploadZone.style.background = 'transparent';
+        if (e.dataTransfer.files.length > 0) {
+            handleFile(e.dataTransfer.files[0]);
+        }
+    });
+    // ---------------------------------
+
+    function handleFile(file) {
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            floorPlanImage = e.target.result;
+            const img = document.getElementById('floorImage');
+            img.src = floorPlanImage;
+            img.onload = () => {
+                document.getElementById('uploadZone').style.display = 'none';
+                document.getElementById('editorWrap').style.display = 'block';
+                resizeCanvas();
+            };
+        };
+        reader.readAsDataURL(file);
+    }
+
+    function resizeCanvas() {
+        const canvas = document.getElementById('drawCanvas');
+        const img = document.getElementById('floorImage');
+        canvas.width = img.clientWidth;
+        canvas.height = img.clientHeight;
+        redraw();
+    }
+    window.addEventListener('resize', resizeCanvas);
+
+    async function autoMapWithAI() {
+        // Trigger file input first if no image
+        if (!floorPlanImage) {
+            alert("Upload an image first.");
+            return;
+        }
+
+        const btn = document.getElementById('aiAutoMapBtn');
+        const originalText = btn.textContent;
+        btn.textContent = "🤖 Analyzing...";
+        btn.disabled = true;
+        
+        try {
+            const res = await fetch('/api/auto-map', { 
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ image: floorPlanImage })
+            });
+            const data = await res.json();
+            
+            if (data.status === 'ok' && data.items.length > 0) {
+                placedItems = placedItems.concat(data.items);
+                itemCounter = { section: 2, exit: 2, room: 4, corridor: 1 };
+                redraw();
+                updateList();
+            } else {
+                alert("AI could not detect valid items. Try drawing manually.");
+            }
+        } catch (e) {
+            console.error(e);
+            alert("Failed to auto-map");
+        } finally {
+            btn.textContent = originalText;
+            btn.disabled = false;
+        }
+    }
+
+    function setTool(tool) {
+        currentTool = tool;
+        document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+        document.querySelector(`[data-tool="${tool}"]`).classList.add('active');
+    }
+
+    let draggingItem = null;
+    const canvas = document.getElementById('drawCanvas');
+
+    canvas.onmousedown = (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const x = (e.clientX - rect.left) / rect.width;
+        const y = (e.clientY - rect.top) / rect.height;
+
+        // Check if clicking an existing exit, room, or corridor to drag
+        if (currentTool === 'exit' || currentTool === 'room' || currentTool === 'section' || currentTool === 'corridor') {
+            for (let i = placedItems.length - 1; i >= 0; i--) {
+                let item = placedItems[i];
+                if (item.type === 'exit') {
+                    if (Math.hypot(item.x - x, item.y - y) < 0.03) {
+                        draggingItem = item;
+                        isDrawing = true;
+                        return;
+                    }
+                } else if (item.type === currentTool) {
+                    if (x >= item.x && x <= item.x + item.w && y >= item.y && y <= item.y + item.h) {
+                        draggingItem = item;
+                        drawStart = { offsetX: x - item.x, offsetY: y - item.y }; // offset
+                        isDrawing = true;
+                        return;
+                    }
+                }
+            }
+        }
+
+        if (currentTool === 'exit') {
+            itemCounter.exit++;
+            placedItems.push({ type: 'exit', id: `E${itemCounter.exit}`, name: `Exit ${itemCounter.exit}`, x, y, w: 0, h: 0 });
+            redraw(); updateList(); return;
+        }
+
+        isDrawing = true;
+        drawStart = { x, y };
+    };
+
+    canvas.onmousemove = (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const x = (e.clientX - rect.left) / rect.width;
+        const y = (e.clientY - rect.top) / rect.height;
+
+        if (isDrawing && draggingItem) {
+            if (draggingItem.type === 'exit') {
+                draggingItem.x = x;
+                draggingItem.y = y;
+            } else {
+                draggingItem.x = x - drawStart.offsetX;
+                draggingItem.y = y - drawStart.offsetY;
+            }
+            redraw();
+            return;
+        }
+
+        if (!isDrawing) return;
+
+        redraw();
+
+        const ctx = canvas.getContext('2d');
+        if (isDrawing && !draggingItem && (currentTool === 'section' || currentTool === 'room' || currentTool === 'corridor')) {
+            const c = colors[currentTool];
+            ctx.strokeStyle = c.stroke; ctx.lineWidth = c.strokeW; ctx.setLineDash([4, 4]);
+            ctx.strokeRect(drawStart.x * canvas.width, drawStart.y * canvas.height, (x - drawStart.x) * canvas.width, (y - drawStart.y) * canvas.height);
+            ctx.setLineDash([]);
+        }
+    };
+
+    canvas.onmouseup = (e) => {
+        if (!isDrawing) return;
+        isDrawing = false;
+        
+        if (draggingItem) {
+            draggingItem = null;
+            updateList();
+            return;
+        }
+        
+        const rect = canvas.getBoundingClientRect();
+        const x = (e.clientX - rect.left) / rect.width;
+        const y = (e.clientY - rect.top) / rect.height;
+        const w = Math.abs(x - drawStart.x);
+        const h = Math.abs(y - drawStart.y);
+
+        if (w > 0.02 && h > 0.02 && (currentTool === 'section' || currentTool === 'room' || currentTool === 'corridor')) {
+            itemCounter[currentTool]++;
+            placedItems.push({
+                type: currentTool,
+                id: `${currentTool.charAt(0).toUpperCase()}${itemCounter[currentTool]}`,
+                name: `${currentTool} ${itemCounter[currentTool]}`,
+                x: Math.min(drawStart.x, x),
+                y: Math.min(drawStart.y, y), w, h
+            });
+        }
+        redraw(); updateList();
+    };
+
+    function redraw() {
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Draw items
+        placedItems.forEach(item => {
+            const c = colors[item.type];
+            const px = item.x * canvas.width, py = item.y * canvas.height;
+            if (item.type === 'exit') {
+                ctx.beginPath(); ctx.arc(px, py, 12, 0, Math.PI*2);
+                ctx.fillStyle = c.fill; ctx.fill();
+                ctx.strokeStyle = c.stroke; ctx.lineWidth=2; ctx.stroke();
+                ctx.fillStyle = '#fff'; ctx.font='10px sans-serif'; ctx.textAlign='center';
+                ctx.fillText(item.id, px, py+3);
+            } else {
+                ctx.fillStyle = c.fill; ctx.fillRect(px, py, item.w*canvas.width, item.h*canvas.height);
+                ctx.strokeStyle = c.stroke; ctx.lineWidth = c.strokeW; ctx.strokeRect(px, py, item.w*canvas.width, item.h*canvas.height);
+                ctx.fillStyle = c.stroke; ctx.font='12px sans-serif'; ctx.fillText(item.id, px+5, py+16);
+            }
+        });
+
+        // Draw lines between connected centers
+        /* Optional debug drawing
+        const graph = buildGraph();
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)'; ctx.lineWidth = 1;
+        Object.keys(graph).forEach(u => {
+            const ui = placedItems[u];
+            const ux = ui.type === 'exit' ? ui.x : ui.x + ui.w/2;
+            const uy = ui.type === 'exit' ? ui.y : ui.y + ui.h/2;
+            Object.keys(graph[u]).forEach(v => {
+                const vi = placedItems[v];
+                const vx = vi.type === 'exit' ? vi.x : vi.x + vi.w/2;
+                const vy = vi.type === 'exit' ? vi.y : vi.y + vi.h/2;
+                ctx.beginPath(); ctx.moveTo(ux*canvas.width, uy*canvas.height); ctx.lineTo(vx*canvas.width, vy*canvas.height); ctx.stroke();
+            });
+        });
+        */
+    }
+
+    function updateList() {
+        document.getElementById('placedItems').innerHTML = placedItems.map((item, i) => `
+            <div style="display:flex; justify-content:space-between; padding:8px; background:#1e293b; margin-bottom:4px; border-radius:4px;">
+                <span>${icons[item.type]} ${item.id}</span>
+                <span style="color:#ef4444; cursor:pointer;" onclick="placedItems.splice(${i},1); redraw(); updateList();">✕</span>
+            </div>
+        `).join('');
+    }
+
+    // ==========================================
+    // LEAFLET MAP PREVIEW & DIJKSTRA PATHFINDING
+    // ==========================================
+    let leafletMap = null;
+
+    function buildGraph() {
+        // Build adjacency list for Dijkstra based on intersection
+        const graph = {};
+        const routable = placedItems.filter(i => i.type === 'room' || i.type === 'corridor' || i.type === 'exit');
+        
+        routable.forEach((_, i) => graph[i] = {});
+        
+        for (let i = 0; i < routable.length; i++) {
+            for (let j = i + 1; j < routable.length; j++) {
+                const item1 = routable[i];
+                const item2 = routable[j];
+                
+                // If both are rooms, don't connect them directly unless they overlap, but usually we want room->corridor
+                // To keep it simple, connect any two items that overlap or are very close
+                let overlap = false;
+                
+                const getRect = (item) => {
+                    if (item.type === 'exit') return { x: item.x - 0.02, y: item.y - 0.02, r: item.x + 0.02, b: item.y + 0.02 };
+                    return { x: item.x, y: item.y, r: item.x + item.w, b: item.y + item.h };
+                };
+                
+                const r1 = getRect(item1);
+                const r2 = getRect(item2);
+                
+                // Add a small margin for "touching" elements
+                const margin = 0.01;
+                if (r1.x < r2.r + margin && r1.r + margin > r2.x && r1.y < r2.b + margin && r1.b + margin > r2.y) {
+                    overlap = true;
+                }
+                
+                if (overlap) {
+                    const cx1 = item1.type === 'exit' ? item1.x : item1.x + item1.w/2;
+                    const cy1 = item1.type === 'exit' ? item1.y : item1.y + item1.h/2;
+                    const cx2 = item2.type === 'exit' ? item2.x : item2.x + item2.w/2;
+                    const cy2 = item2.type === 'exit' ? item2.y : item2.y + item2.h/2;
+                    
+                    const dist = Math.hypot(cx1 - cx2, cy1 - cy2);
+                    graph[i][j] = dist;
+                    graph[j][i] = dist;
+                }
+            }
+        }
+        return { graph, routable };
+    }
+
+    function dijkstra(graph, startIdx, endIdx) {
+        const dist = {}, prev = {};
+        const q = new Set(Object.keys(graph).map(Number));
+        for (let n of q) dist[n] = Infinity;
+        dist[startIdx] = 0;
+
+        while (q.size > 0) {
+            let u = null;
+            for (let n of q) { if (u === null || dist[n] < dist[u]) u = n; }
+            if (dist[u] === Infinity || u === endIdx) break;
+            q.delete(u);
+
+            for (let v in graph[u]) {
+                v = Number(v);
+                let alt = dist[u] + graph[u][v];
+                if (alt < dist[v]) { dist[v] = alt; prev[v] = u; }
+            }
+        }
+
+        const path = [];
+        let curr = endIdx;
+        if (prev[curr] !== undefined || curr === startIdx) {
+            while (curr !== undefined) { path.unshift(curr); curr = prev[curr]; }
+        }
+        return path;
+    }
+
+    async function previewGuestView() {
+        if (!floorPlanImage) return alert("Upload a floor plan first.");
+        if (placedItems.filter(i=>i.type==='room').length === 0) return alert("Draw at least one room to test starting position.");
+        if (placedItems.filter(i=>i.type==='exit').length === 0) return alert("Draw at least one exit.");
+        if (placedItems.filter(i=>i.type==='corridor').length === 0) return alert("Draw Walk Areas (Corridors) touching rooms and exits to build a path network.");
+
+        document.getElementById('previewOverlay').classList.add('show');
+        document.getElementById('bannerExit').textContent = "🤖 Llama 3.3 is calculating safest route...";
+
+        // Initialize Leaflet if not done
+        if (!leafletMap) {
+            // Simple CRS for mapping image coordinates
+            leafletMap = L.map('leafletMap', {
+                crs: L.CRS.Simple,
+                minZoom: -2,
+                maxZoom: 2,
+                zoomControl: true,
+                attributionControl: false
+            });
+        }
+        
+        // Clear old layers
+        leafletMap.eachLayer(layer => leafletMap.removeLayer(layer));
+
+        // Add Image
+        const img = new Image();
+        img.src = floorPlanImage;
+        img.onload = async () => {
+            const w = img.naturalWidth, h = img.naturalHeight;
+            const bounds = [[0, 0], [h, w]];
+            L.imageOverlay(floorPlanImage, bounds).addTo(leafletMap);
+            leafletMap.fitBounds(bounds);
+            
+            // Fix bounds scaling
+            setTimeout(() => {
+                leafletMap.invalidateSize();
+                leafletMap.fitBounds(bounds);
+            }, 100);
+
+            // Convert our relative coords (0-1) to natural image coords
+            const toLatLng = (rx, ry) => [h - (ry * h), rx * w];
+
+            // Draw Rooms
+            placedItems.filter(i=>i.type==='room').forEach(room => {
+                L.rectangle([toLatLng(room.x, room.y), toLatLng(room.x+room.w, room.y+room.h)], {
+                    color: '#6366f1', weight: 1, fillColor: '#6366f1', fillOpacity: 0.1
+                }).bindTooltip(room.id, {permanent: true, direction: 'center', className: 'bg-transparent border-0 text-white shadow-none'}).addTo(leafletMap);
+            });
+
+            // Draw Exits
+            const exits = placedItems.filter(i=>i.type==='exit');
+            exits.forEach(exit => {
+                L.circleMarker(toLatLng(exit.x, exit.y), {
+                    radius: 8, color: '#10b981', fillColor: '#10b981', fillOpacity: 0.8
+                }).bindTooltip("EXIT", {permanent: true, direction: 'top', className: 'text-green-500 font-bold bg-transparent border-0 shadow-none'}).addTo(leafletMap);
+            });
+
+            // Find Route for testing! (From first Room to nearest Exit)
+            const { graph, routable } = buildGraph();
+            
+            const myRoomIdx = routable.findIndex(i => i.type === 'room');
+            const targetExitIdx = routable.findIndex(i => i.type === 'exit');
+            
+            if (myRoomIdx !== -1 && targetExitIdx !== -1) {
+                // CALL AI PATHFINDING ENDPOINT
+                try {
+                    const res = await fetch('/api/ai-path', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ graph, routable, startIdx: myRoomIdx, endIdx: targetExitIdx })
+                    });
+                    
+                    const data = await res.json();
+                    
+                    if (data.status === 'ok' && data.path.length > 0) {
+                        const shortestPath = data.path;
+                        const routeLatLngs = [];
+                        
+                        shortestPath.forEach(idx => {
+                            const item = routable[idx];
+                            const cx = item.type === 'exit' ? item.x : item.x + item.w/2;
+                            const cy = item.type === 'exit' ? item.y : item.y + item.h/2;
+                            routeLatLngs.push(toLatLng(cx, cy));
+                        });
+
+                    // Draw glowing path
+                    L.polyline(routeLatLngs, {
+                        color: '#a855f7', weight: 8, opacity: 0.5, className: 'glowing-path'
+                    }).addTo(leafletMap);
+                    L.polyline(routeLatLngs, {
+                        color: '#fff', weight: 2, opacity: 0.9, dashArray: '10, 10', className: 'marching-ants'
+                    }).addTo(leafletMap);
+
+                    // Add "YOU ARE HERE" marker at start
+                    const startPos = routeLatLngs[0];
+                    L.circleMarker(startPos, {
+                        radius: 10, color: '#fff', weight: 3, fillColor: '#a855f7', fillOpacity: 1
+                    }).bindTooltip("★ YOU", {permanent: true, direction: 'bottom'}).addTo(leafletMap);
+                    
+                        document.getElementById('bannerExit').textContent = `Llama 3.3 Route → ${routable[targetExitIdx].id}`;
+                    } else {
+                        document.getElementById('bannerExit').textContent = "ERROR: AI could not find connected path.";
+                    }
+                } catch (e) {
+                    console.error(e);
+                    document.getElementById('bannerExit').textContent = "ERROR: AI API Failure.";
+                }
+            }
+        };
+    }
+
+    function closePreview() { document.getElementById('previewOverlay').classList.remove('show'); }
+
+    // CSS for animations
+    const style = document.createElement('style');
+    style.innerHTML = `
+        .marching-ants { animation: dash 1s linear infinite; }
+        @keyframes dash { to { stroke-dashoffset: -20; } }
+        .glowing-path { filter: drop-shadow(0 0 8px rgba(168, 85, 247, 0.8)); }
+        .leaflet-tooltip { background: transparent; border: none; box-shadow: none; color: white; font-weight: bold; font-family: Inter; text-shadow: 0 2px 4px rgba(0,0,0,0.8); }
+    `;
+    document.head.appendChild(style);
+
+    async function exportConfig() {
+        const config = {
+            floor: parseInt(document.getElementById('floorNum').value),
+            items: placedItems
+        };
+        const res = await fetch('/api/upload-floor', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(config)
+        });
+        if (res.ok) alert("Map config saved with pathfinding graph!");
+    }
+</script>
+
+</body>
+</html>

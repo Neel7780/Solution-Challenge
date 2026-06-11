@@ -42,6 +42,7 @@ function getDashboardHomeByRole(role?: string) {
   if (role === 'responder') return '/dashboard/responder';
   if (role === 'security') return '/dashboard/security';
   if (role === 'staff') return '/dashboard/staff';
+  if (role === 'org_admin' || role === 'admin') return '/dashboard/organization';
   return '/dashboard/command';
 }
 

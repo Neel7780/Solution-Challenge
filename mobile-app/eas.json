@@ -12,6 +12,10 @@
       "distribution": "internal",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://solution-challenge-gvis.onrender.com/api",
+        "EXPO_PUBLIC_SOCKET_URL": "https://solution-challenge-gvis.onrender.com"
       }
     },
     "production": {

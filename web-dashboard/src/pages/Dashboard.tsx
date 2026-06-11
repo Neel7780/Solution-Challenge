@@ -116,6 +116,12 @@ export default function Dashboard() {
   const [showEvacConfirm, setShowEvacConfirm] = React.useState(false);
   const propertyId = user?.property_id || contexts[0]?.propertyId || 2;
 
+  useEffect(() => {
+    if (user?.role === 'org_admin' || user?.role === 'admin') {
+      navigate('/dashboard/organization', { replace: true });
+    }
+  }, [user, navigate]);
+
   const portals = useMemo(() => {
     const role = user?.role;
     const list = [

@@ -1,0 +1,19 @@
+{
+  "name": "ai-council-playground",
+  "version": "1.0.0",
+  "description": "This folder is an isolated environment to build, test, and perfect our multi-agent AI system (The AI Council) before integrating it into the main CrisisRespond backend.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "ws": "^8.21.0"
+  }
+}

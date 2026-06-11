@@ -1,11 +1,12 @@
 import { Router } from 'express';
-import { getTasks, createTask, updateTask, deleteTask } from '../controllers/taskController';
+import { getTasks, createTask, updateTask, deleteTask, aiPrioritizeTasks } from '../controllers/taskController';
 import { authenticate, requireRole } from '../middleware/auth';
 import { body } from 'express-validator';
 
 const router = Router();
 
 router.get('/', authenticate, getTasks);
+router.post('/ai-prioritize', authenticate, requireRole(['super_admin', 'org_admin', 'admin']), aiPrioritizeTasks);
 
 router.post('/', authenticate, requireRole(['super_admin', 'org_admin', 'admin']), [
   body('propertyId').isInt().withMessage('Property ID must be an integer'),

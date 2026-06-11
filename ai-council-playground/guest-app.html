@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>CrisisRespond — Guest App</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800;900&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', sans-serif; }
+        
+        :root {
+            --bg-peace: #f8fafc;
+            --text-peace: #0f172a;
+            --card-peace: #ffffff;
+            --accent-peace: #3b82f6;
+            
+            --bg-crisis: #000000;
+            --text-crisis: #ffffff;
+            --card-crisis: #111111;
+            --danger: #ff0000;
+            --warning: #ffaa00;
+            --safe: #00ff00;
+        }
+
+        body {
+            background-color: var(--bg-peace);
+            color: var(--text-peace);
+            transition: all 0.3s ease;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* Mobile Frame (for desktop viewing) */
+        .mobile-frame {
+            width: 100%;
+            max-width: 400px;
+            height: 100%;
+            max-height: 850px;
+            background: var(--bg-peace);
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 0 50px rgba(0,0,0,0.1);
+        }
+        
+        @media (min-width: 401px) {
+            .mobile-frame {
+                height: 90vh;
+                border-radius: 40px;
+                border: 12px solid #1e293b;
+            }
+        }
+
+        /* --- PEACE TIME UI --- */
+        .peace-ui {
+            padding: 24px;
+            height: 100%;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .logo { font-size: 20px; font-weight: 800; color: var(--accent-peace); }
+        .room-badge { background: #e2e8f0; padding: 6px 12px; border-radius: 20px; font-weight: 600; font-size: 14px; }
+
+        .digital-key {
+            background: linear-gradient(135deg, #2563eb, #3b82f6);
+            color: white;
+            padding: 30px 20px;
+            border-radius: 20px;
+            text-align: center;
+            box-shadow: 0 10px 20px rgba(59, 130, 246, 0.3);
+        }
+
+        .amenities-btn {
+            background: var(--card-peace);
+            border: 1px solid #e2e8f0;
+            padding: 16px;
+            border-radius: 16px;
+            font-weight: 600;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.02);
+            cursor: pointer;
+        }
+
+        .report-btn {
+            background: #fef2f2;
+            color: #dc2626;
+            border: 1px solid #fecaca;
+            padding: 16px;
+            border-radius: 16px;
+            font-weight: 600;
+            text-align: center;
+            cursor: pointer;
+            margin-top: auto;
+        }
+
+        /* --- CRISIS TIME UI --- */
+        .crisis-ui {
+            display: none;
+            background: var(--bg-crisis);
+            color: var(--text-crisis);
+            height: 100%;
+            flex-direction: column;
+        }
+
+        .crisis-header {
+            background: var(--danger);
+            color: white;
+            padding: 24px 20px 16px;
+            text-align: center;
+            animation: pulse-bg 1s infinite alternate;
+        }
+
+        @keyframes pulse-bg {
+            0% { background-color: #cc0000; }
+            100% { background-color: #ff0000; }
+        }
+
+        .crisis-title { font-size: 24px; font-weight: 900; letter-spacing: 2px; }
+        .crisis-sub { font-size: 14px; font-weight: 600; opacity: 0.9; margin-top: 4px; }
+
+        .map-container {
+            flex: 1;
+            background: #111;
+            position: relative;
+            overflow: hidden;
+            border-bottom: 2px solid #333;
+        }
+        
+        .map-svg { width: 100%; height: 100%; }
+
+        .instructions-panel {
+            padding: 20px;
+            background: #000;
+        }
+
+        .direction-text {
+            font-size: 20px;
+            font-weight: 800;
+            color: var(--warning);
+            text-align: center;
+            margin-bottom: 16px;
+            line-height: 1.3;
+        }
+
+        .btn-sos {
+            background: transparent;
+            color: var(--danger);
+            border: 2px solid var(--danger);
+            padding: 16px;
+            width: 100%;
+            border-radius: 12px;
+            font-size: 18px;
+            font-weight: 800;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: 0.2s;
+            margin-bottom: 12px;
+        }
+
+        .btn-sos:active { background: var(--danger); color: white; }
+
+        .btn-strobe {
+            display: none;
+            background: white;
+            color: black;
+            border: none;
+            padding: 16px;
+            width: 100%;
+            border-radius: 12px;
+            font-size: 18px;
+            font-weight: 900;
+            text-transform: uppercase;
+            cursor: pointer;
+            animation: strobe-btn 0.2s infinite alternate;
+        }
+
+        @keyframes strobe-btn {
+            0% { background: white; color: black; }
+            100% { background: #333; color: white; }
+        }
+
+        .btn-safe {
+            background: var(--safe);
+            color: black;
+            border: none;
+            padding: 16px;
+            width: 100%;
+            border-radius: 12px;
+            font-size: 18px;
+            font-weight: 900;
+            text-transform: uppercase;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+
+        /* SVG Styles */
+        .svg-room { fill: #222; stroke: #444; stroke-width: 2; }
+        .svg-wall { fill: #111; }
+        .svg-fire { fill: rgba(255,0,0,0.2); stroke: red; stroke-width: 2; animation: fire-pulse 1s infinite; }
+        .svg-route { stroke: #00ff00; stroke-width: 6; stroke-linecap: round; fill: none; stroke-dasharray: 10, 10; animation: march 0.5s linear infinite; filter: drop-shadow(0 0 8px #00ff00); }
+        .svg-you { fill: #00ff00; r: 12; filter: drop-shadow(0 0 10px #00ff00); }
+        .svg-exit { fill: #00ff00; font-size: 24px; }
+        
+        @keyframes fire-pulse { 0% { opacity: 0.6; } 100% { opacity: 1; } }
+        @keyframes march { to { stroke-dashoffset: -20; } }
+
+        .strobe-overlay {
+            display: none;
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: white;
+            z-index: 9999;
+            animation: screen-strobe 0.1s infinite;
+        }
+        @keyframes screen-strobe { 0% { opacity: 0; } 100% { opacity: 1; } }
+
+    </style>
+</head>
+<body>
+
+<div class="mobile-frame" id="appFrame">
+    
+    <!-- Peace Time UI -->
+    <div class="peace-ui" id="peaceUI">
+        <div class="header">
+            <div class="logo">Grand Hotel</div>
+            <div class="room-badge" id="guestRoomLabel">Room 203</div>
+        </div>
+
+        <div class="digital-key">
+            <div style="font-size: 40px; margin-bottom: 10px;">📱</div>
+            <div style="font-size: 20px; font-weight: 800;">Tap to Unlock</div>
+            <div style="font-size: 14px; opacity: 0.8; margin-top: 4px;">Connected via Bluetooth</div>
+        </div>
+
+        <div class="amenities-btn">
+            <span>🗺️ Find Amenities</span>
+            <span>→</span>
+        </div>
+        
+        <div class="amenities-btn">
+            <span>📖 Safety Guidelines</span>
+            <span>→</span>
+        </div>
+
+        <div class="report-btn" onclick="alert('Incident reported to security. We are verifying via CCTV.')">
+            ⚠️ Report Incident
+        </div>
+    </div>
+
+    <!-- Crisis Time UI -->
+    <div class="crisis-ui" id="crisisUI">
+        <div class="crisis-header">
+            <div class="crisis-title">EVACUATE NOW</div>
+            <div class="crisis-sub">FIRE DETECTED IN BUILDING</div>
+        </div>
+
+        <div class="map-container" id="mapContainer">
+            <!-- SVG injected here -->
+        </div>
+
+        <div class="instructions-panel">
+            <div class="direction-text" id="directionText">
+                Proceed to the nearest glowing exit. Follow the green path.
+            </div>
+            
+            <button class="btn-sos" id="sosBtn" onclick="triggerSOS()">🚨 I AM TRAPPED</button>
+            <button class="btn-strobe" id="strobeBtn" onclick="toggleStrobe()">🔦 STROBE & SIREN</button>
+            <button class="btn-safe" id="safeBtn" onclick="markSafe()">✅ I AM OUTSIDE</button>
+        </div>
+    </div>
+    
+    <div class="strobe-overlay" id="strobeOverlay"></div>
+</div>
+
+<script>
+    const GUEST_ID = 'G0'; // Simulated Guest ID
+    let state = null;
+    let ws = null;
+    let isStrobing = false;
+    let sirenAudio = new Audio('https://assets.mixkit.co/sfx/preview/mixkit-warning-alarm-buzzer-991.mp3');
+    sirenAudio.loop = true;
+
+    function connectWS() {
+        ws = new WebSocket(`ws://${window.location.host}`);
+        ws.onmessage = (event) => {
+            const msg = JSON.parse(event.data);
+            if (msg.type === 'UPDATE') {
+                state = msg.data;
+                updateApp();
+            }
+        };
+        ws.onclose = () => setTimeout(connectWS, 2000);
+    }
+
+    function updateApp() {
+        if (!state) return;
+        
+        const guestData = state.hotel.guests.find(g => g.id === GUEST_ID);
+        if (guestData) {
+            document.getElementById('guestRoomLabel').textContent = `Room ${guestData.room}`;
+        }
+
+        const isEmergency = state.classification && state.classification.fire_sections.length > 0;
+        
+        if (isEmergency) {
+            document.getElementById('peaceUI').style.display = 'none';
+            document.getElementById('crisisUI').style.display = 'flex';
+            document.getElementById('appFrame').style.background = 'var(--bg-crisis)';
+            renderMap();
+            updateInstructions();
+            
+            // Haptic feedback simulation
+            if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+        } else {
+            document.getElementById('peaceUI').style.display = 'flex';
+            document.getElementById('crisisUI').style.display = 'none';
+            document.getElementById('appFrame').style.background = 'var(--bg-peace)';
+            stopStrobe();
+        }
+    }
+
+    function renderMap() {
+        if (!state) return;
+        const floorData = state.hotel.floors[0]; // Assuming floor 2 for this demo
+        const route = state.guestRoutes.find(r => r.guest_id === GUEST_ID);
+        if (!route || !floorData) return;
+
+        const w = 400; const h = 400;
+        let svg = `<svg viewBox="0 0 ${w} ${h}" class="map-svg" xmlns="http://www.w3.org/2000/svg">`;
+        
+        // Render sections as boxes
+        const fireSet = new Set(state.classification.fire_sections);
+        
+        const sectionW = 160; const sectionH = 300;
+        const padding = 20;
+        
+        // Mock geometry specifically for mobile view
+        const sectionsGeo = {
+            "F2-NW": { x: padding, y: padding, w: sectionW, h: sectionH },
+            "F2-SW": { x: w - sectionW - padding, y: padding, w: sectionW, h: sectionH }
+        };
+
+        floorData.sections.forEach(s => {
+            const geo = sectionsGeo[s.id];
+            if (!geo) return;
+            const isFire = fireSet.has(s.id);
+            const cssClass = isFire ? 'svg-fire' : 'svg-room';
+            svg += `<rect class="${cssClass}" x="${geo.x}" y="${geo.y}" width="${geo.w}" height="${geo.h}" rx="10"/>`;
+            svg += `<text x="${geo.x + geo.w/2}" y="${geo.y + 30}" fill="white" text-anchor="middle" font-weight="bold">${s.name}</text>`;
+            if (isFire) {
+                svg += `<text x="${geo.x + geo.w/2}" y="${geo.y + 60}" fill="red" text-anchor="middle" font-size="30">🔥</text>`;
+            }
+        });
+
+        // Calculate positions
+        const mySectionGeo = sectionsGeo[route.section];
+        if (mySectionGeo) {
+            const myX = mySectionGeo.x + mySectionGeo.w/2;
+            const myY = mySectionGeo.y + mySectionGeo.h/2;
+            
+            // Draw Route Line to center or exit
+            const targetX = route.section === "F2-NW" ? w - padding : padding;
+            const targetY = h - padding;
+            
+            svg += `<path class="svg-route" d="M ${myX} ${myY} L ${targetX} ${targetY}" />`;
+            
+            // Draw me
+            svg += `<circle class="svg-you" cx="${myX}" cy="${myY}" />`;
+            svg += `<text x="${myX}" y="${myY - 20}" fill="#0f0" text-anchor="middle" font-weight="bold">YOU</text>`;
+            
+            // Draw Exit
+            svg += `<text x="${targetX}" y="${targetY}" class="svg-exit" text-anchor="middle">🚪</text>`;
+        }
+
+        svg += `</svg>`;
+        document.getElementById('mapContainer').innerHTML = svg;
+    }
+
+    function updateInstructions() {
+        const route = state.guestRoutes.find(r => r.guest_id === GUEST_ID);
+        if (route) {
+            let instructions = `Go to ${route.exit_name}.`;
+            if (route.in_danger) {
+                instructions = `⚠️ FIRE IN YOUR ZONE! Evacuate immediately to ${route.exit_name}!`;
+            }
+            document.getElementById('directionText').textContent = instructions;
+        }
+    }
+
+    async function triggerSOS() {
+        const msg = prompt("What is your emergency? (e.g. Trapped, Injured)");
+        if (!msg) return;
+        
+        document.getElementById('sosBtn').style.display = 'none';
+        document.getElementById('strobeBtn').style.display = 'block';
+        document.getElementById('directionText').innerHTML = `<span style="color:red">SOS SENT. Help is being dispatched to your room. Tap STROBE to make yourself visible to firefighters.</span>`;
+        
+        if (navigator.vibrate) navigator.vibrate([500, 200, 500]);
+
+        await fetch('/api/trigger-sos', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ guest_id: GUEST_ID, room: "203", message: msg })
+        });
+    }
+
+    function toggleStrobe() {
+        isStrobing = !isStrobing;
+        const overlay = document.getElementById('strobeOverlay');
+        const btn = document.getElementById('strobeBtn');
+        
+        if (isStrobing) {
+            overlay.style.display = 'block';
+            sirenAudio.play().catch(e => console.log("Audio play failed:", e));
+            btn.textContent = "🛑 STOP STROBE & SIREN";
+            btn.style.animation = "none";
+            btn.style.background = "var(--danger)";
+            btn.style.color = "white";
+        } else {
+            stopStrobe();
+        }
+    }
+    
+    function stopStrobe() {
+        isStrobing = false;
+        document.getElementById('strobeOverlay').style.display = 'none';
+        sirenAudio.pause();
+        sirenAudio.currentTime = 0;
+        const btn = document.getElementById('strobeBtn');
+        btn.textContent = "🔦 STROBE & SIREN";
+        btn.style.animation = "strobe-btn 0.2s infinite alternate";
+    }
+
+    function markSafe() {
+        alert("You have been marked safe! The command center has been notified.");
+        // In a real app, this sends an API call to remove the guest from the tracking array
+    }
+
+    connectWS();
+</script>
+
+</body>
+</html>

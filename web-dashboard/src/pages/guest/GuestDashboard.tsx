@@ -36,6 +36,22 @@ import { useAuthStore } from '../../store/authStore';
 import { useNotificationStore } from '../../store/notificationStore';
 import { useSocketStore } from '../../store/socketStore';
 import axios from 'axios';
+import './guest.css'; 
+import '../../landing/landing.css';
+import { MapContainer, TileLayer, Marker, Polyline } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
+import L from 'leaflet';
+import markerIcon from 'leaflet/dist/images/marker-icon.png';
+import markerShadow from 'leaflet/dist/images/marker-shadow.png';
+
+let DefaultIcon = L.icon({
+  iconUrl: markerIcon,
+  shadowUrl: markerShadow,
+  iconAnchor: [12, 41]
+});
+L.Marker.prototype.options.icon = DefaultIcon;
+
+gsap.registerPlugin(ScrollTrigger);
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
@@ -51,17 +67,25 @@ export default function GuestDashboard() {
   const [isSendingSOS, setIsSendingSOS] = useState(false);
   const [assignedStaff, setAssignedStaff] = useState<any[]>([]);
   const [tasks, setTasks] = useState<any[]>([]);
-  const [loadingTasks, setLoadingTasks] = useState(false);
-  
-  // Toast notifications
-  const [toastOpen, setToastOpen] = useState(false);
-  const [toastMessage, setToastMessage] = useState('');
-  const [toastSeverity, setToastSeverity] = useState<'success' | 'info' | 'warning' | 'error'>('info');
+  const [isStrobing, setIsStrobing] = useState(false);
+  const [sirenAudio] = useState(new Audio('https://assets.mixkit.co/sfx/preview/mixkit-warning-alarm-buzzer-991.mp3'));
 
-  const showToast = (message: string, severity: 'success' | 'info' | 'warning' | 'error' = 'info') => {
-    setToastMessage(message);
-    setToastSeverity(severity);
-    setToastOpen(true);
+  useEffect(() => {
+    sirenAudio.loop = true;
+    return () => {
+      sirenAudio.pause();
+    };
+  }, [sirenAudio]);
+
+  const toggleStrobe = () => {
+    if (!isStrobing) {
+      setIsStrobing(true);
+      sirenAudio.play().catch(e => console.log(e));
+    } else {
+      setIsStrobing(false);
+      sirenAudio.pause();
+      sirenAudio.currentTime = 0;
+    }
   };
 
   const fetchActiveIncident = async () => {
@@ -142,22 +166,17 @@ export default function GuestDashboard() {
     };
   }, [socket, activeIncident]);
 
-  const triggerPanic = async () => {
-    if (isSendingSOS) {
-      return;
-    }
-
+  const triggerTrappedSOS = async () => {
+    if (isSendingSOS) return;
     setIsSendingSOS(true);
     try {
-      const response = await axios.post(`${API_URL}/users/panic`, {
-        message: `Panic triggered from Guest Dashboard (Room ${user?.room_number || 'Unknown'})`,
-        latitude: 40.7128, // Mock GPS
-        longitude: -74.0060,
+      await axios.post(`${API_URL}/users/panic`, {
+        message: `TRAPPED: Guest in Room ${user?.room_number || 'Unknown'} requires immediate extraction.`,
+        latitude: 40.7128, longitude: -74.0060,
       });
-      alert(response.data?.message || 'Panic Alert Sent! Security is on the way.');
+      alert('DISTRESS SIGNAL RECEIVED. Extraction team dispatched. Stay low and use the Strobe & Siren.');
     } catch (err) {
-      console.error('Failed to trigger panic:', err);
-      alert('Unable to send SOS. Please check your connection and try again.');
+      alert('NETWORK ERROR. Attempting to broadcast via fallback mesh.');
     } finally {
       setIsSendingSOS(false);
     }
@@ -189,319 +208,177 @@ export default function GuestDashboard() {
   }, { scope: containerRef });
 
   return (
-    <Box ref={containerRef} sx={{ maxWidth: 600, mx: 'auto' }}>
-      <Typography variant="h1" sx={{ fontSize: '2rem', mb: 1 }} className="stagger-item">
-        Hello, {user?.name || 'Guest'}
-      </Typography>
-      <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }} className="stagger-item">
-        Your safety is our top priority.
-      </Typography>
-
-      {/* Status Banner & AI Plan */}
-      {activeIncident ? (
-        <Box sx={{ mb: 4 }} className="stagger-item">
-          <Alert
-            icon={<WarningIcon fontSize="inherit" />}
-            severity="error"
-            sx={{ mb: 2, borderRadius: 3 }}
-            className="glow-red"
-            action={
-              <Button color="inherit" size="small" onClick={() => navigate('/guest/check-in')} sx={{ fontWeight: 'bold' }}>
-                Check-In NOW
-              </Button>
-            }
-          >
-            <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>Active {activeIncident.incident_type.toUpperCase()} Emergency</Typography>
-            <Typography variant="body2" sx={{ mt: 1, mb: 1, fontWeight: 500, opacity: 0.9 }}>
-              {activeIncident.description || 'A fire has been detected.'}
-            </Typography>
-            <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 1.5 }}>
-              {activeIncident.mass_alert_message || 'Please follow the emergency instructions below.'}
-            </Typography>
-            <Button 
-              variant="contained" 
-              color="error" 
-              size="small" 
-              onClick={() => navigate('/guest/map')}
-              sx={{ 
-                fontWeight: 800, 
-                textTransform: 'none', 
-                backgroundColor: '#fff', 
-                color: '#d32f2f',
-                '&:hover': {
-                  backgroundColor: '#f5f5f5',
-                }
-              }}
-            >
-              View Evacuation Map & Directions
-            </Button>
-          </Alert>
-
-          {/* Real-time Responders List */}
-          {assignedStaff.length > 0 && (
-            <Card className="glass" sx={{ mb: 3, border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: 3, background: 'rgba(59, 130, 246, 0.05)' }}>
-              <CardContent sx={{ pb: '16px !important' }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                  <SecurityIcon sx={{ mr: 1, color: '#3b82f6' }} />
-                  <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: '#60a5fa' }}>
-                    Responders Dispatched
-                  </Typography>
-                </Box>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                  The following personnel are currently en route to assist you:
-                </Typography>
-                <List dense sx={{ p: 0 }}>
-                  {assignedStaff.map((staff, idx) => (
-                    <ListItem key={idx} sx={{ px: 0, py: 0.5 }}>
-                      <ListItemIcon sx={{ minWidth: 32 }}>
-                        <ShieldIcon sx={{ fontSize: 18, color: '#3b82f6' }} />
-                      </ListItemIcon>
-                      <ListItemText 
-                        primary={staff.name} 
-                        secondary={<span style={{ textTransform: 'capitalize', color: 'rgba(255,255,255,0.5)' }}>{staff.role}</span>}
-                      />
-                    </ListItem>
-                  ))}
-                </List>
-              </CardContent>
-            </Card>
-          )}
-
-          {activeIncident.evacuation_routes && (
-            <Card className="glass-strong" sx={{ border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: 3 }}>
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                  <RunIcon sx={{ mr: 1, color: '#ef4444' }} />
-                  <Typography variant="h6" sx={{ fontWeight: 'bold' }}>Safe Exit Plan (AI Generated)</Typography>
-                </Box>
-                
-                {activeIncident.evacuation_routes.guestEmergencyPlan && (
-                  <Box sx={{ mb: 3 }}>
-                    <Typography variant="subtitle2" color="primary" sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                      <InfoIcon sx={{ fontSize: 16, mr: 0.5 }} /> YOUR STEPS:
-                    </Typography>
-                    {activeIncident.evacuation_routes.guestEmergencyPlan.map((step: string, i: number) => (
-                      <Typography key={i} variant="body2" sx={{ mb: 0.5 }}>• {step}</Typography>
-                    ))}
-                  </Box>
-                )}
-
-                <Grid container spacing={2}>
-                  {activeIncident.evacuation_routes.safeExits && (
-                    <Grid size={{ xs: 6 }}>
-                      <Typography variant="subtitle2" color="success.main" sx={{ mb: 1 }}>RECOMMENDED EXITS:</Typography>
-                      {activeIncident.evacuation_routes.safeExits.map((exit: string, i: number) => (
-                        <Typography key={i} variant="caption" sx={{ display: 'block', fontWeight: 'bold' }}>- {exit}</Typography>
-                      ))}
-                    </Grid>
-                  )}
-                  {activeIncident.evacuation_routes.tips && (
-                    <Grid size={{ xs: 6 }}>
-                      <Typography variant="subtitle2" color="warning.main" sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                        <TipIcon sx={{ fontSize: 16, mr: 0.5 }} /> SAFETY TIPS:
-                      </Typography>
-                      {activeIncident.evacuation_routes.tips.map((tip: string, i: number) => (
-                        <Typography key={i} variant="caption" sx={{ display: 'block' }}>• {tip}</Typography>
-                      ))}
-                    </Grid>
-                  )}
-                </Grid>
-
-                <Box sx={{ mt: 3 }}>
-                  <Button
-                    variant="contained"
-                    color="success"
-                    fullWidth
-                    onClick={() => navigate('/guest/map')}
-                    startIcon={<MapIcon />}
-                    sx={{
-                      py: 1.25,
-                      fontWeight: 800,
-                      borderRadius: 2,
-                      boxShadow: '0 0 15px rgba(16, 185, 129, 0.4)',
-                      background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                      textTransform: 'none',
-                      '&:hover': {
-                        background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
-                        boxShadow: '0 0 25px rgba(16, 185, 129, 0.6)',
-                      }
-                    }}
-                  >
-                    View Interactive Map & Evacuation Route
-                  </Button>
-                </Box>
-              </CardContent>
-            </Card>
-          )}
-        </Box>
-      ) : (
-        <Alert
-          icon={<CheckCircleIcon fontSize="inherit" />}
-          severity="success"
-          sx={{ mb: 4, borderRadius: 3, background: 'rgba(34, 197, 94, 0.1)', color: '#4ade80' }}
-          className="stagger-item"
-        >
-          No active emergencies at this property.
-        </Alert>
+    <>
+      {isStrobing && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999, background: 'white', animation: 'screen-strobe 0.1s infinite alternate' }}></div>
       )}
+      <style>{`
+        @keyframes screen-strobe { 0% { opacity: 0; } 100% { opacity: 1; } }
+        @keyframes strobe-btn { 0% { background: white; color: black; } 100% { background: #333; color: white; } }
+      `}</style>
+      <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', gap: '3rem' }}>
+      
+      {/* Hero Section */}
+      <section style={{ paddingTop: '1rem', paddingBottom: '1rem' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+          <h1 style={{ fontSize: 'clamp(2.5rem, 8vw, 4rem)', lineHeight: 1.1, margin: 0, fontFamily: 'Fraunces, Georgia, serif', fontWeight: 600, letterSpacing: '-0.05em' }}>
+            <span className="sh-line-mask"><span className="sh-line-inner" style={{ color: 'var(--gp-text-primary)' }}>Hello,</span></span>
+            <span className="sh-line-mask">
+              <span className="sh-line-inner guest-hword" style={{ WebkitTextFillColor: 'transparent' }}>
+                {user?.name || 'Guest'}
+              </span>
+            </span>
+          </h1>
+          <div className="sh-fade-in" style={{ marginTop: '0.5rem', maxWidth: '100%', fontSize: '1.1rem', color: 'var(--gp-text-secondary)' }}>
+            <p>Your safety is our top priority. We are monitoring the property 24/7.</p>
+          </div>
+        </div>
+      </section>
 
-      {/* Main Panic Button */}
-      <Box
-        className="stagger-item"
-        sx={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          mb: 5
-        }}
-      >
-        <Box sx={{ position: 'relative', width: 200, height: 200, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-          <div className="panic-ring"></div>
-          <div className="panic-ring"></div>
-          <div className="panic-ring"></div>
-          <Button
-            ref={panicRef}
-            variant="contained"
-            color="error"
-            onClick={triggerPanic}
-            disabled={isSendingSOS}
-            sx={{
-              width: 150,
-              height: 150,
-              borderRadius: '50%',
-              fontSize: '1.5rem',
-              fontWeight: 800,
-              zIndex: 2,
-              background: 'linear-gradient(135deg, #ef4444 0%, #b91c1c 100%)',
-            }}
-          >
-            {isSendingSOS ? 'SENDING...' : 'SOS'}
-          </Button>
-        </Box>
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-          Tap SOS to immediately alert security and responders.
-        </Typography>
-      </Box>
+      {/* Dynamic Status Display */}
+      <section className="sh-fade-in">
+        {activeIncident ? (
+          <div style={{ background: '#000000', border: '2px solid #ef4444', color: '#ffffff', borderRadius: '0.5rem', padding: '2rem', position: 'relative', overflow: 'hidden' }}>
+            <div style={{ position: 'relative', zIndex: 2 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid #333', paddingBottom: '1rem' }}>
+                <h2 style={{ fontFamily: 'Inter, sans-serif', fontSize: '1.5rem', fontWeight: 900, letterSpacing: '0.1em', color: '#ef4444', margin: 0, textTransform: 'uppercase' }}>
+                  CRITICAL ALERT: {activeIncident.incident_type}
+                </h2>
+                <div style={{ background: '#ef4444', color: '#fff', padding: '0.2rem 0.8rem', fontSize: '0.8rem', fontWeight: 800, borderRadius: '0.25rem', animation: 'pulse-bg 1s infinite alternate' }}>EVACUATE</div>
+              </div>
+              
+              <p style={{ fontSize: '1.1rem', marginBottom: '0.5rem', fontWeight: 400, color: '#ccc' }}>{activeIncident.description || 'Hazard detected on premises.'}</p>
+              <p style={{ fontSize: '1.2rem', marginBottom: '1.5rem', fontWeight: 700, color: '#fff' }}>{activeIncident.mass_alert_message}</p>
+              
+              <div style={{ background: 'rgba(255,255,255,0.05)', padding: '16px', borderRadius: '8px', borderLeft: '4px solid #f59e0b', marginBottom: '1.5rem' }}>
+                <h3 style={{ margin: '0 0 8px 0', fontSize: '1rem', color: '#f59e0b', textTransform: 'uppercase', fontWeight: 800 }}>MANDATORY SAFETY GUIDELINES</h3>
+                <ul style={{ margin: 0, paddingLeft: '20px', color: '#ddd', fontSize: '0.9rem', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <li><strong>STAY CALM:</strong> Follow the green highlighted route on your map below.</li>
+                  <li><strong>NO ELEVATORS:</strong> Use stairs only. Elevators are disabled during fire emergencies.</li>
+                  <li><strong>SMOKE CONDITIONS:</strong> If you encounter heavy smoke, stay low to the ground to breathe.</li>
+                  <li><strong>DO NOT RETURN:</strong> Once outside, proceed to the assembly point and press "I AM SAFE". Do not re-enter.</li>
+                </ul>
+              </div>
+              
+              {/* Live Tactical Evacuation Map */}
+              <div style={{ marginTop: '1rem', background: '#111', borderRadius: '0.5rem', overflow: 'hidden', border: '1px solid #333', height: '300px', width: '100%' }}>
+                <MapContainer center={[40.7128, -74.0060]} zoom={18} style={{ height: '100%', width: '100%' }} zoomControl={false} dragging={false}>
+                  <TileLayer
+                    url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+                    attribution="&copy; OpenStreetMap contributors"
+                  />
+                  {/* Fire Marker */}
+                  <Marker position={[40.71295, -74.0061]}>
+                  </Marker>
+                  {/* Guest Location */}
+                  <Marker position={[40.7128, -74.0060]} />
+                  {/* Exit Path */}
+                  <Polyline positions={[[40.7128, -74.0060], [40.7127, -74.0058], [40.7125, -74.0055]]} color="#10b981" weight={6} dashArray="10, 10" />
+                </MapContainer>
+              </div>
 
-      {/* Assigned Tasks Section */}
-      {tasks.length > 0 && (
-        <Box sx={{ mb: 4 }} className="stagger-item">
-          <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
-            <CheckCircleIcon sx={{ color: 'var(--accent-green)', fontSize: 20 }} /> Your Emergency Tasks
-          </Typography>
-          <Stack spacing={1.5}>
-            {tasks.map((task) => (
-              <Card 
-                key={task.id} 
-                className="glass-strong" 
-                sx={{ 
-                  borderLeft: `4px solid ${task.priority === 'urgent' ? '#ef4444' : task.priority === 'high' ? '#f59e0b' : '#3b82f6'}`,
-                  borderRadius: 2.5 
-                }}
-              >
-                <CardContent sx={{ py: 1.5, px: 2, '&:last-child': { pb: 1.5 } }}>
-                  <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 0.5, color: '#fff' }}>
-                    {task.description}
-                  </Typography>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1 }}>
-                    <Chip 
-                      label={task.status.toUpperCase().replace('_', ' ')} 
-                      size="small" 
-                      color={task.status === 'completed' ? 'success' : task.status === 'in_progress' ? 'warning' : 'primary'}
-                      sx={{ fontSize: '0.62rem', height: 18, fontWeight: 700 }}
-                    />
-                    {task.assigned_by_ai && (
-                      <Chip 
-                        label="AI Assigned" 
-                        size="small" 
-                        variant="outlined"
-                        sx={{ fontSize: '0.62rem', height: 18, borderColor: 'var(--accent-blue)', color: 'var(--accent-blue)', fontWeight: 600 }}
-                      />
-                    )}
-                  </Box>
-                </CardContent>
-              </Card>
-            ))}
-          </Stack>
-        </Box>
-      )}
+              <div style={{ marginTop: '2rem', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <button 
+                  onClick={() => navigate('/guest/check-in')}
+                  style={{ background: '#10b981', color: '#000', padding: '1rem', fontSize: '1.1rem', fontWeight: 800, width: '100%', border: 'none', borderRadius: '0.25rem', cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.05em' }}
+                >
+                  CONFIRM EVACUATION (MARK SAFE)
+                </button>
+                <button 
+                  onClick={triggerTrappedSOS}
+                  style={{ background: '#000', color: '#ef4444', border: '2px solid #ef4444', padding: '1rem', fontSize: '1.1rem', fontWeight: 800, width: '100%', borderRadius: '0.25rem', cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.05em' }}
+                >
+                  {isSendingSOS ? 'TRANSMITTING...' : 'I AM TRAPPED (DISPATCH RESCUE)'}
+                </button>
+                <button 
+                  onClick={toggleStrobe}
+                  style={{ 
+                    background: isStrobing ? '#fff' : '#111', 
+                    color: isStrobing ? '#000' : '#fff', 
+                    border: '1px solid #333', 
+                    padding: '1rem', 
+                    fontSize: '1rem', 
+                    fontWeight: 700, 
+                    width: '100%', 
+                    borderRadius: '0.25rem',
+                    cursor: 'pointer',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                    animation: isStrobing ? 'strobe-btn 0.1s infinite alternate' : 'none'
+                  }}
+                >
+                  {isStrobing ? 'DISENGAGE STROBE / SIREN' : 'ACTIVATE STROBE / SIREN'}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+            <div style={{ background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '0.5rem', padding: '2rem', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
+                <div style={{ width: '12px', height: '12px', background: '#10b981', borderRadius: '50%' }}></div>
+                <h2 style={{ fontFamily: 'Inter, sans-serif', fontSize: '1.1rem', fontWeight: 600, letterSpacing: '0.05em', margin: 0, color: '#374151', textTransform: 'uppercase' }}>
+                  Status: Secure
+                </h2>
+              </div>
+              <p style={{ color: '#6b7280', fontSize: '0.95rem', margin: 0 }}>All monitoring systems are nominal. No hazards detected in your sector.</p>
+            </div>
+            
+            <div style={{ background: '#1f2937', color: 'white', borderRadius: '0.5rem', padding: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <h3 style={{ fontSize: '1.1rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>Digital Credential</h3>
+                <p style={{ color: '#9ca3af', fontSize: '0.85rem', margin: '0.25rem 0 0 0' }}>Authorized Access Active</p>
+              </div>
+              <div style={{ width: '40px', height: '40px', border: '2px solid #3b82f6', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ width: '20px', height: '20px', background: '#3b82f6', borderRadius: '50%' }}></div>
+              </div>
+            </div>
+          </div>
+        )}
+      </section>
+
+
 
       {/* Quick Actions Grid */}
-      <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 'bold' }} className="stagger-item">
-        Quick Actions
-      </Typography>
-      <Grid container spacing={2} className="stagger-item" sx={{ mb: 4 }}>
-        <Grid size={{ xs: 6 }}>
-          <Card 
-            className="glass" 
-            sx={{ height: '100%', cursor: 'pointer', '&:hover': { transform: 'scale(1.02)' }, transition: 'transform 0.2s ease-in-out' }}
-            onClick={() => {
-              window.location.href = 'tel:+15550199';
-            }}
-          >
-            <CardContent sx={{ textAlign: 'center', p: 3 }}>
-              <IconButton color="secondary" sx={{ mb: 1, backgroundColor: 'rgba(59, 130, 246, 0.1)' }}>
-                <PhoneIcon />
-              </IconButton>
-              <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>Call Security</Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid size={{ xs: 6 }}>
-          <Card 
-            className="glass" 
-            sx={{ height: '100%', cursor: 'pointer', '&:hover': { transform: 'scale(1.02)' }, transition: 'transform 0.2s ease-in-out' }}
-            onClick={() => navigate('/guest/chat')}
-          >
-            <CardContent sx={{ textAlign: 'center', p: 3 }}>
-              <IconButton color="primary" sx={{ mb: 1, backgroundColor: 'rgba(0, 121, 193, 0.1)' }}>
-                <SecurityIcon />
-              </IconButton>
-              <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>Radio Chat</Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid size={{ xs: 12 }}>
-          <Card 
-            className="glass" 
-            sx={{ 
-              borderColor: 'rgba(239, 68, 68, 0.3)', 
-              borderWidth: 1.5,
-              cursor: 'pointer',
-              '&:hover': { transform: 'scale(1.01)' }, 
-              transition: 'transform 0.2s ease-in-out'
-            }}
-            onClick={() => navigate('/guest/emergency')}
-          >
-            <CardContent sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2, p: 2 }}>
-              <IconButton color="error" sx={{ backgroundColor: 'rgba(239, 68, 68, 0.1)' }}>
-                <ReportIcon />
-              </IconButton>
-              <Box>
-                <Typography variant="subtitle2" sx={{ fontWeight: 'bold', textAlign: 'left' }}>Report Property Emergency</Typography>
-                <Typography variant="caption" color="text.secondary">Select hazard type and alert staff</Typography>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
+      <section className="sh-fade-in" style={{ marginBottom: '1rem' }}>
+        <h2 style={{ fontSize: '1.5rem', fontWeight: 700, letterSpacing: '-0.03em', marginBottom: '1rem', color: 'var(--gp-text-primary)' }}>Quick Actions</h2>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+          
+          <div onClick={() => window.location.href = 'tel:+15550199'} className="guest-card" style={{ padding: '1.5rem', cursor: 'pointer', display: 'flex', flexDirection: 'column', minHeight: '160px' }}>
+            <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'var(--gp-bg)', color: 'var(--gp-text-primary)', border: '1px solid var(--gp-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', marginBottom: 'auto' }}>
+              📞
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: '1.5rem' }}>
+              <h3 style={{ fontSize: '1.2rem', fontWeight: 700, letterSpacing: '-0.02em', margin: 0, color: 'var(--gp-text-primary)' }}>Call Security</h3>
+              <span style={{ fontSize: '1.2rem', color: 'var(--gp-text-secondary)' }}>→</span>
+            </div>
+          </div>
 
-      {/* Snackbar for Popups */}
-      <Snackbar
-        open={toastOpen}
-        autoHideDuration={6000}
-        onClose={() => setToastOpen(false)}
-        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
-      >
-        <MuiAlert 
-          onClose={() => setToastOpen(false)} 
-          severity={toastSeverity} 
-          sx={{ width: '100%', borderRadius: 2, boxShadow: '0 8px 32px rgba(0,0,0,0.4)' }}
-          variant="filled"
-        >
-          {toastMessage}
-        </MuiAlert>
-      </Snackbar>
-    </Box>
+          <div onClick={() => navigate('/guest/chat')} className="guest-card" style={{ padding: '1.5rem', cursor: 'pointer', display: 'flex', flexDirection: 'column', minHeight: '160px' }}>
+            <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'var(--gp-teal)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', marginBottom: 'auto' }}>
+              💬
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: '1.5rem' }}>
+              <h3 style={{ fontSize: '1.2rem', fontWeight: 700, letterSpacing: '-0.02em', margin: 0, color: 'var(--gp-text-primary)' }}>Radio Chat</h3>
+              <span style={{ fontSize: '1.2rem', color: 'var(--gp-text-secondary)' }}>→</span>
+            </div>
+          </div>
+
+          <div onClick={() => navigate('/guest/emergency')} className="guest-card" style={{ padding: '1.5rem', cursor: 'pointer', display: 'flex', flexDirection: 'column', minHeight: '160px', gridColumn: '1 / -1', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
+            <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', marginBottom: '1rem' }}>
+              ⚠
+            </div>
+            <h3 style={{ fontSize: '1.2rem', fontWeight: 700, letterSpacing: '-0.02em', margin: 0, color: '#ef4444' }}>Report Emergency</h3>
+            <p style={{ color: 'var(--gp-text-secondary)', marginTop: '0.2rem', marginBottom: '1rem', fontSize: '0.9rem' }}>Notify the command center of a hazard.</p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 'auto' }}>
+              <span style={{ fontSize: '1.2rem', color: '#ef4444' }}>→</span>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+    </div>
+    </>
   );
 }

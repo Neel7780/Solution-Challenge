@@ -1,0 +1,87 @@
+{
+  "incident_id": "FIRE-2026-001",
+  "timestamp": "2026-06-11T10:09:37.986Z",
+  "property": "Grand Hotel Main Building",
+  "trigger": "smoke_detector",
+  "sensors": [
+    {
+      "id": "S1",
+      "section_id": "F2-SA",
+      "location": "Floor 2 North Wing Corridor",
+      "type": "smoke",
+      "status": "CLEAR"
+    },
+    {
+      "id": "S2",
+      "section_id": "F2-SA",
+      "location": "Floor 2 North Wing Corridor",
+      "type": "temperature",
+      "reading_celsius": 22,
+      "status": "CLEAR"
+    },
+    {
+      "id": "S3",
+      "section_id": "F2-SA",
+      "location": "Near Exit E4 (North Stairwell)",
+      "type": "smoke",
+      "status": "CLEAR"
+    },
+    {
+      "id": "S4",
+      "section_id": "F2-SB",
+      "location": "Floor 2 South Wing Corridor",
+      "type": "smoke",
+      "status": "CLEAR"
+    },
+    {
+      "id": "S5",
+      "section_id": "F2-SB",
+      "location": "Near Exit E6 (South Fire Escape)",
+      "type": "smoke",
+      "status": "CLEAR"
+    },
+    {
+      "id": "S6",
+      "section_id": "F1-SA",
+      "location": "Ground North Wing",
+      "type": "smoke",
+      "status": "CLEAR"
+    },
+    {
+      "id": "S7",
+      "section_id": "F1-SB",
+      "location": "Ground South Wing",
+      "type": "smoke",
+      "status": "CLEAR"
+    },
+    {
+      "id": "S8",
+      "section_id": "F3-SA",
+      "location": "Floor 3 North Wing",
+      "type": "smoke",
+      "status": "CLEAR"
+    },
+    {
+      "id": "S9",
+      "section_id": "F3-SB",
+      "location": "Floor 3 South Wing",
+      "type": "smoke",
+      "status": "CLEAR"
+    },
+    {
+      "id": "SIM-SMOKE-F2-SA",
+      "section_id": "F2-SA",
+      "location": "Simulated fire in F2-SA",
+      "type": "smoke",
+      "status": "CRITICAL"
+    },
+    {
+      "id": "SIM-TEMP-F2-SA",
+      "section_id": "F2-SA",
+      "location": "Simulated fire in F2-SA",
+      "type": "temperature",
+      "reading_celsius": 250,
+      "status": "CRITICAL"
+    }
+  ]
+}
