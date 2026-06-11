@@ -35,6 +35,7 @@ import GuestDashboard from './pages/guest/GuestDashboard';
 import GuestEmergency from './pages/guest/GuestEmergency';
 import GuestNotifications from './pages/guest/GuestNotifications';
 import GuestCheckIn from './pages/guest/GuestCheckIn';
+import GuestMap from './pages/guest/GuestMap';
 import NotFound from './pages/NotFound';
 
 function getDashboardHomeByRole(role?: string) {
@@ -114,6 +115,7 @@ function App() {
           <Route path="emergency" element={<GuestEmergency />} />
           <Route path="notifications" element={<GuestNotifications />} />
           <Route path="check-in" element={<GuestCheckIn />} />
+          <Route path="map" element={<GuestMap />} />
           <Route path="chat" element={<Chat />} />
         </Route>
       </Route>

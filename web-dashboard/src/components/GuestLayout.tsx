@@ -30,6 +30,7 @@ import {
   Chat as ChatIcon,
   DarkMode as DarkModeIcon,
   LightMode as LightModeIcon,
+  Map as MapIcon,
 } from '@mui/icons-material';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
@@ -59,8 +60,9 @@ export default function GuestLayout() {
 
   const getPathValue = (path: string) => {
     if (path.includes('emergency')) return 1;
-    if (path.includes('chat')) return 2;
-    if (path.includes('notifications')) return 3;
+    if (path.includes('map')) return 2;
+    if (path.includes('chat')) return 3;
+    if (path.includes('notifications')) return 4;
     return 0; // dashboard
   };
 
@@ -173,6 +175,12 @@ export default function GuestLayout() {
             </ListItemButton>
           </ListItem>
           <ListItem disablePadding>
+            <ListItemButton onClick={() => handleNavigation('/guest/map')} sx={{ borderRadius: 1 }}>
+              <ListItemIcon sx={{ minWidth: 36 }}><MapIcon sx={{ fontSize: 20, color: 'var(--accent-green)' }} /></ListItemIcon>
+              <ListItemText primary={<Typography sx={{ fontSize: '0.85rem' }}>Live Evacuation Map</Typography>} />
+            </ListItemButton>
+          </ListItem>
+          <ListItem disablePadding>
             <ListItemButton onClick={() => handleNavigation('/guest/chat')} sx={{ borderRadius: 1 }}>
               <ListItemIcon sx={{ minWidth: 36 }}><ChatIcon sx={{ fontSize: 20 }} /></ListItemIcon>
               <ListItemText primary={<Typography sx={{ fontSize: '0.85rem' }}>Property Chat</Typography>} />
@@ -230,16 +238,21 @@ export default function GuestLayout() {
             switch(newValue) {
               case 0: navigate('/guest'); break;
               case 1: navigate('/guest/emergency'); break;
-              case 2: navigate('/guest/chat'); break;
-              case 3: navigate('/guest/notifications'); break;
+              case 2: navigate('/guest/map'); break;
+              case 3: navigate('/guest/chat'); break;
+              case 4: navigate('/guest/notifications'); break;
             }
           }}
           sx={{ background: 'transparent' }}
         >
           <BottomNavigationAction label="Home" icon={<HomeIcon />} />
           <BottomNavigationAction 
-            label="Emergency" 
+            label="SOS" 
             icon={<WarningIcon color="error" />} 
+          />
+          <BottomNavigationAction 
+            label="Map" 
+            icon={<MapIcon />} 
           />
           <BottomNavigationAction 
             label="Chat" 

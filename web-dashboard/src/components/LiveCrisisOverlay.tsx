@@ -81,6 +81,7 @@ export default function LiveCrisisOverlay() {
 
   const isGuest = user.role === 'guest';
   const isOnGuestEmergency = location.pathname.startsWith('/guest/emergency');
+  const isOnGuestMap = location.pathname.startsWith('/guest/map');
   const isExpanded = !forceMinimized && (hoverExpanded || nearTopExpanded);
 
   return (
@@ -146,10 +147,19 @@ export default function LiveCrisisOverlay() {
                       Minimize
                     </Button>
                   )}
-                  {isExpanded && isGuest && !isOnGuestEmergency && (
-                    <Button color="inherit" size="small" onClick={() => navigate('/guest/emergency')}>
-                      Emergency View
-                    </Button>
+                  {isExpanded && isGuest && (
+                    <>
+                      {!isOnGuestEmergency && (
+                        <Button color="inherit" size="small" onClick={() => navigate('/guest/emergency')}>
+                          Emergency View
+                        </Button>
+                      )}
+                      {!isOnGuestMap && (
+                        <Button variant="contained" color="error" size="small" onClick={() => navigate('/guest/map')} sx={{ fontWeight: 'bold' }}>
+                          View Map Route
+                        </Button>
+                      )}
+                    </>
                   )}
                   {showCoords && (
                     <Button color="inherit" size="small" onClick={() => navigate('/dashboard/locations')}>
@@ -279,9 +289,14 @@ export default function LiveCrisisOverlay() {
 
         <DialogActions sx={{ px: 3, pb: 2.4 }}>
           {isGuest ? (
-            <Button variant="contained" color="error" onClick={() => { acknowledgeCritical(); navigate('/guest/check-in'); }}>
-              Open Check-In
-            </Button>
+            <Stack direction="row" spacing={1} sx={{ flexGrow: 1 }}>
+              <Button variant="contained" color="error" onClick={() => { acknowledgeCritical(); navigate('/guest/check-in'); }}>
+                Open Check-In
+              </Button>
+              <Button variant="contained" color="success" onClick={() => { acknowledgeCritical(); navigate('/guest/map'); }} sx={{ bgcolor: '#10b981', '&:hover': { bgcolor: '#059669' } }}>
+                View Evacuation Map
+              </Button>
+            </Stack>
           ) : (
             <Button variant="contained" onClick={() => { acknowledgeCritical(); navigate('/dashboard/locations'); }}>
               Open Crisis Map

@@ -28,6 +28,7 @@ import {
   Info as InfoIcon,
   TipsAndUpdates as TipIcon,
   Shield as ShieldIcon,
+  Map as MapIcon,
 } from '@mui/icons-material';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
@@ -205,7 +206,7 @@ export default function GuestDashboard() {
             sx={{ mb: 2, borderRadius: 3 }}
             className="glow-red"
             action={
-              <Button color="inherit" size="small" onClick={() => navigate('/guest/check-in')}>
+              <Button color="inherit" size="small" onClick={() => navigate('/guest/check-in')} sx={{ fontWeight: 'bold' }}>
                 Check-In NOW
               </Button>
             }
@@ -214,9 +215,26 @@ export default function GuestDashboard() {
             <Typography variant="body2" sx={{ mt: 1, mb: 1, fontWeight: 500, opacity: 0.9 }}>
               {activeIncident.description || 'A fire has been detected.'}
             </Typography>
-            <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+            <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 1.5 }}>
               {activeIncident.mass_alert_message || 'Please follow the emergency instructions below.'}
             </Typography>
+            <Button 
+              variant="contained" 
+              color="error" 
+              size="small" 
+              onClick={() => navigate('/guest/map')}
+              sx={{ 
+                fontWeight: 800, 
+                textTransform: 'none', 
+                backgroundColor: '#fff', 
+                color: '#d32f2f',
+                '&:hover': {
+                  backgroundColor: '#f5f5f5',
+                }
+              }}
+            >
+              View Evacuation Map & Directions
+            </Button>
           </Alert>
 
           {/* Real-time Responders List */}
@@ -288,6 +306,30 @@ export default function GuestDashboard() {
                     </Grid>
                   )}
                 </Grid>
+
+                <Box sx={{ mt: 3 }}>
+                  <Button
+                    variant="contained"
+                    color="success"
+                    fullWidth
+                    onClick={() => navigate('/guest/map')}
+                    startIcon={<MapIcon />}
+                    sx={{
+                      py: 1.25,
+                      fontWeight: 800,
+                      borderRadius: 2,
+                      boxShadow: '0 0 15px rgba(16, 185, 129, 0.4)',
+                      background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                      textTransform: 'none',
+                      '&:hover': {
+                        background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
+                        boxShadow: '0 0 25px rgba(16, 185, 129, 0.6)',
+                      }
+                    }}
+                  >
+                    View Interactive Map & Evacuation Route
+                  </Button>
+                </Box>
               </CardContent>
             </Card>
           )}
