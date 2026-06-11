@@ -57,7 +57,7 @@ const checkOrigin = (origin: string | undefined, callback: (err: Error | null, a
     callback(null, true);
     return;
   }
-  const isAllowed = allowedOrigins.includes(origin) || origin.endsWith('.vercel.app') || origin.includes('localhost');
+  const isAllowed = allowedOrigins.includes(origin) || origin.endsWith('.vercel.app') || origin.endsWith('.netlify.app') || origin.includes('localhost');
   callback(null, isAllowed);
 };
 
