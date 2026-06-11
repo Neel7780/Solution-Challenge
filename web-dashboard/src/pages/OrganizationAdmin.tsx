@@ -290,11 +290,11 @@ export default function OrganizationAdmin() {
               : activeTab === 'overview'
               ? 'Tactical command center & AI verification'
               : 'Emergency task dispatch and tracking log'}
-          </p>
-        </div>
-        <div style={{ display: "flex", flexDirection: "row", gap: "16px", alignItems: "center" }}>
-          <div style={{ display: 'none' }}></div>
-          <div style={{ display: 'none' }}>
+          </Typography>
+        </Box>
+        <Box sx={{ display: "flex", flexDirection: "row", gap: "16px", alignItems: "center" }}>
+          <Box sx={{ display: 'none' }}></Box>
+          <Box sx={{ display: 'none' }}>
           {activeTab === 'properties' ? (
             <Button
               variant="outlined"
@@ -329,9 +329,9 @@ export default function OrganizationAdmin() {
               Assign Task
             </Button>
           )}
-        </div>
-      </div>
-      </div>
+          </Box>
+        </Box>
+      </Box>
 
       {/* Add Property Dialog */}
       <Dialog open={openAddProperty} onClose={() => setOpenAddProperty(false)} maxWidth="xs" fullWidth>

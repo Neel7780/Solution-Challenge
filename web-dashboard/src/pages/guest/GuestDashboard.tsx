@@ -36,7 +36,6 @@ import { useAuthStore } from '../../store/authStore';
 import { useNotificationStore } from '../../store/notificationStore';
 import { useSocketStore } from '../../store/socketStore';
 import axios from 'axios';
-import './guest.css'; 
 import '../../landing/landing.css';
 import { MapContainer, TileLayer, Marker, Polyline } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -67,8 +66,18 @@ export default function GuestDashboard() {
   const [isSendingSOS, setIsSendingSOS] = useState(false);
   const [assignedStaff, setAssignedStaff] = useState<any[]>([]);
   const [tasks, setTasks] = useState<any[]>([]);
+  const [loadingTasks, setLoadingTasks] = useState(false);
+  const [toastOpen, setToastOpen] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const [toastSeverity, setToastSeverity] = useState<'success' | 'info' | 'error'>('info');
   const [isStrobing, setIsStrobing] = useState(false);
   const [sirenAudio] = useState(new Audio('https://assets.mixkit.co/sfx/preview/mixkit-warning-alarm-buzzer-991.mp3'));
+
+  const showToast = (message: string, severity: 'success' | 'info' | 'error') => {
+    setToastMessage(message);
+    setToastSeverity(severity);
+    setToastOpen(true);
+  };
 
   useEffect(() => {
     sirenAudio.loop = true;
@@ -377,6 +386,17 @@ export default function GuestDashboard() {
 
         </div>
       </section>
+
+      <Snackbar
+        open={toastOpen}
+        autoHideDuration={6000}
+        onClose={() => setToastOpen(false)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <MuiAlert onClose={() => setToastOpen(false)} severity={toastSeverity} sx={{ width: '100%' }}>
+          {toastMessage}
+        </MuiAlert>
+      </Snackbar>
 
     </div>
     </>
