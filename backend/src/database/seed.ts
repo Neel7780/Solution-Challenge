@@ -63,11 +63,7 @@ async function seed() {
           [orgId, propertyId, u.name, u.email, u.role, passwordHash, u.room || null]
         );
         
-        // Link to mapping table
-        await client.query(
-          `INSERT INTO user_properties (user_id, property_id, role) VALUES ($1, $2, $3)`,
-          [userResult.rows[0].id, propertyId, u.role === 'org_admin' ? 'admin' : u.role]
-        );
+
         logger.info(`User created: ${u.email} / password`);
       }
     }

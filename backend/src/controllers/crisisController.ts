@@ -631,6 +631,18 @@ export const updateIncidentStatus = async (req: Request, res: Response) => {
         );
       }
 
+      if ((status === 'contained' || status === 'resolved') && (incident.severity === 'critical' || incident.status === 'critical')) {
+        await client.query(
+          `UPDATE tasks
+           SET status = 'completed'
+           WHERE incident_id = $1
+           AND assigned_to IN (
+             SELECT id FROM users WHERE role IN ('security', 'responder')
+           )`,
+          [incident.id]
+        );
+      }
+
       await client.query('COMMIT');
 
       if (req.io) {
@@ -708,6 +720,19 @@ export const resolveIncident = async (req: Request, res: Response) => {
 
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Incident not found or access denied' });
+    }
+
+    const incident = result.rows[0];
+    if (incident.severity === 'critical') {
+      await query(
+        `UPDATE tasks
+         SET status = 'completed'
+         WHERE incident_id = $1
+         AND assigned_to IN (
+           SELECT id FROM users WHERE role IN ('security', 'responder')
+         )`,
+        [id]
+      );
     }
 
     if (req.io) {

@@ -1,0 +1,388 @@
+/* ═══════════════════════════════════════════════════
+   CRISIS RESPOND — Live Tactical Map Styles
+   Premium marker animations, map overlays, and
+   evacuation route visualizations
+   ═══════════════════════════════════════════════════ */
+
+/* ─── Marker Pulse Animation ─── */
+@keyframes marker-pulse {
+  0% {
+    transform: scale(0.5);
+    opacity: 0.9;
+  }
+  70% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(2.5);
+    opacity: 0;
+  }
+}
+
+@keyframes marker-pulse-slow {
+  0% {
+    transform: scale(0.8);
+    opacity: 0.6;
+  }
+  100% {
+    transform: scale(2.0);
+    opacity: 0;
+  }
+}
+
+/* ─── SOS / Alert Flash ─── */
+@keyframes marker-alert {
+  0%, 100% {
+    box-shadow: 0 0 6px 2px rgba(239, 68, 68, 0.5);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 18px 6px rgba(239, 68, 68, 0.9);
+    transform: scale(1.15);
+  }
+}
+
+/* ─── Route Flow (dashed line animation) ─── */
+@keyframes route-flow {
+  0% {
+    stroke-dashoffset: 0;
+  }
+  100% {
+    stroke-dashoffset: -40;
+  }
+}
+
+/* ─── Marker Glow Breathe ─── */
+@keyframes marker-glow {
+  0%, 100% {
+    box-shadow: 0 0 8px 2px var(--marker-color);
+  }
+  50% {
+    box-shadow: 0 0 16px 5px var(--marker-color);
+  }
+}
+
+/* ─── Smooth Position Transition ─── */
+.leaflet-marker-icon {
+  transition: transform 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) !important;
+}
+
+/* ─── Base Marker Container ─── */
+.crisis-marker {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.crisis-marker__dot {
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 11px;
+  color: #fff;
+  letter-spacing: 0.02em;
+  position: relative;
+  z-index: 2;
+  transition: transform 0.2s ease;
+}
+
+.crisis-marker__dot:hover {
+  transform: scale(1.2);
+}
+
+/* Pulse ring behind marker */
+.crisis-marker__pulse {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  animation: marker-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  z-index: 1;
+}
+
+/* ─── Role-Based Marker Colors ─── */
+
+/* Admin — Red */
+.marker-admin .crisis-marker__dot {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  border: 2.5px solid #fff;
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.6);
+  --marker-color: rgba(239, 68, 68, 0.5);
+  animation: marker-glow 3s ease-in-out infinite;
+}
+.marker-admin .crisis-marker__pulse {
+  border: 2px solid #ef4444;
+}
+
+/* Security — Blue */
+.marker-security .crisis-marker__dot {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  border: 2.5px solid #fff;
+  box-shadow: 0 0 10px rgba(59, 130, 246, 0.6);
+  --marker-color: rgba(59, 130, 246, 0.5);
+  animation: marker-glow 3s ease-in-out infinite;
+}
+.marker-security .crisis-marker__pulse {
+  border: 2px solid #3b82f6;
+}
+
+/* Staff — Cyan */
+.marker-staff .crisis-marker__dot {
+  background: linear-gradient(135deg, #06b6d4, #0891b2);
+  border: 2.5px solid #fff;
+  box-shadow: 0 0 10px rgba(6, 182, 212, 0.6);
+  --marker-color: rgba(6, 182, 212, 0.5);
+  animation: marker-glow 3s ease-in-out infinite;
+}
+.marker-staff .crisis-marker__pulse {
+  border: 2px solid #06b6d4;
+}
+
+/* Responder — Gold */
+.marker-responder .crisis-marker__dot {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  border: 2.5px solid #fff;
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.6);
+  --marker-color: rgba(245, 158, 11, 0.5);
+  animation: marker-glow 3s ease-in-out infinite;
+}
+.marker-responder .crisis-marker__pulse {
+  border: 2px solid #f59e0b;
+}
+
+/* Guest — Green (smaller, less prominent) */
+.marker-guest .crisis-marker__dot {
+  background: linear-gradient(135deg, #10b981, #059669);
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.5);
+}
+.marker-guest .crisis-marker__pulse {
+  border: 1.5px solid #10b981;
+  animation: marker-pulse-slow 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* ─── Status-Based Overrides ─── */
+
+/* SOS / Trapped / Distressed */
+.marker-sos .crisis-marker__dot {
+  background: linear-gradient(135deg, #ef4444, #b91c1c) !important;
+  border: 2.5px solid #fca5a5 !important;
+  animation: marker-alert 1s ease-in-out infinite !important;
+}
+.marker-sos .crisis-marker__pulse {
+  border: 2px solid #ef4444 !important;
+  animation: marker-pulse 1.2s cubic-bezier(0.4, 0, 0.6, 1) infinite !important;
+}
+
+/* Safe / Reached Exit */
+.marker-safe .crisis-marker__dot {
+  background: linear-gradient(135deg, #22c55e, #16a34a) !important;
+  border: 2.5px solid #fff !important;
+  box-shadow: 0 0 8px rgba(34, 197, 94, 0.6) !important;
+  animation: none !important;
+}
+.marker-safe .crisis-marker__pulse {
+  display: none;
+}
+
+/* Evacuating */
+.marker-evacuating .crisis-marker__dot {
+  box-shadow: 0 0 8px 2px rgba(251, 191, 36, 0.6) !important;
+}
+.marker-evacuating .crisis-marker__pulse {
+  border-color: #fbbf24 !important;
+}
+
+/* ─── Incident Marker ─── */
+.marker-incident {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.marker-incident__core {
+  width: 32px;
+  height: 32px;
+  background: radial-gradient(circle, #ef4444 40%, #991b1b 100%);
+  border: 3px solid #fca5a5;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  animation: marker-alert 1s ease-in-out infinite;
+  z-index: 2;
+}
+
+.marker-incident__ring {
+  position: absolute;
+  width: 48px;
+  height: 48px;
+  border: 2px solid rgba(239, 68, 68, 0.6);
+  border-radius: 50%;
+  animation: marker-pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  z-index: 1;
+}
+
+.marker-incident__ring--outer {
+  width: 64px;
+  height: 64px;
+  border-color: rgba(239, 68, 68, 0.3);
+  animation-delay: 0.4s;
+}
+
+/* ─── Exit Marker ─── */
+.marker-exit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.marker-exit__badge {
+  padding: 3px 12px;
+  background: linear-gradient(135deg, #10b981, #059669);
+  border: 2px solid #fff;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.5);
+  white-space: nowrap;
+}
+
+/* ─── Floating Map Overlay Panels ─── */
+.map-overlay-panel {
+  background: rgba(15, 23, 42, 0.88);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  color: #fff;
+}
+
+.map-overlay-panel--status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* Connection Status Indicator */
+.map-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.map-status-dot--live {
+  background: #10b981;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.8);
+  animation: marker-pulse-slow 2s ease-in-out infinite;
+}
+
+.map-status-dot--polling {
+  background: #f59e0b;
+  box-shadow: 0 0 6px rgba(245, 158, 11, 0.6);
+}
+
+.map-status-dot--offline {
+  background: #ef4444;
+  box-shadow: 0 0 6px rgba(239, 68, 68, 0.6);
+}
+
+/* ─── Evacuation Route Polyline Animation ─── */
+.leaflet-overlay-pane svg path.evacuation-route {
+  stroke-dasharray: 12, 8;
+  animation: route-flow 1.5s linear infinite;
+}
+
+/* ─── Personnel Count Badge ─── */
+.map-personnel-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.map-personnel-badge--tracked {
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.map-personnel-badge--alert {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.map-personnel-badge--safe {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+/* ─── Map Legend ─── */
+.map-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+}
+
+.map-legend__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.8);
+  font-weight: 500;
+}
+
+.map-legend__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  border: 1.5px solid rgba(255, 255, 255, 0.5);
+}
+
+/* ─── Popup Styles (override Leaflet defaults for dark theme) ─── */
+.crisis-popup .leaflet-popup-content-wrapper {
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  color: #fff;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+.crisis-popup .leaflet-popup-tip {
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.crisis-popup .leaflet-popup-close-button {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.crisis-popup .leaflet-popup-close-button:hover {
+  color: #fff;
+}

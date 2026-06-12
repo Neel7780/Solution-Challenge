@@ -301,13 +301,7 @@ export const createProperty = async (req: Request, res: Response) => {
 
     const property = result.rows[0];
 
-    // Automatically give the creator (org_admin) access to this property
-    await client.query(
-      `INSERT INTO user_properties (user_id, property_id, role)
-       VALUES ($1, $2, $3)
-       ON CONFLICT (user_id, property_id) DO NOTHING`,
-      [userId, property.id, 'admin']
-    );
+
 
     await client.query('COMMIT');
     res.status(201).json({ success: true, property, message: 'Property created successfully' });
