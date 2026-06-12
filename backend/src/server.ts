@@ -807,7 +807,13 @@ const PORT = Number(process.env.PORT) || 3001;
 
 async function startServer() {
   try {
-    logger.info('Database connected successfully');
+    const { pool } = await import('./database/connection.js');
+    await pool.query(`
+      ALTER TABLE incidents 
+      ADD COLUMN IF NOT EXISTS verified BOOLEAN DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS cctv_analysis JSONB DEFAULT NULL
+    `);
+    logger.info('Database connected and schema columns verified successfully');
 
     server.listen(PORT, '0.0.0.0', () => {
       logger.info(`Crisis Response API running on port ${PORT}`);

@@ -14,6 +14,7 @@ import {
   updateIncidentStatus,
   updatePropertyStatus,
   getSafetyRoster,
+  verifyCCTVFeed,
 } from '../controllers/crisisController';
 
 import { authenticate, requireRole } from '../middleware/auth';
@@ -62,6 +63,7 @@ router.get('/:id', authenticate, getIncident);
 router.patch('/:id/status', authenticate, [body('status').isIn(['active', 'contained', 'resolved', 'false_alarm'])], updateIncidentStatus);
 router.get('/:id/full', authenticate, getIncidentDetails);
 router.post('/:id/resolve', authenticate, resolveIncident);
+router.post('/:id/verify-cctv', authenticate, requireRole(['admin', 'security', 'responder', 'org_admin', 'super_admin']), verifyCCTVFeed);
 
 router.post('/property/:propertyId/status', authenticate, requireRole(['admin', 'security', 'staff', 'responder', 'org_admin', 'super_admin']), updatePropertyStatus);
 router.get('/property/:propertyId/safety-roster', authenticate, requireRole(['admin', 'security', 'org_admin', 'super_admin', 'responder']), getSafetyRoster);

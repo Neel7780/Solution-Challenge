@@ -2,6 +2,7 @@ import { pool, query } from '../database/connection';
 import logger from '../utils/logger';
 import type { Request, Response } from 'express';
 import { enrichIncident } from '../services/intelligenceService';
+import { verifyIncidentWithCCTV } from '../services/cctvVerificationService';
 
 const getClientIp = (req: Request) => {
   const forwardedFor = req.headers['x-forwarded-for'];
@@ -720,6 +721,45 @@ export const resolveIncident = async (req: Request, res: Response) => {
   } catch (error: any) {
     logger.error('Error resolving incident:', error);
     res.status(500).json({ error: 'Failed to resolve incident' });
+  }
+};
+
+export const verifyCCTVFeed = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { cameraType = 'kitchen_fire' } = req.body;
+  const numericIncidentId = Number(id);
+
+  if (!['kitchen_fire', 'hallway_intruder', 'normal_lobby'].includes(cameraType)) {
+    return res.status(400).json({ error: 'Invalid cameraType' });
+  }
+
+  try {
+    const analysisResult = await verifyIncidentWithCCTV(numericIncidentId, cameraType);
+
+    // Fetch updated incident to broadcast
+    const incidentResult = await query(
+      `SELECT * FROM incidents WHERE id = $1`,
+      [numericIncidentId]
+    );
+    const incident = incidentResult.rows[0];
+
+    if (req.io && incident) {
+      const payload = {
+        incidentId: numericIncidentId,
+        incident,
+        analysis: analysisResult,
+        timestamp: new Date().toISOString(),
+      };
+
+      // Broadcast to property room and admin rooms
+      req.io.to(`property_${incident.property_id}`).emit('incident_verified', payload);
+      req.io.to('role_admin').to('role_org_admin').to('role_super_admin').emit('incident_verified', payload);
+    }
+
+    res.json({ success: true, analysis: analysisResult });
+  } catch (error: any) {
+    logger.error('Error in verifyCCTVFeed controller:', error);
+    res.status(500).json({ error: 'Failed to verify CCTV feed' });
   }
 };
 

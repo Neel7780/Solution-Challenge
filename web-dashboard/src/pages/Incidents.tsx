@@ -52,6 +52,8 @@ interface Incident {
     safeExits: string[];
     tips: string[];
   };
+  verified?: boolean;
+  cctv_analysis?: any;
 }
 
 interface PublicReport {
@@ -106,6 +108,27 @@ export default function Incidents() {
   const [severity, setSeverity] = useState('high');
   const [description, setDescription] = useState('');
   const [zoneId, setZoneId] = useState<number | string>('');
+  const [selectedCameraType, setSelectedCameraType] = useState<'kitchen_fire' | 'hallway_intruder' | 'normal_lobby'>('kitchen_fire');
+
+  const verifyCCTVMutation = useMutation({
+    mutationFn: ({ id, cameraType }: { id: number; cameraType: string }) => 
+      axios.post(`${API_URL}/crisis/${id}/verify-cctv`, { cameraType }),
+    onSuccess: (response) => {
+      queryClient.invalidateQueries({ queryKey: ['incidents'] });
+      setSelectedIncident((prev) => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          verified: response.data.analysis.verified,
+          cctv_analysis: response.data.analysis,
+          severity: response.data.analysis.verified
+            ? response.data.analysis.hazardType === 'fire' ? 'critical' : 'high'
+            : 'low',
+          status: response.data.analysis.verified ? 'active' : 'false_alarm',
+        };
+      });
+    },
+  });
 
   const { data: incidents, isLoading } = useQuery<Incident[]>({
     queryKey: ['incidents', activeTab],
@@ -602,6 +625,87 @@ export default function Incidents() {
                   </Stack>
                 </Box>
               )}
+
+              <Box sx={{ p: 2, borderRadius: 1, border: '1px solid rgba(255, 255, 255, 0.08)', backgroundColor: 'rgba(255, 255, 255, 0.02)' }}>
+                <Typography variant="overline" sx={{ color: 'var(--text-muted)', display: 'block', mb: 1, fontWeight: 'bold', fontSize: '0.65rem' }}>
+                  AI CCTV VISION VERIFICATION
+                </Typography>
+                
+                {selectedIncident.verified ? (
+                  <Stack spacing={1}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Box sx={{ 
+                        px: 1, 
+                        py: 0.2, 
+                        borderRadius: 0.5, 
+                        backgroundColor: selectedIncident.cctv_analysis?.verified ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                        border: selectedIncident.cctv_analysis?.verified ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(239, 68, 68, 0.3)'
+                      }}>
+                        <Typography variant="caption" sx={{ 
+                          color: selectedIncident.cctv_analysis?.verified ? '#34d399' : '#f87171', 
+                          fontWeight: 'bold',
+                          fontSize: '0.65rem'
+                        }}>
+                          {selectedIncident.cctv_analysis?.verified ? 'VERIFIED REAL THREAT' : 'FALSE ALARM'}
+                        </Typography>
+                      </Box>
+                      <Typography variant="caption" sx={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>
+                        Confidence: {Math.round((selectedIncident.cctv_analysis?.confidence || 0) * 100)}%
+                      </Typography>
+                    </Box>
+                    <Typography variant="caption" sx={{ color: '#fff', mt: 1, display: 'block', fontSize: '0.75rem', lineHeight: 1.4 }}>
+                      {selectedIncident.cctv_analysis?.description}
+                    </Typography>
+                    {selectedIncident.cctv_analysis?.verified && selectedIncident.cctv_analysis?.hazardType !== 'none' && (
+                      <Box sx={{ mt: 1, borderRadius: 0.5, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)' }}>
+                        <img 
+                          src={`/assets/cctv/${selectedIncident.cctv_analysis.hazardType === 'fire' ? 'kitchen_fire.png' : 'hallway_intruder.png'}`} 
+                          alt="Verified CCTV Feed" 
+                          style={{ width: '100%', height: 'auto', display: 'block' }} 
+                        />
+                      </Box>
+                    )}
+                  </Stack>
+                ) : (
+                  <Stack spacing={1.5}>
+                    <Typography variant="caption" sx={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>
+                      This incident has not been verified by CCTV camera analytics. Choose a camera feed to test:
+                    </Typography>
+                    
+                    <TextField
+                      select
+                      fullWidth
+                      size="small"
+                      label="Camera / Target Feed"
+                      value={selectedCameraType}
+                      onChange={(e) => setSelectedCameraType(e.target.value as any)}
+                      slotProps={{
+                        select: {
+                          sx: { fontSize: '0.75rem', height: 36, color: '#fff', backgroundColor: 'transparent' }
+                        },
+                        inputLabel: {
+                          sx: { fontSize: '0.75rem', color: 'var(--text-muted)' }
+                        }
+                      }}
+                    >
+                      <MenuItem value="kitchen_fire" sx={{ fontSize: '0.75rem' }}>Camera 102 (Kitchen Stovetop - Fire/Smoke)</MenuItem>
+                      <MenuItem value="hallway_intruder" sx={{ fontSize: '0.75rem' }}>Camera 204 (Floor 2 Hallway - Intruder)</MenuItem>
+                      <MenuItem value="normal_lobby" sx={{ fontSize: '0.75rem' }}>Camera 001 (Main Lobby - Normal)</MenuItem>
+                    </TextField>
+
+                    <Button
+                      variant="contained"
+                      color="error"
+                      size="small"
+                      onClick={() => verifyCCTVMutation.mutate({ id: selectedIncident.id, cameraType: selectedCameraType })}
+                      disabled={verifyCCTVMutation.isPending}
+                      sx={{ textTransform: 'none', fontSize: '0.7rem', backgroundColor: 'var(--accent-red)', '&:hover': { backgroundColor: '#dc2626' } }}
+                    >
+                      {verifyCCTVMutation.isPending ? 'Verifying with Vision AI...' : 'Verify Incident with Vision AI'}
+                    </Button>
+                  </Stack>
+                )}
+              </Box>
               
               <Divider sx={{ opacity: 0.1 }} />
               

@@ -18,6 +18,8 @@ export interface Incident {
   zone_name: string;
   latitude?: number;
   longitude?: number;
+  verified?: boolean;
+  cctv_analysis?: any;
 }
 
 export interface OverviewData {
