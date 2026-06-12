@@ -48,9 +48,14 @@ export default function NavigationScreen({ navigation }: any) {
       try {
         const asset = Asset.fromModule(currentFloor === 2 ? require('../../assets/maps/floor2.png') : require('../../assets/maps/floor1.png'));
         await asset.downloadAsync();
-        if (asset.localUri) {
-          const base64 = await FileSystem.readAsStringAsync(asset.localUri, { encoding: 'base64' });
-          setFloorPlanDataUrl(`data:image/png;base64,${base64}`);
+        if (asset.uri) {
+          const response = await fetch(asset.uri);
+          const blob = await response.blob();
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            setFloorPlanDataUrl(reader.result as string);
+          };
+          reader.readAsDataURL(blob);
         }
       } catch (err) {
         console.warn('Failed to load floorplan asset:', err);

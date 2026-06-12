@@ -631,14 +631,9 @@ export const updateIncidentStatus = async (req: Request, res: Response) => {
         );
       }
 
-      if ((status === 'contained' || status === 'resolved') && (incident.severity === 'critical' || incident.status === 'critical')) {
+      if (status === 'contained' || status === 'resolved') {
         await client.query(
-          `UPDATE tasks
-           SET status = 'completed'
-           WHERE incident_id = $1
-           AND assigned_to IN (
-             SELECT id FROM users WHERE role IN ('security', 'responder')
-           )`,
+          `DELETE FROM tasks WHERE incident_id = $1`,
           [incident.id]
         );
       }
@@ -723,17 +718,10 @@ export const resolveIncident = async (req: Request, res: Response) => {
     }
 
     const incident = result.rows[0];
-    if (incident.severity === 'critical') {
-      await query(
-        `UPDATE tasks
-         SET status = 'completed'
-         WHERE incident_id = $1
-         AND assigned_to IN (
-           SELECT id FROM users WHERE role IN ('security', 'responder')
-         )`,
-        [id]
-      );
-    }
+    await query(
+      `DELETE FROM tasks WHERE incident_id = $1`,
+      [id]
+    );
 
     if (req.io) {
       req.io.emit('incident_resolved', { incidentId: id, timestamp: new Date().toISOString() });

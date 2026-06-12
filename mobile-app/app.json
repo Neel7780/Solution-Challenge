@@ -36,7 +36,8 @@
       [
         "expo-notifications",
         {}
-      ]
+      ],
+      "expo-audio"
     ],
     "extra": {
       "eas": {
