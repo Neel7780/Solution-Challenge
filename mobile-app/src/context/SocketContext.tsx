@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { Platform } from 'react-native';
 import { io, Socket } from 'socket.io-client';
 import { useAuth } from './AuthContext';
 import * as Notifications from 'expo-notifications';
@@ -20,7 +21,7 @@ export const SocketProvider = ({ children }: SocketProviderProps) => {
 
   useEffect(() => {
     if (token && user) {
-      initSocket();
+      void initSocket();
     } else {
       disconnectSocket();
     }
@@ -30,7 +31,31 @@ export const SocketProvider = ({ children }: SocketProviderProps) => {
     };
   }, [token, user]);
 
-  const initSocket = () => {
+  const ensureNotificationsReady = async () => {
+    const { status: existingStatus } = await Notifications.getPermissionsAsync();
+    let finalStatus = existingStatus;
+
+    if (existingStatus !== 'granted') {
+      const { status } = await Notifications.requestPermissionsAsync();
+      finalStatus = status;
+    }
+
+    if (Platform.OS === 'android') {
+      await Notifications.setNotificationChannelAsync('emergencies', {
+        name: 'Emergency Alerts',
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#d32f2f',
+        sound: 'default',
+      });
+    }
+
+    return finalStatus === 'granted';
+  };
+
+  const initSocket = async () => {
+    await ensureNotificationsReady();
+
     const newSocket = io(SOCKET_URL, {
       auth: { token }
     });
@@ -162,7 +187,12 @@ export const SocketProvider = ({ children }: SocketProviderProps) => {
 
   const showNotification = async (title: string, body: string) => {
     await Notifications.scheduleNotificationAsync({
-      content: { title, body },
+      content: {
+        title,
+        body,
+        sound: 'default',
+        channelId: 'emergencies',
+      },
       trigger: null
     });
   };

@@ -6,9 +6,9 @@ import {
   Text,
   TouchableOpacity,
   Alert,
+  StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import MapView, { PROVIDER_GOOGLE, Marker, Polyline, Circle } from 'react-native-maps';
 import { MaterialIcons as Icon } from '@expo/vector-icons';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
@@ -19,6 +19,7 @@ import { getDistanceInMeters, godotToLatLng, latLngToGodot, getGeoreferencedLatL
 import { findClosestNodeOffline, findShortestPathOffline, Hazard } from '../utils/pathfinding';
 import { speakGuidance, stopSpeech } from '../utils/voiceGuidance';
 import { NavigationNode } from '../types/navigation';
+import LeafletMapView, { type LeafletMapCircle, type LeafletMapMarker, type LeafletMapPolyline } from '../components/LeafletMapView';
 
 export default function NavigationScreen({ navigation }: any) {
   const { user } = useAuth();
@@ -236,8 +237,72 @@ export default function NavigationScreen({ navigation }: any) {
     return { latitude: 40.7128, longitude: -74.0060 };
   }, [location]);
 
+  const mapMarkers = useMemo<LeafletMapMarker[]>(() => {
+    const markers: LeafletMapMarker[] = [];
+
+    if (location?.latitude && location?.longitude) {
+      markers.push({
+        id: 'current-location',
+        latitude: location.latitude,
+        longitude: location.longitude,
+        title: 'You are here',
+        description: 'Current GPS location',
+        color: '#0f172a',
+        label: 'ME',
+      });
+    }
+
+    routePath.forEach((node) => {
+      const latlng = godotToLatLng(node.x, node.y);
+      markers.push({
+        id: `route-node-${node.id}`,
+        latitude: latlng.latitude,
+        longitude: latlng.longitude,
+        title: node.name,
+        description: node.type.toUpperCase(),
+        color: node.type === 'exit' ? '#059669' : node.type === 'stairwell' ? '#f59e0b' : '#2563eb',
+        label: node.type === 'exit' ? 'EXIT' : node.type === 'stairwell' ? 'ST' : '•',
+      });
+    });
+
+    return markers;
+  }, [location, routePath]);
+
+  const mapCircles = useMemo<LeafletMapCircle[]>(() => {
+    return hazards
+      .filter((hazard) => hazard.floor === currentFloor)
+      .map((hazard, index) => {
+        const latlng = godotToLatLng(hazard.x, hazard.y);
+        return {
+          id: `hazard-${index}`,
+          latitude: latlng.latitude,
+          longitude: latlng.longitude,
+          radius: hazard.radius,
+          strokeColor: 'rgba(239, 68, 68, 0.6)',
+          fillColor: 'rgba(239, 68, 68, 0.22)',
+          fillOpacity: 0.22,
+        };
+      });
+  }, [currentFloor, hazards]);
+
+  const mapPolylines = useMemo<LeafletMapPolyline[]>(() => {
+    if (polylineCoordinates.length === 0) return [];
+    return [
+      {
+        id: 'route-path',
+        coordinates: polylineCoordinates,
+        color: '#10b981',
+        weight: 5,
+        dashArray: '5,10',
+      },
+    ];
+  }, [polylineCoordinates]);
+
+  const distanceLabel = distanceRemaining > 0 ? `${distanceRemaining}m remaining` : 'Route ready';
+
   return (
     <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#06111f" />
       {loading && (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#10b981" />
@@ -245,67 +310,35 @@ export default function NavigationScreen({ navigation }: any) {
         </View>
       )}
 
-      <MapView
-        provider={PROVIDER_GOOGLE}
+      <View style={styles.topHud}>
+        <View style={styles.topHudText}>
+          <Text style={styles.kicker}>Indoor Navigation</Text>
+          <Text style={styles.hudTitle}>Turn-by-turn evacuation</Text>
+          <Text style={styles.hudSubtitle}>WebView Leaflet route guidance with live hazard overlays.</Text>
+        </View>
+        <View style={styles.hudPills}>
+          <View style={styles.hudPillAccent}>
+            <Text style={styles.hudPillLabelLight}>Distance</Text>
+            <Text style={styles.hudPillValueLight}>{distanceLabel}</Text>
+          </View>
+          {offlineMode && (
+            <View style={styles.hudPillDanger}>
+              <Text style={styles.hudPillLabelDanger}>Fallback</Text>
+              <Text style={styles.hudPillValueDanger}>Offline routing</Text>
+            </View>
+          )}
+        </View>
+      </View>
+
+      <LeafletMapView
         style={styles.map}
-        initialRegion={{
-          ...mapCenter,
-          latitudeDelta: 0.002,
-          longitudeDelta: 0.002,
-        }}
-        showsUserLocation
-        followsUserLocation
-        zoomEnabled={true}
-        scrollEnabled={true}
-        pitchEnabled={true}
-        rotateEnabled={true}
-      >
-        {/* Render Hazards */}
-        {hazards.filter(h => h.floor === currentFloor).map((h, i) => {
-          const latlng = godotToLatLng(h.x, h.y);
-          return (
-            <Circle
-              key={`hazard-${i}`}
-              center={{ latitude: latlng.latitude, longitude: latlng.longitude }}
-              radius={h.radius}
-              fillColor="rgba(239, 68, 68, 0.2)"
-              strokeColor="rgba(239, 68, 68, 0.5)"
-              strokeWidth={1.5}
-            />
-          );
-        })}
-
-        {/* Render Route Waypoints */}
-        {routePath.map((node, i) => {
-          const latlng = godotToLatLng(node.x, node.y);
-          return (
-            <Marker
-              key={`node-${node.id}`}
-              coordinate={{ latitude: latlng.latitude, longitude: latlng.longitude }}
-              title={node.name}
-              description={node.type.toUpperCase()}
-            >
-              <View style={[styles.nodeMarker, node.type === 'exit' ? styles.exitMarker : {}]}>
-                <Icon
-                  name={node.type === 'exit' ? 'directions-run' : node.type === 'stairwell' ? 'import-export' : 'fiber-manual-record'}
-                  size={14}
-                  color="#fff"
-                />
-              </View>
-            </Marker>
-          );
-        })}
-
-        {/* Render Safe Egress Path */}
-        {polylineCoordinates.length > 0 && (
-          <Polyline
-            coordinates={polylineCoordinates}
-            strokeColor="#10b981"
-            strokeWidth={5}
-            lineDashPattern={[5, 10]}
-          />
-        )}
-      </MapView>
+        center={mapCenter}
+        zoom={18}
+        fitToData
+        markers={mapMarkers}
+        circles={mapCircles}
+        polylines={mapPolylines}
+      />
 
       {/* Floating Instructions Panel */}
       <View style={styles.floatingPanel}>
@@ -355,37 +388,133 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f4f6f9',
   },
+  topHud: {
+    position: 'absolute',
+    top: 14,
+    left: 14,
+    right: 14,
+    zIndex: 20,
+    backgroundColor: 'rgba(6, 17, 31, 0.84)',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.22,
+    shadowRadius: 18,
+    elevation: 10,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  topHudText: {
+    flex: 1,
+  },
+  kicker: {
+    color: '#34d399',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    marginBottom: 4,
+  },
+  hudTitle: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '800',
+    letterSpacing: -0.4,
+  },
+  hudSubtitle: {
+    marginTop: 4,
+    color: 'rgba(255,255,255,0.72)',
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  hudPills: {
+    alignItems: 'flex-end',
+    gap: 8,
+  },
+  hudPillAccent: {
+    backgroundColor: 'rgba(16, 185, 129, 0.16)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.26)',
+    minWidth: 98,
+  },
+  hudPillDanger: {
+    backgroundColor: 'rgba(239, 68, 68, 0.16)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.24)',
+    minWidth: 98,
+  },
+  hudPillLabelLight: {
+    color: '#bbf7d0',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+  },
+  hudPillLabelDanger: {
+    color: '#fecaca',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+  },
+  hudPillValueLight: {
+    marginTop: 2,
+    color: '#ecfdf5',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  hudPillValueDanger: {
+    marginTop: 2,
+    color: '#fff1f2',
+    fontSize: 12,
+    fontWeight: '800',
+  },
   map: {
-    ...StyleSheet.absoluteFillObject,
+    flex: 1,
   },
   loadingContainer: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(255,255,255,0.85)',
+    backgroundColor: 'rgba(6, 17, 31, 0.78)',
     zIndex: 100,
     justifyContent: 'center',
     alignItems: 'center',
+    paddingHorizontal: 24,
   },
   loadingText: {
     marginTop: 12,
     fontSize: 16,
     fontWeight: '600',
-    color: '#374151',
+    color: '#f8fafc',
+    textAlign: 'center',
+    paddingHorizontal: 24,
   },
   floatingPanel: {
     position: 'absolute',
-    bottom: 24,
-    left: 16,
-    right: 16,
-    backgroundColor: 'rgba(255,255,255,0.92)',
-    borderRadius: 16,
+    bottom: 18,
+    left: 14,
+    right: 14,
+    backgroundColor: 'rgba(255,255,255,0.94)',
+    borderRadius: 20,
     padding: 16,
     borderWidth: 1,
-    borderColor: 'rgba(229, 231, 235, 0.7)',
+    borderColor: 'rgba(148, 163, 184, 0.26)',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.16,
+    shadowRadius: 18,
+    elevation: 8,
   },
   panelHeader: {
     flexDirection: 'row',
@@ -395,15 +524,15 @@ const styles = StyleSheet.create({
   panelTitle: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#10b981',
+    color: '#0f766e',
     marginLeft: 6,
     letterSpacing: 0.5,
   },
   offlineBadge: {
-    backgroundColor: '#ef4444',
+    backgroundColor: '#991b1b',
     paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 4,
+    borderRadius: 9999,
     marginLeft: 'auto',
   },
   offlineText: {
@@ -413,8 +542,8 @@ const styles = StyleSheet.create({
   },
   instructionText: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#1f2937',
+    fontWeight: '700',
+    color: '#0f172a',
     marginBottom: 12,
     lineHeight: 22,
   },
@@ -428,12 +557,12 @@ const styles = StyleSheet.create({
   },
   footerLabel: {
     fontSize: 12,
-    color: '#6b7280',
+    color: '#475569',
   },
   footerValue: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#111827',
+    color: '#0f172a',
   },
   controlButtons: {
     flexDirection: 'row',
@@ -443,21 +572,8 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#f3f4f6',
+    backgroundColor: '#e2e8f0',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  nodeMarker: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: '#3b82f6',
-    borderWidth: 2,
-    borderColor: '#fff',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  exitMarker: {
-    backgroundColor: '#10b981',
   },
 });

@@ -5,13 +5,14 @@ import {
   ActivityIndicator,
   Text,
   TouchableOpacity,
+  StatusBar,
 } from 'react-native';
-import MapView, { PROVIDER_GOOGLE, Marker, Callout, Polyline } from 'react-native-maps';
 import { MaterialIcons as Icon } from '@expo/vector-icons';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { useLocation } from '../context/LocationContext';
 import { API_URL } from '../config';
+import LeafletMapView, { type LeafletMapMarker, type LeafletMapPolyline } from '../components/LeafletMapView';
 
 // Georeference constants matching Locations.tsx and GuestMap.tsx
 const PROPERTY_CONFIG = {
@@ -82,6 +83,7 @@ export default function MapScreen({ navigation }: any) {
   const [incidents, setIncidents] = useState<any[]>([]);
   const [zones, setZones] = useState<any[]>([]);
   const [guestCoords, setGuestCoords] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [guestLocationUpdatedAt, setGuestLocationUpdatedAt] = useState<string | null>(null);
   const [activeUsers, setActiveUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
@@ -108,6 +110,7 @@ export default function MapScreen({ navigation }: any) {
           if (history && history.length > 0) {
             const georef = getGeoreferencedLatLng(history[0].latitude, history[0].longitude);
             setGuestCoords(georef);
+            setGuestLocationUpdatedAt(history[0].recorded_at || null);
           }
         } catch (err) {
           console.log('Error fetching location history on mobile map:', err);
@@ -227,6 +230,96 @@ export default function MapScreen({ navigation }: any) {
     };
   }, [exitPoints, displayLocation]);
 
+  const mapMarkers = useMemo<LeafletMapMarker[]>(() => {
+    const markers: LeafletMapMarker[] = [];
+
+    if (guestCoords) {
+      markers.push({
+        id: 'guest-location',
+        latitude: guestCoords.latitude,
+        longitude: guestCoords.longitude,
+        title: 'You (Simulation)',
+        description: `Room ${user?.room_number || 'N/A'}`,
+        color: '#2563eb',
+        label: 'ME',
+      });
+    }
+
+    activeUsers
+      .filter((u) => u.user_id !== (user?.id || user?._id))
+      .forEach((u, index) => {
+        const coords = getGeoreferencedLatLng(u.latitude, u.longitude);
+        const isDistressed = u.user_status === 'distressed' || u.user_status === 'trapped' || u.user_status === 'needs_help';
+        markers.push({
+          id: `active-user-${u.id || index}`,
+          latitude: coords.latitude,
+          longitude: coords.longitude,
+          title: u.name,
+          description: `Role: ${u.role} | Status: ${u.user_status}`,
+          color: isDistressed ? '#dc2626' : '#2563eb',
+          label: isDistressed ? '!' : 'U',
+        });
+      });
+
+    incidents.forEach((incident) => {
+      const coords = getGeoreferencedLatLng(incident.latitude, incident.longitude);
+      const isResolved = incident.status === 'resolved' || incident.status === 'contained';
+      markers.push({
+        id: `incident-${incident.id}`,
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+        title: `${isResolved ? '✅ ' : '🚨 '}${incident.incident_type.toUpperCase()}`,
+        description: incident.description,
+        color: isResolved ? '#059669' : getSeverityColor(incident.severity),
+        label: isResolved ? '✓' : '!',
+        actionLabel: 'View details',
+      });
+    });
+
+    exitPoints.forEach((exit) => {
+      markers.push({
+        id: `exit-${exit.id}`,
+        latitude: exit.latitude,
+        longitude: exit.longitude,
+        title: exit.name,
+        description: `Capacity: ${exit.capacity || 'N/A'}`,
+        color: '#059669',
+        label: 'EXIT',
+      });
+    });
+
+    return markers;
+  }, [activeUsers, exitPoints, guestCoords, incidents, user]);
+
+  const mapPolylines = useMemo<LeafletMapPolyline[]>(() => {
+    if (!nearestExit || !activeIncident || !displayLocation) return [];
+    return [
+      {
+        id: 'evacuation-route',
+        coordinates: [
+          { latitude: displayLocation.latitude, longitude: displayLocation.longitude },
+          { latitude: nearestExit.latitude, longitude: nearestExit.longitude },
+        ],
+        color: '#10b981',
+        weight: 4,
+        dashArray: '6,10',
+      },
+    ];
+  }, [activeIncident, displayLocation, nearestExit]);
+
+  const handleMarkerPress = (markerId: string) => {
+    if (!markerId.startsWith('incident-')) return;
+    const incidentId = Number(markerId.replace('incident-', ''));
+    if (!Number.isNaN(incidentId)) {
+      navigation.navigate('IncidentDetails', { incidentId });
+    }
+  };
+
+  const nearestExitLabel = nearestExit ? `${nearestExit.name} · ${nearestExit.distance}m` : 'Calculating route';
+  const guestLocationLabel = guestCoords
+    ? `Live guest${guestLocationUpdatedAt ? ` · ${new Date(guestLocationUpdatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}`
+    : 'Guest location idle';
+
   if (loading || !displayLocation) {
     return (
       <View style={styles.centered}>
@@ -238,104 +331,37 @@ export default function MapScreen({ navigation }: any) {
 
   return (
     <View style={styles.container}>
-      <MapView
-        provider={PROVIDER_GOOGLE}
+      <StatusBar barStyle="light-content" backgroundColor="#0f172a" />
+      <View style={styles.topHud}>
+        <View style={styles.topHudText}>
+          <Text style={styles.kicker}>Mobile Map</Text>
+          <Text style={styles.hudTitle}>Voyager evacuation overview</Text>
+          <Text style={styles.hudSubtitle}>Leaflet in a WebView with CartoDB Voyager tiles.</Text>
+        </View>
+        <View style={styles.hudPills}>
+          <View style={styles.hudPill}>
+            <Text style={styles.hudPillLabel}>Incidents</Text>
+            <Text style={styles.hudPillValue}>{incidents.length}</Text>
+          </View>
+          <View style={styles.hudPillMuted}>
+            <Text style={styles.hudPillLabelMuted}>Guest</Text>
+            <Text style={styles.hudPillValueMuted}>{guestLocationLabel}</Text>
+          </View>
+          <View style={styles.hudPillAccent}>
+            <Text style={styles.hudPillLabelLight}>Nearest Exit</Text>
+            <Text style={styles.hudPillValueLight}>{nearestExitLabel}</Text>
+          </View>
+        </View>
+      </View>
+      <LeafletMapView
         style={styles.map}
-        initialRegion={{
-          latitude: displayLocation.latitude,
-          longitude: displayLocation.longitude,
-          latitudeDelta: 0.004,
-          longitudeDelta: 0.004,
-        }}
-        showsUserLocation={true}
-        showsMyLocationButton={true}
-        zoomEnabled={true}
-        scrollEnabled={true}
-        pitchEnabled={true}
-        rotateEnabled={true}
-      >
-        {/* Custom Marker for Simulated guest location */}
-        {guestCoords && (
-          <Marker
-            coordinate={guestCoords}
-            title="You (Simulation)"
-            description={`Room ${user?.room_number || 'N/A'}`}
-          >
-            <View style={styles.userDotContainer}>
-              <View style={styles.userDotPulse} />
-              <View style={styles.userDot} />
-            </View>
-          </Marker>
-        )}
-
-        {/* Active Users for Responders */}
-        {activeUsers.filter(u => u.user_id !== (user?.id || user?._id)).map((u) => {
-          const coords = getGeoreferencedLatLng(u.latitude, u.longitude);
-          const isDistressed = u.user_status === 'distressed' || u.user_status === 'trapped' || u.user_status === 'needs_help';
-          return (
-            <Marker
-              key={`active-user-${u.id}`}
-              coordinate={coords}
-              pinColor={isDistressed ? '#d32f2f' : '#3b82f6'}
-              title={u.name}
-              description={`Role: ${u.role} | Status: ${u.user_status}`}
-            />
-          );
-        })}
-
-        {/* Active Emergency Markers */}
-        {incidents.map((incident) => {
-          const coords = getGeoreferencedLatLng(incident.latitude, incident.longitude);
-          const isResolved = incident.status === 'resolved' || incident.status === 'contained';
-          return (
-            <Marker
-              key={incident.id}
-              coordinate={coords}
-              pinColor={isResolved ? '#4caf50' : getSeverityColor(incident.severity)}
-            >
-              <Callout onPress={() => navigation.navigate('IncidentDetails', { incidentId: incident.id })}>
-                <View style={styles.callout}>
-                  <Text style={[styles.calloutTitle, isResolved && { color: '#2e7d32' }]}>
-                    {isResolved ? '✅ ' : '🚨 '}{incident.incident_type.toUpperCase()}
-                  </Text>
-                  <Text style={styles.calloutDesc}>{incident.description}</Text>
-                  <Text style={styles.calloutLink}>Tap for details</Text>
-                </View>
-              </Callout>
-            </Marker>
-          );
-        })}
-
-        {/* Exit Gate Assembly Points */}
-        {exitPoints.map((exit) => (
-          <Marker
-            key={exit.id}
-            coordinate={{
-              latitude: exit.latitude,
-              longitude: exit.longitude,
-            }}
-            title={exit.name}
-            description={`Capacity: ${exit.capacity || 'N/A'}`}
-          >
-            <View style={styles.exitMarker}>
-              <Text style={styles.exitMarkerText}>EXIT</Text>
-            </View>
-          </Marker>
-        ))}
-
-        {/* Evacuation Polyline Path */}
-        {nearestExit && activeIncident && (
-          <Polyline
-            coordinates={[
-              { latitude: displayLocation.latitude, longitude: displayLocation.longitude },
-              { latitude: nearestExit.latitude, longitude: nearestExit.longitude },
-            ]}
-            strokeColor="#10b981"
-            strokeWidth={4}
-            lineDashPattern={[6, 10]}
-          />
-        )}
-      </MapView>
+        center={displayLocation}
+        zoom={16}
+        fitToData
+        markers={mapMarkers}
+        polylines={mapPolylines}
+        onMarkerPress={handleMarkerPress}
+      />
 
       {/* Floating Evacuation Status Panel */}
       {activeIncident && nearestExit && (
@@ -376,6 +402,122 @@ export default function MapScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#f4f6f9',
+  },
+  topHud: {
+    position: 'absolute',
+    top: 14,
+    left: 14,
+    right: 14,
+    zIndex: 20,
+    backgroundColor: 'rgba(15, 23, 42, 0.82)',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.22,
+    shadowRadius: 18,
+    elevation: 10,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  topHudText: {
+    flex: 1,
+  },
+  kicker: {
+    color: '#7dd3fc',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    marginBottom: 4,
+  },
+  hudTitle: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '800',
+    letterSpacing: -0.4,
+  },
+  hudSubtitle: {
+    marginTop: 4,
+    color: 'rgba(255,255,255,0.72)',
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  hudPills: {
+    alignItems: 'flex-end',
+    gap: 8,
+  },
+  hudPill: {
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    minWidth: 98,
+  },
+  hudPillAccent: {
+    backgroundColor: 'rgba(16, 185, 129, 0.16)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.26)',
+    minWidth: 98,
+  },
+  hudPillMuted: {
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    minWidth: 98,
+  },
+  hudPillLabel: {
+    color: 'rgba(255,255,255,0.64)',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+  },
+  hudPillLabelLight: {
+    color: '#bbf7d0',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+  },
+  hudPillLabelMuted: {
+    color: 'rgba(255,255,255,0.62)',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+  },
+  hudPillValue: {
+    marginTop: 2,
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  hudPillValueMuted: {
+    marginTop: 2,
+    color: 'rgba(255,255,255,0.88)',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  hudPillValueLight: {
+    marginTop: 2,
+    color: '#ecfdf5',
+    fontSize: 12,
+    fontWeight: '800',
   },
   centered: {
     flex: 1,
@@ -386,32 +528,22 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 12,
     color: '#666',
+    textAlign: 'center',
+    paddingHorizontal: 24,
+  },
+  fallbackText: {
+    marginTop: 12,
+    color: '#4b5563',
+    textAlign: 'center',
+    paddingHorizontal: 24,
+    lineHeight: 20,
   },
   map: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  callout: {
-    padding: 8,
-    width: 200,
-  },
-  calloutTitle: {
-    fontWeight: 'bold',
-    fontSize: 14,
-    marginBottom: 4,
-  },
-  calloutDesc: {
-    fontSize: 12,
-    color: '#666',
-    marginBottom: 4,
-  },
-  calloutLink: {
-    fontSize: 12,
-    color: '#1976d2',
-    fontWeight: 'bold',
+    flex: 1,
   },
   refreshButton: {
     position: 'absolute',
-    top: 16,
+    top: 96,
     right: 16,
     backgroundColor: '#fff',
     padding: 12,
@@ -421,52 +553,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 4,
-  },
-  exitMarker: {
-    backgroundColor: '#10b981',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-    borderWidth: 1.5,
-    borderColor: '#fff',
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 1,
-  },
-  exitMarkerText: {
-    color: '#fff',
-    fontSize: 9,
-    fontWeight: 'bold',
-  },
-  userDotContainer: {
-    width: 24,
-    height: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  userDot: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: '#3b82f6',
-    borderWidth: 2,
-    borderColor: '#ffffff',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-  },
-  userDotPulse: {
-    position: 'absolute',
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: 'rgba(59, 130, 246, 0.4)',
-    borderWidth: 1,
-    borderColor: 'rgba(59, 130, 246, 0.6)',
   },
   evacuationPanel: {
     position: 'absolute',
