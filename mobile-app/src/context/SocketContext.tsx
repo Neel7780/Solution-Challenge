@@ -1,8 +1,9 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { Platform } from 'react-native';
+import React, { createContext, useContext, useEffect, useState, ReactNode, useRef } from 'react';
+import { Platform, Vibration } from 'react-native';
 import { io, Socket } from 'socket.io-client';
 import { useAuth } from './AuthContext';
 import * as Notifications from 'expo-notifications';
+import { Audio } from 'expo-av';
 import { SOCKET_URL } from '../config';
 import { SocketContextType } from '../types';
 import { useNotifications } from './NotificationContext';
@@ -18,6 +19,69 @@ export const SocketProvider = ({ children }: SocketProviderProps) => {
   const [connected, setConnected] = useState<boolean>(false);
   const { token, user } = useAuth();
   const { addNotification } = useNotifications();
+
+  const [alarmActive, setAlarmActive] = useState<boolean>(false);
+  const [alarmTitle, setAlarmTitle] = useState<string>('');
+  const [alarmMessage, setAlarmMessage] = useState<string>('');
+  const soundRef = useRef<Audio.Sound | null>(null);
+  const alarmTimeoutRef = useRef<any>(null);
+
+  const startAlarmMedia = async () => {
+    // Clear any previous timeout
+    if (alarmTimeoutRef.current) {
+      clearTimeout(alarmTimeoutRef.current);
+      alarmTimeoutRef.current = null;
+    }
+
+    try {
+      if (soundRef.current) {
+        await soundRef.current.unloadAsync().catch(() => {});
+      }
+      soundRef.current = new Audio.Sound();
+      await soundRef.current.loadAsync(
+        { uri: 'https://raw.githubusercontent.com/fewieden/MMM-AlarmClock/master/sounds/alarm.mp3' },
+        { shouldPlay: true, isLooping: true }
+      );
+      await soundRef.current.playAsync().catch(() => {});
+    } catch (error) {
+      console.warn('Failed to play alarm sound:', error);
+    }
+    Vibration.vibrate([1000, 500, 1000, 500], true);
+
+    // Auto-silence sound and vibration after 1 minute (60,000ms)
+    alarmTimeoutRef.current = setTimeout(() => {
+      void stopAlarmMedia();
+      alarmTimeoutRef.current = null;
+    }, 60000);
+  };
+
+  const stopAlarmMedia = async () => {
+    if (alarmTimeoutRef.current) {
+      clearTimeout(alarmTimeoutRef.current);
+      alarmTimeoutRef.current = null;
+    }
+    try {
+      if (soundRef.current) {
+        await soundRef.current.stopAsync().catch(() => {});
+        await soundRef.current.unloadAsync().catch(() => {});
+        soundRef.current = null;
+      }
+    } catch (error) {
+      console.warn('Failed to stop alarm sound:', error);
+    }
+    Vibration.cancel();
+  };
+
+  const silenceAlarm = () => {
+    setAlarmActive(false);
+    void stopAlarmMedia();
+  };
+
+  useEffect(() => {
+    return () => {
+      void stopAlarmMedia();
+    };
+  }, []);
 
   useEffect(() => {
     if (token && user) {
@@ -89,6 +153,10 @@ export const SocketProvider = ({ children }: SocketProviderProps) => {
         message: `${data.incident.incident_type.toUpperCase()}: ${data.incident.description}`,
         severity: 'critical'
       });
+      setAlarmTitle('🚨 EMERGENCY ALARM ACTIVE 🚨');
+      setAlarmMessage(`${data.incident.incident_type.toUpperCase()}: ${data.incident.description}`);
+      setAlarmActive(true);
+      void startAlarmMedia();
     });
 
     // Listen for nearby crisis
@@ -100,6 +168,10 @@ export const SocketProvider = ({ children }: SocketProviderProps) => {
         message: data.message,
         severity: 'high'
       });
+      setAlarmTitle('⚠️ CRITICAL NEARBY CALAMITY ⚠️');
+      setAlarmMessage(data.message);
+      setAlarmActive(true);
+      void startAlarmMedia();
     });
 
     // Listen for AI enrichment
@@ -125,6 +197,10 @@ export const SocketProvider = ({ children }: SocketProviderProps) => {
           message: 'IMMEDIATE EVACUATION ORDERED. Proceed to nearest safe exit.',
           severity: 'critical'
         });
+        setAlarmTitle('🛑 IMMEDIATE EVACUATION ORDERED 🛑');
+        setAlarmMessage('Proceed to the nearest safe exit immediately and follow vocal instructions.');
+        setAlarmActive(true);
+        void startAlarmMedia();
       } else if (data.status === 'operational') {
         showNotification('✅ Status Update', 'The property has returned to operational status.');
         addNotification({
@@ -133,6 +209,7 @@ export const SocketProvider = ({ children }: SocketProviderProps) => {
           message: 'The property has returned to operational status.',
           severity: 'success'
         });
+        silenceAlarm();
       }
     });
 
@@ -146,6 +223,7 @@ export const SocketProvider = ({ children }: SocketProviderProps) => {
           message: `Incident #${data.incidentId} has been resolved.`,
           severity: 'success'
         });
+        silenceAlarm();
       }
     });
 
@@ -190,15 +268,14 @@ export const SocketProvider = ({ children }: SocketProviderProps) => {
       content: {
         title,
         body,
-        sound: 'default',
-        channelId: 'emergencies',
+        sound: true,
       },
       trigger: null
     });
   };
 
   return (
-    <SocketContext.Provider value={{ socket, connected }}>
+    <SocketContext.Provider value={{ socket, connected, alarmActive, alarmTitle, alarmMessage, silenceAlarm }}>
       {children}
     </SocketContext.Provider>
   );

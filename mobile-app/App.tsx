@@ -11,6 +11,8 @@ Notifications.setNotificationHandler({
     shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: false,
+    shouldShowBanner: true,
+    shouldShowList: true,
   }),
 });
 
@@ -26,6 +28,7 @@ import ContactsScreen from './src/screens/ContactsScreen';
 import SafetyGuideScreen from './src/screens/SafetyGuideScreen';
 import IncidentDetailsScreen from './src/screens/IncidentDetailsScreen';
 import NavigationScreen from './src/screens/NavigationScreen';
+import AlarmOverlay from './src/components/AlarmOverlay';
 
 const Stack = createStackNavigator<RootStackParamList>();
 
@@ -90,6 +93,7 @@ export default function App() {
                 />
               </Stack.Navigator>
               <StatusBar style="auto" />
+              <AlarmOverlay />
             </NavigationContainer>
             </LocationProvider>
           </SocketProvider>
