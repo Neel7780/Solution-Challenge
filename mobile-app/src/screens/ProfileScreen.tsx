@@ -20,7 +20,7 @@ interface ProfileItemProps {
   isEditing?: boolean;
 }
 
-export default function ProfileScreen() {
+export default function ProfileScreen({ navigation }: any) {
   const { user, logout, updateProfile } = useAuth();
   const [editing, setEditing] = useState<boolean>(false);
   const [name, setName] = useState<string>(user?.name || '');
@@ -33,7 +33,17 @@ export default function ProfileScreen() {
       'Are you sure you want to logout?',
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Logout', onPress: logout, style: 'destructive' },
+        { 
+          text: 'Logout', 
+          onPress: async () => {
+            await logout();
+            navigation.reset({
+              index: 0,
+              routes: [{ name: 'Login' }],
+            });
+          }, 
+          style: 'destructive' 
+        },
       ]
     );
   };

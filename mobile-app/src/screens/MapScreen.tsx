@@ -12,6 +12,7 @@ import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { useLocation } from '../context/LocationContext';
 import { API_URL } from '../config';
+import { useSocket } from '../context/SocketContext';
 import LeafletMapView, { type LeafletMapMarker, type LeafletMapPolyline } from '../components/LeafletMapView';
 
 // Georeference constants matching Locations.tsx and GuestMap.tsx
@@ -87,52 +88,8 @@ export default function MapScreen({ navigation }: any) {
   const [activeUsers, setActiveUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
+  const { socket, connected } = useSocket();
   const propertyId = user?.property_id || 2;
-
-  useEffect(() => {
-    fetchIncidents();
-    fetchZones();
-  }, [propertyId]);
-
-  // Poll for location updates of simulated guest and active users if responder
-  useEffect(() => {
-    let intervalId: any;
-    
-    const isResponder = user?.role === 'responder' || user?.role === 'security' || user?.role === 'staff' || user?.role === 'admin' || user?.role === 'org_admin' || user?.role === 'super_admin';
-
-    const fetchLocationData = async () => {
-      // Fetch own guest simulation location
-      if (user?.id || user?._id) {
-        try {
-          const uId = user.id || user._id;
-          const res = await axios.get(`${API_URL}/locations/history/${uId}`);
-          const history = res.data.history;
-          if (history && history.length > 0) {
-            const georef = getGeoreferencedLatLng(history[0].latitude, history[0].longitude);
-            setGuestCoords(georef);
-            setGuestLocationUpdatedAt(history[0].recorded_at || null);
-          }
-        } catch (err) {
-          console.log('Error fetching location history on mobile map:', err);
-        }
-      }
-
-      // Fetch all active users if responder
-      if (isResponder) {
-        try {
-          const res = await axios.get(`${API_URL}/locations/active-users/${propertyId}`);
-          setActiveUsers(res.data.locations || []);
-        } catch (err) {
-          console.log('Error fetching active users on mobile map:', err);
-        }
-      }
-    };
-
-    fetchLocationData();
-    intervalId = setInterval(fetchLocationData, 5000);
-
-    return () => clearInterval(intervalId);
-  }, [user, propertyId]);
 
   const fetchIncidents = async () => {
     try {
@@ -154,6 +111,65 @@ export default function MapScreen({ navigation }: any) {
     }
   };
 
+  const fetchLocationData = async () => {
+    const isResponder = user?.role === 'responder' || user?.role === 'security' || user?.role === 'staff' || user?.role === 'admin' || user?.role === 'org_admin' || user?.role === 'super_admin';
+    // Fetch own guest simulation location
+    if (user?.id || user?._id) {
+      try {
+        const uId = user.id || user._id;
+        const res = await axios.get(`${API_URL}/locations/history/${uId}`);
+        const history = res.data.history;
+        if (history && history.length > 0) {
+          const georef = getGeoreferencedLatLng(history[0].latitude, history[0].longitude);
+          setGuestCoords(georef);
+          setGuestLocationUpdatedAt(history[0].recorded_at || null);
+        }
+      } catch (err) {
+        console.log('Error fetching location history on mobile map:', err);
+      }
+    }
+
+    // Fetch all active users if responder
+    if (isResponder) {
+      try {
+        const res = await axios.get(`${API_URL}/locations/active-users/${propertyId}`);
+        setActiveUsers(res.data.locations || []);
+      } catch (err) {
+        console.log('Error fetching active users on mobile map:', err);
+      }
+    }
+  };
+
+  useEffect(() => {
+    fetchIncidents();
+    fetchZones();
+    fetchLocationData();
+  }, [propertyId]);
+
+  // Socket listener for live updates
+  useEffect(() => {
+    if (!socket || !connected) return;
+
+    socket.on('crisis_reported', fetchIncidents);
+    socket.on('incident_status_update', fetchIncidents);
+    socket.on('property_status_update', fetchIncidents);
+    socket.on('location_update', fetchLocationData);
+
+    return () => {
+      socket.off('crisis_reported', fetchIncidents);
+      socket.off('incident_status_update', fetchIncidents);
+      socket.off('property_status_update', fetchIncidents);
+      socket.off('location_update', fetchLocationData);
+    };
+  }, [socket, connected]);
+
+  // Poll for location updates as fallback
+  useEffect(() => {
+    const intervalId = setInterval(fetchLocationData, 10000); // reduced polling frequency since we have sockets
+    return () => clearInterval(intervalId);
+  }, [user, propertyId]);
+
+
   const getSeverityColor = (severity: string) => {
     switch (severity?.toLowerCase()) {
       case 'critical': return '#d32f2f';
@@ -163,7 +179,7 @@ export default function MapScreen({ navigation }: any) {
     }
   };
 
-  const displayLocation = guestCoords || location;
+  const displayLocation = guestCoords || location || { latitude: PROPERTY_CONFIG.ANCHOR_LAT, longitude: PROPERTY_CONFIG.ANCHOR_LNG };
   const activeIncident = incidents.length > 0 ? incidents[0] : null;
 
   // Safe Exit Assembly Points (Dynamic from DB + Fallback)
