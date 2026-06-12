@@ -158,30 +158,63 @@ export function findClosestNode(x: number, y: number, floor: number): Navigation
 }
 
 // Generate structural instructions from path
-export function generateVoiceInstructions(path: NavigationNode[]): string[] {
+export async function generateVoiceInstructions(path: NavigationNode[]): Promise<string[]> {
   if (path.length <= 1) {
     return ['Shelter in place immediately and await responder assistance.'];
   }
 
-  const instructions: string[] = [];
-  instructions.push(`Exit current area and proceed toward ${path[1].name}.`);
+  try {
+    const { GoogleGenerativeAI } = await import('@google/generative-ai');
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) throw new Error('GEMINI_API_KEY not set');
+    
+    const client = new GoogleGenerativeAI(apiKey);
+    
+    // Optimized configuration for near-instant response times
+    const generationConfig = {
+      model: "gemini-3.5-flash", // Use the optimized 3.5 branch
+      temperature: 0.2,          // Keep it low so it doesn't waste time overthinking
+      maxOutputTokens: 100,      // Keep directions under 2 sentences to cut generation time
+    };
+    
+    const genModel = client.getGenerativeModel({ model: generationConfig.model });
+    const pathString = path.map(n => n.name).join(' -> ');
+    const prompt = `You are an emergency evacuation AI. Convert this path into clear, calm voice directions: ${pathString}. Keep directions under 2 sentences to cut generation time.`;
+    
+    const result = await genModel.generateContent({
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      generationConfig: {
+        temperature: generationConfig.temperature,
+        maxOutputTokens: generationConfig.maxOutputTokens
+      }
+    });
+    
+    const text = result.response.text();
+    // Split into sentences for the array
+    return text.split(/(?<=\.)\s+/).filter(Boolean).map(s => s.trim());
+  } catch (error) {
+    console.error('Failed to generate AI voice instructions, using fallback:', error);
+    const instructions: string[] = [];
+    instructions.push(`Exit current area and proceed toward ${path[1].name}.`);
 
-  for (let i = 1; i < path.length - 1; i++) {
-    const prev = path[i - 1];
-    const curr = path[i];
-    const next = path[i + 1];
+    for (let i = 1; i < path.length - 1; i++) {
+      const prev = path[i - 1];
+      const curr = path[i];
+      const next = path[i + 1];
 
-    if (curr.type === 'stairwell' && next.type === 'stairwell') {
-      instructions.push(`Enter ${curr.name} and take the stairs down to floor ${next.floor}.`);
-    } else if (curr.type === 'corridor' && next.type === 'stairwell') {
-      instructions.push(`Walk along the corridor and enter ${next.name}.`);
-    } else if (curr.type === 'corridor' && next.type === 'exit') {
-      instructions.push(`Head directly to ${next.name} to exit the building.`);
-    } else {
-      instructions.push(`Continue to ${next.name}.`);
+      if (curr.type === 'stairwell' && next.type === 'stairwell') {
+        instructions.push(`Enter ${curr.name} and take the stairs down to floor ${next.floor}.`);
+      } else if (curr.type === 'corridor' && next.type === 'stairwell') {
+        instructions.push(`Walk along the corridor and enter ${next.name}.`);
+      } else if (curr.type === 'corridor' && next.type === 'exit') {
+        instructions.push(`Head directly to ${next.name} to exit the building.`);
+      } else {
+        instructions.push(`Continue to ${next.name}.`);
+      }
     }
-  }
 
-  instructions.push('You have arrived at a safe zone.');
-  return instructions;
+    instructions.push('You have arrived at a safe zone.');
+    return instructions;
+  }
 }
+

@@ -743,7 +743,7 @@ io.on('connection', (socket: any) => {
         if (startNode) {
           const route = findShortestPath(startNode.id, hazards);
           if (route) {
-            const instructions = generateVoiceInstructions(route.path);
+            const instructions = await generateVoiceInstructions(route.path);
             socket.emit('route_calculated', {
               success: true,
               shelterInPlace: false,

@@ -66,7 +66,7 @@ export async function calculateSafeRoute(req: Request, res: Response) {
     }
 
     // Generate voice/text instructions from waypoints
-    const instructions = generateVoiceInstructions(route.path);
+    const instructions = await generateVoiceInstructions(route.path);
 
     return res.json({
       success: true,
