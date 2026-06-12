@@ -125,7 +125,7 @@ app.use((req: any, res: any, next: any) => {
   next();
 });
 
-app.use('/api/crisis', crisisLimiter, crisisRoutes);
+app.use('/api/crisis', crisisRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/locations', locationRoutes);
 app.use('/api/notifications', notificationRoutes);

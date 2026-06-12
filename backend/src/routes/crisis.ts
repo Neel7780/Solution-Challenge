@@ -26,7 +26,13 @@ const publicReportLimiter = rateLimit({
   message: { error: 'Too many public reports from this source. Please try again later.' },
 });
 
-router.post('/report', authenticate, [
+const crisisLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000,
+  max: 10,
+  message: { error: 'Too many crisis reports, please try again later' },
+});
+
+router.post('/report', authenticate, crisisLimiter, [
   body('propertyId').isInt().withMessage('Property ID is required'),
   body('type').isIn(['fire', 'medical', 'security', 'natural_disaster', 'evacuation', 'other']),
   body('severity').optional().isIn(['low', 'medium', 'high', 'critical']),
