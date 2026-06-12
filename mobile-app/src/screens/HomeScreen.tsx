@@ -41,8 +41,8 @@ export default function HomeScreen({ navigation }: any) {
       const incidentsRes = await axios.get(`${API_URL}/crisis/active`);
       setActiveIncident(incidentsRes.data.incidents[0] || null);
 
-      // Get stats
-      if (user?.property_id) {
+      // Get stats (only for staff/responders/admins)
+      if (user?.property_id && user?.role && user.role !== 'guest') {
         const statsRes = await axios.get(`${API_URL}/dashboard/stats/${user.property_id}`);
         setStats(statsRes.data.stats);
       }

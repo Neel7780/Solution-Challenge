@@ -96,25 +96,30 @@ export const SocketProvider = ({ children }: SocketProviderProps) => {
   }, [token, user]);
 
   const ensureNotificationsReady = async () => {
-    const { status: existingStatus } = await Notifications.getPermissionsAsync();
-    let finalStatus = existingStatus;
+    try {
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      let finalStatus = existingStatus;
 
-    if (existingStatus !== 'granted') {
-      const { status } = await Notifications.requestPermissionsAsync();
-      finalStatus = status;
+      if (existingStatus !== 'granted') {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+      }
+
+      if (Platform.OS === 'android') {
+        await Notifications.setNotificationChannelAsync('emergencies', {
+          name: 'Emergency Alerts',
+          importance: Notifications.AndroidImportance.MAX,
+          vibrationPattern: [0, 250, 250, 250],
+          lightColor: '#d32f2f',
+          sound: 'default',
+        });
+      }
+
+      return finalStatus === 'granted';
+    } catch (err) {
+      console.warn("Notifications check failed (likely Expo Go SDK 53 restriction):", err);
+      return false; // allow fallback gracefully without crashing
     }
-
-    if (Platform.OS === 'android') {
-      await Notifications.setNotificationChannelAsync('emergencies', {
-        name: 'Emergency Alerts',
-        importance: Notifications.AndroidImportance.MAX,
-        vibrationPattern: [0, 250, 250, 250],
-        lightColor: '#d32f2f',
-        sound: 'default',
-      });
-    }
-
-    return finalStatus === 'granted';
   };
 
   const initSocket = async () => {
@@ -146,7 +151,7 @@ export const SocketProvider = ({ children }: SocketProviderProps) => {
 
     // Listen for crisis alerts
     newSocket.on('crisis_reported', (data: any) => {
-      showNotification('🚨 EMERGENCY ALERT 🚨', `${data.incident.incident_type.toUpperCase()}: ${data.incident.description}`);
+      showNotification('🚨 EMERGENCY ALERT 🚨', `${data.incident.incident_type.toUpperCase()}: ${data.incident.description}`, { screen: 'Navigation' });
       addNotification({
         type: 'crisis',
         title: 'Emergency Alert',
@@ -190,7 +195,7 @@ export const SocketProvider = ({ children }: SocketProviderProps) => {
     // Listen for property status updates (e.g. Evacuation Order)
     newSocket.on('property_status_update', (data: any) => {
       if (data.status === 'evacuating') {
-        showNotification('🛑 EVACUATION ORDER 🛑', 'IMMEDIATE EVACUATION ORDERED. Proceed to nearest safe exit.');
+        showNotification('🛑 EVACUATION ORDER 🛑', 'IMMEDIATE EVACUATION ORDERED. Proceed to nearest safe exit.', { screen: 'Navigation' });
         addNotification({
           type: 'status',
           title: 'Evacuation Order',
@@ -263,14 +268,17 @@ export const SocketProvider = ({ children }: SocketProviderProps) => {
     }
   };
 
-  const showNotification = async (title: string, body: string) => {
+  const showNotification = async (title: string, body: string, data?: Record<string, any>) => {
     await Notifications.scheduleNotificationAsync({
       content: {
         title,
         body,
-        sound: true,
+        sound: 'default',
+        data,
       },
-      trigger: null
+      trigger: {
+        channelId: 'emergencies',
+      },
     });
   };
 

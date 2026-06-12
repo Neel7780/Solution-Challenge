@@ -1,5 +1,5 @@
 import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { StatusBar } from 'expo-status-bar';
 import * as Notifications from 'expo-notifications';
@@ -31,15 +31,28 @@ import NavigationScreen from './src/screens/NavigationScreen';
 import AlarmOverlay from './src/components/AlarmOverlay';
 
 const Stack = createStackNavigator<RootStackParamList>();
+export const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
 export default function App() {
+  React.useEffect(() => {
+    const subscription = Notifications.addNotificationResponseReceivedListener(response => {
+      const data = response.notification.request.content.data;
+      if (data?.screen === 'Navigation') {
+        if (navigationRef.isReady()) {
+          navigationRef.navigate('Navigation' as never);
+        }
+      }
+    });
+    return () => subscription.remove();
+  }, []);
+
   return (
     <SafeAreaProvider>
       <AuthProvider>
         <NotificationProvider>
           <SocketProvider>
             <LocationProvider>
-              <NavigationContainer>
+              <NavigationContainer ref={navigationRef}>
               <Stack.Navigator initialRouteName="Login" screenOptions={{ headerShown: false }}>
                 <Stack.Screen name="Login" component={LoginScreen as any} />
                 <Stack.Screen name="Main" component={MainTabNavigator as any} />

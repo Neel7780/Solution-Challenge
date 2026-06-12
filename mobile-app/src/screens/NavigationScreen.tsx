@@ -11,6 +11,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons as Icon } from '@expo/vector-icons';
 import axios from 'axios';
+import * as FileSystem from 'expo-file-system';
+import { Asset } from 'expo-asset';
 import { useAuth } from '../context/AuthContext';
 import { useLocation } from '../context/LocationContext';
 import { useSocket } from '../context/SocketContext';
@@ -34,9 +36,28 @@ export default function NavigationScreen({ navigation }: any) {
   const [hazards, setHazards] = useState<Hazard[]>([]);
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [offlineMode, setOfflineMode] = useState<boolean>(false);
+  const [floorPlanDataUrl, setFloorPlanDataUrl] = useState<string | null>(null);
+  const lastRecalculateTime = useRef<number>(0);
 
   const propertyId = user?.property_id || 2;
   const currentFloor = Number(user?.room_number?.startsWith('2') ? 2 : 1);
+
+  // Load floorplan as Base64 to bypass Android WebView file/mixed content restrictions
+  useEffect(() => {
+    const loadFloorPlan = async () => {
+      try {
+        const asset = Asset.fromModule(currentFloor === 2 ? require('../../assets/maps/floor2.png') : require('../../assets/maps/floor1.png'));
+        await asset.downloadAsync();
+        if (asset.localUri) {
+          const base64 = await FileSystem.readAsStringAsync(asset.localUri, { encoding: 'base64' });
+          setFloorPlanDataUrl(`data:image/png;base64,${base64}`);
+        }
+      } catch (err) {
+        console.warn('Failed to load floorplan asset:', err);
+      }
+    };
+    loadFloorPlan();
+  }, [currentFloor]);
 
   // Convert current GPS location to Godot coordinates
   const currentGodotCoords = useMemo(() => {
@@ -150,9 +171,31 @@ export default function NavigationScreen({ navigation }: any) {
     });
   }, [propertyId]);
 
+  // Socket listener for live navigation updates
+  useEffect(() => {
+    if (!socket || !connected) return;
+
+    const handleUpdate = () => {
+      console.log('Live update received, recalculating route...');
+      fetchHazards().then((activeHazards) => {
+        calculateRoute(activeHazards);
+      });
+    };
+
+    socket.on('crisis_reported', handleUpdate);
+    socket.on('incident_status_update', handleUpdate);
+    socket.on('property_status_update', handleUpdate);
+
+    return () => {
+      socket.off('crisis_reported', handleUpdate);
+      socket.off('incident_status_update', handleUpdate);
+      socket.off('property_status_update', handleUpdate);
+    };
+  }, [socket, connected]);
+
   // Recalculate automatically if user drifts away from path or enters a new node
   useEffect(() => {
-    if (!currentGodotCoords || routePath.length === 0 || !location?.latitude || !location?.longitude) return;
+    if (loading || !currentGodotCoords || routePath.length === 0 || !location?.latitude || !location?.longitude) return;
 
     // 1. Check if user arrived at a waypoint node
     const nextNode = routePath[currentStep + 1];
@@ -197,12 +240,14 @@ export default function NavigationScreen({ navigation }: any) {
         godotToLatLng(closestNodeOnPath.x, closestNodeOnPath.y).longitude
       );
 
-      if (distToPath > 8.0) {
+      const now = Date.now();
+      if (distToPath > 8.0 && now - lastRecalculateTime.current > 15000) { // 15 seconds cooldown
+        lastRecalculateTime.current = now;
         console.log('User drifted from suggested path, recalculating...');
         calculateRoute();
       }
     }
-  }, [location, currentStep, routePath]);
+  }, [location, currentStep, routePath, loading]);
 
   // Emit initial 'evacuating' status on screen open
   useEffect(() => {
@@ -222,29 +267,46 @@ export default function NavigationScreen({ navigation }: any) {
     };
   }, [routePath]);
 
-  // Map route nodes to Leaflet-compatible LatLng coordinates for rendering the polyline
+  const IMAGE_BOUNDS = {
+    xMin: -9.0,
+    xMax: 5.0,
+    yMin: -15.0,
+    yMax: 10.0
+  };
+  const GODOT_MAX_X = 800;
+  const GODOT_MAX_Y = 600;
+
+  const godotToSchematic = (x: number, y: number) => {
+    const pixelX = ((x - IMAGE_BOUNDS.xMin) / (IMAGE_BOUNDS.xMax - IMAGE_BOUNDS.xMin)) * GODOT_MAX_X;
+    const pixelY = (1 - ((y - IMAGE_BOUNDS.yMin) / (IMAGE_BOUNDS.yMax - IMAGE_BOUNDS.yMin))) * GODOT_MAX_Y;
+    return { latitude: pixelY, longitude: pixelX };
+  };
+
+  // Map route nodes to pixel coordinates for rendering the polyline on floorplan
   const polylineCoordinates = useMemo(() => {
     return routePath.map((n) => {
-      const latlng = godotToLatLng(n.x, n.y);
-      return { latitude: latlng.latitude, longitude: latlng.longitude };
+      return godotToSchematic(n.x, n.y);
     });
   }, [routePath]);
 
   const mapCenter = useMemo(() => {
     if (location?.latitude && location?.longitude) {
-      return { latitude: location.latitude, longitude: location.longitude };
+      const gCoords = latLngToGodot(location.latitude, location.longitude);
+      return godotToSchematic(gCoords.x, gCoords.y);
     }
-    return { latitude: 40.7128, longitude: -74.0060 };
+    return godotToSchematic(0, 0);
   }, [location]);
 
   const mapMarkers = useMemo<LeafletMapMarker[]>(() => {
     const markers: LeafletMapMarker[] = [];
 
     if (location?.latitude && location?.longitude) {
+      const gCoords = latLngToGodot(location.latitude, location.longitude);
+      const schematicCoords = godotToSchematic(gCoords.x, gCoords.y);
       markers.push({
         id: 'current-location',
-        latitude: location.latitude,
-        longitude: location.longitude,
+        latitude: schematicCoords.latitude,
+        longitude: schematicCoords.longitude,
         title: 'You are here',
         description: 'Current GPS location',
         color: '#0f172a',
@@ -253,11 +315,11 @@ export default function NavigationScreen({ navigation }: any) {
     }
 
     routePath.forEach((node) => {
-      const latlng = godotToLatLng(node.x, node.y);
+      const schematicCoords = godotToSchematic(node.x, node.y);
       markers.push({
         id: `route-node-${node.id}`,
-        latitude: latlng.latitude,
-        longitude: latlng.longitude,
+        latitude: schematicCoords.latitude,
+        longitude: schematicCoords.longitude,
         title: node.name,
         description: node.type.toUpperCase(),
         color: node.type === 'exit' ? '#059669' : node.type === 'stairwell' ? '#f59e0b' : '#2563eb',
@@ -272,12 +334,12 @@ export default function NavigationScreen({ navigation }: any) {
     return hazards
       .filter((hazard) => hazard.floor === currentFloor)
       .map((hazard, index) => {
-        const latlng = godotToLatLng(hazard.x, hazard.y);
+        const schematicCoords = godotToSchematic(hazard.x, hazard.y);
         return {
           id: `hazard-${index}`,
-          latitude: latlng.latitude,
-          longitude: latlng.longitude,
-          radius: hazard.radius,
+          latitude: schematicCoords.latitude,
+          longitude: schematicCoords.longitude,
+          radius: hazard.radius * 57, // Convert Godot units to pixels
           strokeColor: 'rgba(239, 68, 68, 0.6)',
           fillColor: 'rgba(239, 68, 68, 0.22)',
           fillOpacity: 0.22,
@@ -333,11 +395,13 @@ export default function NavigationScreen({ navigation }: any) {
       <LeafletMapView
         style={styles.map}
         center={mapCenter}
-        zoom={18}
+        zoom={0}
         fitToData
         markers={mapMarkers}
         circles={mapCircles}
         polylines={mapPolylines}
+        mode="floorplan"
+        floorPlanUrl={floorPlanDataUrl || undefined}
       />
 
       {/* Floating Instructions Panel */}
