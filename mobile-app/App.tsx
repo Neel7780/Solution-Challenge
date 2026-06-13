@@ -1,5 +1,5 @@
 import React from 'react';
-import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
+import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { StatusBar } from 'expo-status-bar';
 import * as Notifications from 'expo-notifications';
@@ -30,8 +30,8 @@ import IncidentDetailsScreen from './src/screens/IncidentDetailsScreen';
 import NavigationScreen from './src/screens/NavigationScreen';
 import AlarmOverlay from './src/components/AlarmOverlay';
 
+import { navigationRef } from './src/navigation/navigationRef';
 const Stack = createStackNavigator<RootStackParamList>();
-export const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
 export default function App() {
   React.useEffect(() => {

@@ -27,7 +27,7 @@ interface HomeScreenProps {
 
 export default function HomeScreen({ navigation }: any) {
   const { user } = useAuth();
-  const { connected } = useSocket();
+  const { connected, socket } = useSocket();
   const [activeIncident, setActiveIncident] = useState<any>(null);
   const [stats, setStats] = useState<any>({});
   const [refreshing, setRefreshing] = useState<boolean>(false);
@@ -37,17 +37,35 @@ export default function HomeScreen({ navigation }: any) {
   useEffect(() => {
     fetchDashboardData();
     
-    if (!connected) {
-      const interval = setInterval(fetchDashboardData, 3000);
-      return () => clearInterval(interval);
+    // Always poll every 2 seconds as requested fallback
+    const interval = setInterval(fetchDashboardData, 2000); 
+
+    if (socket) {
+      socket.on('crisis_reported', fetchDashboardData);
+      socket.on('incident_enriched', fetchDashboardData);
+      socket.on('incident_status_update', fetchDashboardData);
     }
-  }, [connected]);
+    
+    return () => {
+      clearInterval(interval);
+      if (socket) {
+        socket.off('crisis_reported', fetchDashboardData);
+        socket.off('incident_enriched', fetchDashboardData);
+        socket.off('incident_status_update', fetchDashboardData);
+      }
+    };
+  }, [socket]);
 
   const fetchDashboardData = async () => {
     try {
-      // Get active incidents
-      const incidentsRes = await axios.get(`${API_URL}/crisis/active`);
-      setActiveIncident(incidentsRes.data.incidents[0] || null);
+      const propertyId = user?.property_id || 2;
+      const incidentsRes = await axios.get(`${API_URL}/crisis/active?propertyId=${propertyId}`);
+      if (incidentsRes.data.incidents && incidentsRes.data.incidents.length > 0) {
+        const detailsRes = await axios.get(`${API_URL}/crisis/${incidentsRes.data.incidents[0].id}`);
+        setActiveIncident(detailsRes.data.incident || null);
+      } else {
+        setActiveIncident(null);
+      }
 
       // Get stats (only for staff/responders/admins)
       if (user?.property_id && user?.role && user.role !== 'guest') {
@@ -113,20 +131,30 @@ export default function HomeScreen({ navigation }: any) {
   if (activeIncident && userStatus !== 'safe') {
     return (
       <View style={{ flex: 1, backgroundColor: '#000' }}>
-        <View style={{ padding: 16, backgroundColor: 'rgba(0,0,0,0.8)', position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, paddingTop: 60 }}>
+        <View style={{ padding: 16, backgroundColor: 'rgba(15, 23, 42, 0.95)', position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, paddingTop: 60, borderBottomWidth: 1, borderBottomColor: '#334155' }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            <Text style={{ color: '#ef4444', fontSize: 18, fontWeight: 'bold' }}>CRITICAL ALERT</Text>
+            <Text style={{ color: '#ef4444', fontSize: 20, fontWeight: '900' }}>CRITICAL ALERT: {activeIncident.incident_type?.toUpperCase() || 'EMERGENCY'}</Text>
             <View style={{ backgroundColor: '#ef4444', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 }}>
               <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>EVACUATE</Text>
             </View>
           </View>
-          <Text style={{ color: '#fff', fontSize: 14, marginTop: 8 }}>{activeIncident.mass_alert_message || 'Hazard detected. Evacuate immediately.'}</Text>
+          <Text style={{ color: '#f8fafc', fontSize: 15, marginTop: 12, fontWeight: '600' }}>
+            {activeIncident.mass_alert_message || 'Hazard detected. Evacuate immediately.'}
+          </Text>
+
+          {activeIncident.evacuation_routes?.guestEmergencyPlan && (
+            <View style={{ marginTop: 16, backgroundColor: 'rgba(239, 68, 68, 0.1)', padding: 12, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(239, 68, 68, 0.3)' }}>
+              <Text style={{ color: '#fca5a5', fontSize: 12, fontWeight: 'bold', marginBottom: 8, textTransform: 'uppercase' }}>AI Evacuation Protocol:</Text>
+              {activeIncident.evacuation_routes.guestEmergencyPlan.map((plan: string, i: number) => (
+                <Text key={i} style={{ color: '#fff', fontSize: 13, marginBottom: 4 }}>• {plan}</Text>
+              ))}
+            </View>
+          )}
         </View>
 
         <WebView 
           source={{ uri: 'https://app.mappedin.com/map/6a2d1e9d8c2010000b751066?embedded=true' }}
-          style={{ flex: 1 }}
-          scrollEnabled={false}
+          style={{ flex: 1, marginTop: 120 }}
           javaScriptEnabled={true}
         />
 
@@ -149,6 +177,8 @@ export default function HomeScreen({ navigation }: any) {
       </View>
     );
   }
+
+
 
   return (
     <ScrollView

@@ -111,7 +111,7 @@ export default function ChatScreen() {
   };
 
   const renderItem = ({ item }: { item: ChatMessage }) => {
-    const isCurrentUser = item.user_id === user?.id;
+    const isCurrentUser = String(item.user_id) === String(user?.id);
     const roleColor = getRoleColor(item.user_role);
 
     return (

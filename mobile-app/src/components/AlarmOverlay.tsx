@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { MaterialIcons as Icon } from '@expo/vector-icons';
 import { useSocket } from '../context/SocketContext';
-import { navigationRef } from '../../App';
+import { navigationRef } from '../navigation/navigationRef';
 
 export default function AlarmOverlay() {
   const { alarmActive, alarmTitle, alarmMessage, silenceAlarm } = useSocket();
@@ -54,7 +54,7 @@ export default function AlarmOverlay() {
     silenceAlarm();
     // 2. Redirect to Evacuation Path Navigation screen
     try {
-      navigation.navigate('Navigation');
+      navigationRef.navigate('Navigation');
     } catch (error) {
       console.warn('Navigation to evacuation map failed:', error);
     }

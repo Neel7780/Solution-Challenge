@@ -3,7 +3,7 @@ import { Platform, Vibration } from 'react-native';
 import { io, Socket } from 'socket.io-client';
 import { useAuth } from './AuthContext';
 import * as Notifications from 'expo-notifications';
-import { Audio } from 'expo-av';
+import { useAudioPlayer } from 'expo-audio';
 import { SOCKET_URL } from '../config';
 import { SocketContextType } from '../types';
 import { useNotifications } from './NotificationContext';
@@ -23,8 +23,9 @@ export const SocketProvider = ({ children }: SocketProviderProps) => {
   const [alarmActive, setAlarmActive] = useState<boolean>(false);
   const [alarmTitle, setAlarmTitle] = useState<string>('');
   const [alarmMessage, setAlarmMessage] = useState<string>('');
-  const soundRef = useRef<Audio.Sound | null>(null);
   const alarmTimeoutRef = useRef<any>(null);
+
+  const player = useAudioPlayer(require('../../assets/alarm.mp3'));
 
   const startAlarmMedia = async () => {
     // Clear any previous timeout
@@ -34,15 +35,8 @@ export const SocketProvider = ({ children }: SocketProviderProps) => {
     }
 
     try {
-      if (soundRef.current) {
-        await soundRef.current.unloadAsync().catch(() => {});
-      }
-      soundRef.current = new Audio.Sound();
-      await soundRef.current.loadAsync(
-        { uri: 'https://raw.githubusercontent.com/fewieden/MMM-AlarmClock/master/sounds/alarm.mp3' },
-        { shouldPlay: true, isLooping: true }
-      );
-      await soundRef.current.playAsync().catch(() => {});
+      player.loop = true;
+      player.play();
     } catch (error) {
       console.warn('Failed to play alarm sound:', error);
     }
@@ -61,10 +55,11 @@ export const SocketProvider = ({ children }: SocketProviderProps) => {
       alarmTimeoutRef.current = null;
     }
     try {
-      if (soundRef.current) {
-        await soundRef.current.stopAsync().catch(() => {});
-        await soundRef.current.unloadAsync().catch(() => {});
-        soundRef.current = null;
+      if (player && player.playing) {
+        player.pause();
+      }
+      if (player) {
+        player.seekTo(0);
       }
     } catch (error) {
       console.warn('Failed to stop alarm sound:', error);
@@ -258,6 +253,10 @@ export const SocketProvider = ({ children }: SocketProviderProps) => {
           message: `Panic button triggered by ${data.userName || 'a guest'}`,
           severity: 'critical'
         });
+        setAlarmTitle('🆘 PANIC ALERT 🆘');
+        setAlarmMessage(`Panic button triggered by ${data.userName || 'a guest'}`);
+        setAlarmActive(true);
+        void startAlarmMedia();
       }
     });
 
