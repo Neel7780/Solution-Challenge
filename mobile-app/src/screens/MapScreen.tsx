@@ -13,7 +13,7 @@ import { useAuth } from '../context/AuthContext';
 import { useLocation } from '../context/LocationContext';
 import { API_URL } from '../config';
 import { useSocket } from '../context/SocketContext';
-import LeafletMapView, { type LeafletMapMarker, type LeafletMapPolyline } from '../components/LeafletMapView';
+import { WebView } from 'react-native-webview';
 
 // Georeference constants matching Locations.tsx and GuestMap.tsx
 const PROPERTY_CONFIG = {
@@ -246,90 +246,7 @@ export default function MapScreen({ navigation }: any) {
     };
   }, [exitPoints, displayLocation]);
 
-  const mapMarkers = useMemo<LeafletMapMarker[]>(() => {
-    const markers: LeafletMapMarker[] = [];
 
-    if (guestCoords) {
-      markers.push({
-        id: 'guest-location',
-        latitude: guestCoords.latitude,
-        longitude: guestCoords.longitude,
-        title: 'You (Simulation)',
-        description: `Room ${user?.room_number || 'N/A'}`,
-        color: '#2563eb',
-        label: 'ME',
-      });
-    }
-
-    activeUsers
-      .filter((u) => u.user_id !== (user?.id || user?._id))
-      .forEach((u, index) => {
-        const coords = getGeoreferencedLatLng(u.latitude, u.longitude);
-        const isDistressed = u.user_status === 'distressed' || u.user_status === 'trapped' || u.user_status === 'needs_help';
-        markers.push({
-          id: `active-user-${u.id || index}`,
-          latitude: coords.latitude,
-          longitude: coords.longitude,
-          title: u.name,
-          description: `Role: ${u.role} | Status: ${u.user_status}`,
-          color: isDistressed ? '#dc2626' : '#2563eb',
-          label: isDistressed ? '!' : 'U',
-        });
-      });
-
-    incidents.forEach((incident) => {
-      const coords = getGeoreferencedLatLng(incident.latitude, incident.longitude);
-      const isResolved = incident.status === 'resolved' || incident.status === 'contained';
-      markers.push({
-        id: `incident-${incident.id}`,
-        latitude: coords.latitude,
-        longitude: coords.longitude,
-        title: `${isResolved ? '✅ ' : '🚨 '}${incident.incident_type.toUpperCase()}`,
-        description: incident.description,
-        color: isResolved ? '#059669' : getSeverityColor(incident.severity),
-        label: isResolved ? '✓' : '!',
-        actionLabel: 'View details',
-      });
-    });
-
-    exitPoints.forEach((exit) => {
-      markers.push({
-        id: `exit-${exit.id}`,
-        latitude: exit.latitude,
-        longitude: exit.longitude,
-        title: exit.name,
-        description: `Capacity: ${exit.capacity || 'N/A'}`,
-        color: '#059669',
-        label: 'EXIT',
-      });
-    });
-
-    return markers;
-  }, [activeUsers, exitPoints, guestCoords, incidents, user]);
-
-  const mapPolylines = useMemo<LeafletMapPolyline[]>(() => {
-    if (!nearestExit || !activeIncident || !displayLocation) return [];
-    return [
-      {
-        id: 'evacuation-route',
-        coordinates: [
-          { latitude: displayLocation.latitude, longitude: displayLocation.longitude },
-          { latitude: nearestExit.latitude, longitude: nearestExit.longitude },
-        ],
-        color: '#10b981',
-        weight: 4,
-        dashArray: '6,10',
-      },
-    ];
-  }, [activeIncident, displayLocation, nearestExit]);
-
-  const handleMarkerPress = (markerId: string) => {
-    if (!markerId.startsWith('incident-')) return;
-    const incidentId = Number(markerId.replace('incident-', ''));
-    if (!Number.isNaN(incidentId)) {
-      navigation.navigate('IncidentDetails', { incidentId });
-    }
-  };
 
   const nearestExitLabel = nearestExit ? `${nearestExit.name} · ${nearestExit.distance}m` : 'Calculating route';
   const guestLocationLabel = guestCoords
@@ -369,44 +286,13 @@ export default function MapScreen({ navigation }: any) {
           </View>
         </View>
       </View>
-      <LeafletMapView
-        style={styles.map}
-        center={displayLocation}
-        zoom={16}
-        fitToData
-        markers={mapMarkers}
-        polylines={mapPolylines}
-        onMarkerPress={handleMarkerPress}
-      />
-
-      {/* Floating Evacuation Status Panel */}
-      {activeIncident && nearestExit && (
-        <View style={styles.evacuationPanel}>
-          <View style={styles.evacuationHeader}>
-            <View style={styles.evacuationTitleRow}>
-              <Icon name="directions-run" size={20} color="#10b981" />
-              <Text style={styles.evacuationTitle}>EVACUATION ROUTE ACTIVE</Text>
-            </View>
-            <View style={styles.distanceBadge}>
-              <Text style={styles.distanceText}>{nearestExit.distance}m away</Text>
-            </View>
-          </View>
-          <Text style={styles.evacuationInstructions}>
-            Follow the green evacuation path towards {nearestExit.name}.
-          </Text>
-          <TouchableOpacity 
-            style={styles.navButton} 
-            onPress={() => navigation.navigate('Navigation')}
-          >
-            <Icon name="navigation" size={16} color="#fff" style={{ marginRight: 6 }} />
-            <Text style={styles.navButtonText}>Start Turn-by-Turn Navigation</Text>
-          </TouchableOpacity>
-          <View style={styles.safetyTipRow}>
-            <Icon name="warning" size={14} color="#fbbf24" />
-            <Text style={styles.safetyTipText}>Do not use elevators. Stay low to avoid smoke.</Text>
-          </View>
-        </View>
-      )}
+      <View style={{ flex: 1, marginTop: 100 }}>
+        <WebView 
+          source={{ uri: 'https://app.mappedin.com/map/6a2d1e9d8c2010000b751066?embedded=true' }}
+          style={styles.map}
+          javaScriptEnabled={true}
+        />
+      </View>
 
       <TouchableOpacity style={styles.refreshButton} onPress={() => { fetchIncidents(); fetchZones(); }}>
         <Icon name="refresh" size={24} color="#333" />

@@ -16,10 +16,7 @@ import {
   Warning as WarningIcon,
   Explore as ExploreIcon,
 } from '@mui/icons-material';
-import { MapContainer, Marker, Popup, Polyline, useMap, ImageOverlay } from 'react-leaflet';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
-import 'leaflet/dist/leaflet.css';
+
 import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
 import { useAuthStore } from '../../store/authStore';
@@ -121,85 +118,7 @@ export const getSchematicLatLng = (item: any) => {
   return godotToSchematic(worldX, worldY);
 };
 
-// Map center autofit
-function FitBoundsComponent({ bounds }: { bounds: L.LatLngBoundsExpression }) {
-  const map = useMap();
-  useEffect(() => {
-    try {
-      map.fitBounds(bounds, { maxZoom: 20, padding: [30, 30] });
-    } catch (e) {
-      console.error('FitBounds failed:', e);
-    }
-  }, [map, bounds]);
-  return null;
-}
 
-// Custom Marker Icons
-const userIcon = new L.DivIcon({
-  className: 'custom-user-icon',
-  html: `<div style="
-    width: 22px;
-    height: 22px;
-    background-color: #3b82f6;
-    border: 3px solid #fff;
-    border-radius: 50%;
-    box-shadow: 0 0 12px rgba(59, 130, 246, 0.8);
-    position: relative;
-  ">
-    <div style="
-      position: absolute;
-      width: 34px;
-      height: 34px;
-      border: 2px solid #3b82f6;
-      border-radius: 50%;
-      top: -9px;
-      left: -9px;
-      animation: pulse 1.5s infinite;
-      opacity: 0;
-    "></div>
-  </div>`,
-  iconSize: [22, 22],
-  iconAnchor: [11, 11]
-});
-
-const incidentIcon = L.divIcon({
-  className: 'custom-incident-icon',
-  html: `<div style="
-    width: 26px;
-    height: 26px;
-    background-color: #ef4444;
-    border: 2px solid #fff;
-    border-radius: 50%;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    box-shadow: 0 0 15px rgba(239, 68, 68, 0.8);
-    animation: flash 1.2s infinite alternate;
-  ">
-    <span style="color: white; font-size: 14px; font-weight: bold; line-height: 1;">🔥</span>
-  </div>`,
-  iconSize: [26, 26],
-  iconAnchor: [13, 13]
-});
-
-const exitIcon = L.divIcon({
-  className: 'custom-exit-icon',
-  html: `<div style="
-    width: 50px;
-    height: 22px;
-    background-color: #10b981;
-    border: 2px solid #fff;
-    border-radius: 4px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    box-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
-  ">
-    <span style="color: white; font-size: 10px; font-weight: bold; letter-spacing: 0.05em;">EXIT</span>
-  </div>`,
-  iconSize: [50, 22],
-  iconAnchor: [25, 11]
-});
 
 // Haversine distance formula
 function getDistanceInMeters(lat1: number, lon1: number, lat2: number, lon2: number) {
@@ -539,80 +458,17 @@ export default function GuestMap() {
       </Paper>
 
       {/* Main Map Container */}
-      <MapContainer
-        center={mapCenter}
-        zoom={0}
-        minZoom={-2}
-        crs={L.CRS.Simple}
-        style={{ height: '100%', width: '100%', borderRadius: 12, backgroundColor: '#0f172a' }}
-      >
-        <ImageOverlay
-          url={`/assets/maps/floor${selectedFloor}.png`}
-          bounds={[[0, 0], [GODOT_MAX_Y, GODOT_MAX_X]]}
-          opacity={0.9}
-        />
-
-        {/* User Marker (Pulse) */}
-        <Marker position={userPosition} icon={userIcon}>
-          <Popup>
-            <Typography variant="body2" sx={{ fontWeight: 'bold' }}>You are here</Typography>
-            <Typography variant="caption" color="text.secondary">Room {user?.room_number || 'N/A'}</Typography>
-          </Popup>
-        </Marker>
-
-        {/* Active Emergency Marker */}
-        {activeIncident && (
-          <Marker position={getSchematicLatLng(activeIncident)} icon={incidentIcon}>
-            <Popup>
-              <Typography variant="subtitle2" sx={{ color: '#ef4444', fontWeight: 700 }}>
-                🚨 {activeIncident.incident_type.toUpperCase()} HAZARD
-              </Typography>
-              <Typography variant="body2">{activeIncident.description}</Typography>
-            </Popup>
-          </Marker>
-        )}
-
-        {/* Exit Gate Assembly Points */}
-        {assemblyPoints.map((exit: any) => (
-          <Marker key={exit.id} position={getSchematicLatLng(exit)} icon={exitIcon}>
-            <Popup>
-              <Typography variant="subtitle2" sx={{ color: '#10b981', fontWeight: 700 }}>{exit.name}</Typography>
-              <Typography variant="caption" color="text.secondary">Capacity: {exit.capacity} people</Typography>
-            </Popup>
-          </Marker>
-        ))}
-
-        {/* Evacuation Guideline Polyline (Directions to nearest exit) */}
-        {calculatedRoute && calculatedRoute.length > 0 ? (
-          <>
-            <Polyline
-              positions={calculatedRoute as any}
-              pathOptions={{
-                color: '#10b981',
-                weight: 5,
-                dashArray: '8, 12',
-                opacity: 0.9,
-              }}
-            />
-            <FitBoundsComponent bounds={calculatedRoute} />
-          </>
-        ) : (
-          nearestExit && activeIncident && (
-            <>
-              <Polyline
-                positions={[userPosition, getSchematicLatLng(nearestExit)]}
-                pathOptions={{
-                  color: '#10b981',
-                  weight: 4,
-                  dashArray: '8, 12',
-                  opacity: 0.9,
-                }}
-              />
-              <FitBoundsComponent bounds={[userPosition, getSchematicLatLng(nearestExit)]} />
-            </>
-          )
-        )}
-      </MapContainer>
+      <iframe 
+        title="Mappedin Map" 
+        name="Mappedin Map" 
+        allow="clipboard-write 'self' https://app.mappedin.com; web-share 'self' https://app.mappedin.com" 
+        scrolling="no" 
+        width="100%" 
+        height="100%" 
+        frameBorder="0" 
+        style={{ border: 0, borderRadius: 12 }} 
+        src="https://app.mappedin.com/map/6a2d1e9d8c2010000b751066?embedded=true"
+      ></iframe>
 
       {/* Floating Evacuation Status Panel */}
       <Card

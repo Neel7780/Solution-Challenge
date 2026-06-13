@@ -12,10 +12,12 @@ import {
 import { MaterialIcons as Icon } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { API_URL } from '../config';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../types';
+import { WebView } from 'react-native-webview';
 
 type HomeScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Main'>;
 
@@ -30,6 +32,7 @@ export default function HomeScreen({ navigation }: any) {
   const [stats, setStats] = useState<any>({});
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
+  const [userStatus, setUserStatus] = useState<string | null>(null);
 
   useEffect(() => {
     fetchDashboardData();
@@ -54,6 +57,14 @@ export default function HomeScreen({ navigation }: any) {
     } catch (error) {
       console.log('Dashboard fetch error:', error);
     } finally {
+      if (user?.id) {
+        try {
+          const status = await AsyncStorage.getItem(`guest_safety_status_${user.id}`);
+          setUserStatus(status);
+        } catch (e) {
+          console.log(e);
+        }
+      }
       setLoading(false);
     }
   };
@@ -82,6 +93,10 @@ export default function HomeScreen({ navigation }: any) {
       });
 
       Alert.alert('Check-in Successful', `You have been marked as ${status}.`);
+      if (user?.id) {
+        await AsyncStorage.setItem(`guest_safety_status_${user.id}`, status);
+        setUserStatus(status);
+      }
     } catch (error) {
       Alert.alert('Error', 'Failed to check in. Please try again.');
     }
@@ -91,6 +106,46 @@ export default function HomeScreen({ navigation }: any) {
     return (
       <View style={[styles.container, styles.centered]}>
         <ActivityIndicator size="large" color="#d32f2f" />
+      </View>
+    );
+  }
+
+  if (activeIncident && userStatus !== 'safe') {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#000' }}>
+        <View style={{ padding: 16, backgroundColor: 'rgba(0,0,0,0.8)', position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, paddingTop: 60 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Text style={{ color: '#ef4444', fontSize: 18, fontWeight: 'bold' }}>CRITICAL ALERT</Text>
+            <View style={{ backgroundColor: '#ef4444', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 }}>
+              <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>EVACUATE</Text>
+            </View>
+          </View>
+          <Text style={{ color: '#fff', fontSize: 14, marginTop: 8 }}>{activeIncident.mass_alert_message || 'Hazard detected. Evacuate immediately.'}</Text>
+        </View>
+
+        <WebView 
+          source={{ uri: 'https://app.mappedin.com/map/6a2d1e9d8c2010000b751066?embedded=true' }}
+          style={{ flex: 1 }}
+          scrollEnabled={false}
+          javaScriptEnabled={true}
+        />
+
+        <View style={{ position: 'absolute', bottom: 30, left: 16, right: 16, zIndex: 10 }}>
+          <TouchableOpacity
+            style={[styles.checkInButton, styles.safeButton, { marginBottom: 12, paddingVertical: 16, justifyContent: 'center' }]}
+            onPress={() => handleCheckIn('safe')}
+          >
+            <Icon name="check-circle" size={24} color="#fff" />
+            <Text style={[styles.checkInText, { fontSize: 16 }]}>I'm Safe (Confirm Evacuation)</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.checkInButton, { backgroundColor: '#000', borderWidth: 2, borderColor: '#ef4444', paddingVertical: 16, justifyContent: 'center' }]}
+            onPress={() => handleCheckIn('needs_help')}
+          >
+            <Icon name="warning" size={24} color="#ef4444" />
+            <Text style={[styles.checkInText, { fontSize: 16, color: '#ef4444' }]}>I'm Trapped (Dispatch Rescue)</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
@@ -127,58 +182,6 @@ export default function HomeScreen({ navigation }: any) {
         <Text style={styles.panicSubtext}>Tap for immediate help</Text>
       </TouchableOpacity>
 
-      {/* Active Incident Alert */}
-      {activeIncident && (
-        <View style={styles.alertBox}>
-          <View style={styles.alertHeader}>
-            <Icon name="error" size={24} color="#d32f2f" />
-            <Text style={styles.alertTitle}>AI Detected Live Crisis</Text>
-          </View>
-          <View style={{ backgroundColor: 'rgba(255,92,92,0.2)', alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4, marginBottom: 8 }}>
-            <Text style={{ color: '#d32f2f', fontWeight: 'bold', fontSize: 12 }}>Immediate Action Required</Text>
-          </View>
-          <Text style={styles.alertText}>
-            EMERGENCY DETECTED. Please evacuate immediately via the nearest safe exit and follow all staff instructions.
-          </Text>
-          
-          <Text style={{ fontWeight: 'bold', color: '#d32f2f', marginTop: 12, marginBottom: 4 }}>SAFE EXITS</Text>
-          <Text style={{ color: '#333', marginBottom: 12 }}>Main Entrance • North Stairwell • South Fire Escape</Text>
-          
-          <Text style={{ fontWeight: 'bold', color: '#d32f2f', marginBottom: 4 }}>EVACUATION PLAN</Text>
-          <Text style={{ color: '#333', marginBottom: 2 }}>1. Stay calm and alert.</Text>
-          <Text style={{ color: '#333', marginBottom: 2 }}>2. Follow the illuminated exit signs.</Text>
-          <Text style={{ color: '#333', marginBottom: 2 }}>3. Do not use elevators.</Text>
-          <Text style={{ color: '#333', marginBottom: 12 }}>4. Once outside, proceed to the designated assembly point.</Text>
-          
-          <Text style={{ fontWeight: 'bold', color: '#388e3c', marginBottom: 4 }}>SAFETY TIPS</Text>
-          <Text style={{ color: '#333', marginBottom: 2 }}>• Stay low to the ground if there is smoke.</Text>
-          <Text style={{ color: '#333', marginBottom: 2 }}>• Touch doors with the back of your hand before opening.</Text>
-          <Text style={{ color: '#333', marginBottom: 16 }}>• If you are trapped, seal the door with wet cloths.</Text>
-          <View style={styles.checkInButtons}>
-            <TouchableOpacity
-              style={[styles.checkInButton, styles.safeButton]}
-              onPress={() => handleCheckIn('safe')}
-            >
-              <Icon name="check-circle" size={20} color="#fff" />
-              <Text style={styles.checkInText}>I'm Safe</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.checkInButton, styles.helpButton]}
-              onPress={() => handleCheckIn('needs_help')}
-            >
-              <Icon name="help" size={20} color="#fff" />
-              <Text style={styles.checkInText}>Need Help</Text>
-            </TouchableOpacity>
-          </View>
-          <TouchableOpacity
-            style={styles.mapRouteButton}
-            onPress={() => navigation.navigate('Map')}
-          >
-            <Icon name="directions-run" size={20} color="#fff" />
-            <Text style={styles.mapRouteText}>View Evacuation Map & Route</Text>
-          </TouchableOpacity>
-        </View>
-      )}
 
       {/* Quick Actions */}
       <Text style={styles.sectionTitle}>Quick Actions</Text>

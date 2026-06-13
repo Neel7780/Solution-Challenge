@@ -52,21 +52,9 @@ import {
 
 import { useSocketStore } from '../store/socketStore';
 import { useCrisisStore } from '../store/crisisStore';
-import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
-import 'leaflet/dist/leaflet.css';
-import L from 'leaflet';
-import markerIcon from 'leaflet/dist/images/marker-icon.png';
-import markerShadow from 'leaflet/dist/images/marker-shadow.png';
 import { useLocationStore, LocationEntry } from '../store/locationStore';
 import { getGeoreferencedLatLng, PROPERTY_CONFIG } from './Locations';
 import '../assets/map-styles.css';
-
-let DefaultIcon = L.icon({
-  iconUrl: markerIcon,
-  shadowUrl: markerShadow,
-  iconAnchor: [12, 41]
-});
-L.Marker.prototype.options.icon = DefaultIcon;
 
 
 
@@ -127,34 +115,6 @@ export default function OrganizationAdmin() {
     return () => clearInterval(interval);
   }, [propertyId]);
 
-  // Helper: create styled DivIcon for a personnel/guest marker
-  function createPersonnelIcon(entry: LocationEntry, navStatus?: any): L.DivIcon {
-    const role = (entry.role || 'guest').toLowerCase();
-    const status = navStatus?.status || entry.status || '';
-    const initial = entry.name?.charAt(0)?.toUpperCase() || '?';
-    const size = role === 'guest' ? 26 : 32;
-
-    let roleClass = 'marker-guest';
-    if (role === 'admin' || role === 'org_admin' || role === 'super_admin') roleClass = 'marker-admin';
-    else if (role === 'security') roleClass = 'marker-security';
-    else if (role === 'staff') roleClass = 'marker-staff';
-    else if (role === 'responder') roleClass = 'marker-responder';
-
-    let statusClass = '';
-    if (['trapped', 'distressed', 'needs_help'].includes(status)) statusClass = 'marker-sos';
-    else if (['safe', 'reached_exit'].includes(status)) statusClass = 'marker-safe';
-    else if (status === 'evacuating') statusClass = 'marker-evacuating';
-
-    return L.divIcon({
-      className: `${roleClass} ${statusClass}`,
-      html: `<div class="crisis-marker">
-        <div class="crisis-marker__pulse" style="width:${size + 12}px;height:${size + 12}px;"></div>
-        <div class="crisis-marker__dot" style="width:${size}px;height:${size}px;">${initial}</div>
-      </div>`,
-      iconSize: [size + 12, size + 12],
-      iconAnchor: [(size + 12) / 2, (size + 12) / 2],
-    });
-  }
 
   // Ensure tasks and personnel load when looking at overview
   React.useEffect(() => {
@@ -739,54 +699,17 @@ export default function OrganizationAdmin() {
               <Chip label="LIVE SENSORS LINKED" size="small" sx={{ background: 'rgba(16,185,129,0.1)', color: '#10b981', fontWeight: 800, borderRadius: '4px' }} />
             </div>
             <div style={{ height: '500px', width: '100%', borderRadius: '8px', overflow: 'hidden', border: '1px solid #222', position: 'relative' }}>
-              <MapContainer center={[PROPERTY_CONFIG.ANCHOR_LAT, PROPERTY_CONFIG.ANCHOR_LNG]} zoom={18} style={{ height: '100%', width: '100%' }}>
-                <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" attribution="&copy; OpenStreetMap contributors" />
-
-                {/* Active Incident — use real coordinates */}
-                {activeIncident && activeIncident.latitude && activeIncident.longitude && (
-                  <Marker
-                    position={getGeoreferencedLatLng({ latitude: activeIncident.latitude, longitude: activeIncident.longitude })}
-                    icon={L.divIcon({
-                      className: '',
-                      html: `<div class="marker-incident">
-                        <div class="marker-incident__ring marker-incident__ring--outer"></div>
-                        <div class="marker-incident__ring"></div>
-                        <div class="marker-incident__core">🔥</div>
-                      </div>`,
-                      iconSize: [64, 64],
-                      iconAnchor: [32, 32],
-                    })}
-                  >
-                    <Popup>🔥 EMERGENCY: {activeIncident.incident_type?.toUpperCase() || 'UNKNOWN'}</Popup>
-                  </Marker>
-                )}
-
-                {/* Live Personnel & Guest Markers from LocationStore */}
-                {allLocations.map((entry) => {
-                  const pos = getGeoreferencedLatLng({ latitude: entry.latitude, longitude: entry.longitude });
-                  const navStatus = locationStore.getNavStatus(entry.userId);
-                  const safetyStatus = navStatus?.status || entry.status || 'active';
-                  return (
-                    <Marker
-                      key={`loc-${entry.userId}`}
-                      position={pos}
-                      icon={createPersonnelIcon(entry, navStatus)}
-                    >
-                      <Popup>
-                        <div style={{ minWidth: '160px' }}>
-                          <strong style={{ color: '#fff', fontSize: '0.95rem' }}>{entry.name}</strong>
-                          <div style={{ color: '#94a3b8', fontSize: '0.8rem', marginTop: 2 }}>{entry.role.toUpperCase()}{entry.roomNumber ? ` • Rm ${entry.roomNumber}` : ''}</div>
-                          <div style={{ marginTop: 6, fontSize: '0.8rem', fontWeight: 700, color: ['trapped','distressed','needs_help'].includes(safetyStatus) ? '#ef4444' : ['safe','reached_exit'].includes(safetyStatus) ? '#22c55e' : '#f59e0b' }}>
-                            {safetyStatus.replace(/_/g, ' ').toUpperCase()}
-                          </div>
-                          {navStatus?.currentWaypoint && <div style={{ color: '#94a3b8', fontSize: '0.75rem', marginTop: 2 }}>Node: {navStatus.currentWaypoint}</div>}
-                          <div style={{ color: '#64748b', fontSize: '0.7rem', marginTop: 4 }}>{new Date(entry.recordedAt).toLocaleTimeString()}</div>
-                        </div>
-                      </Popup>
-                    </Marker>
-                  );
-                })}
-              </MapContainer>
+              <iframe 
+                title="Mappedin Map" 
+                name="Mappedin Map" 
+                allow="clipboard-write 'self' https://app.mappedin.com; web-share 'self' https://app.mappedin.com" 
+                scrolling="no" 
+                width="100%" 
+                height="100%" 
+                frameBorder="0" 
+                style={{ border: 0 }} 
+                src="https://app.mappedin.com/map/6a2d1e9d8c2010000b751066?embedded=true"
+              ></iframe>
 
               {/* Live Tracking Status Overlay */}
               <div style={{ position: 'absolute', top: 16, right: 16, zIndex: 1000, display: 'flex', flexDirection: 'column', gap: 8 }}>

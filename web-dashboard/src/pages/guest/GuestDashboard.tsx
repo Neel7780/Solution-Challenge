@@ -39,18 +39,7 @@ import { useNotificationStore } from '../../store/notificationStore';
 import { useSocketStore } from '../../store/socketStore';
 import axios from 'axios';
 import '../../landing/landing.css';
-import { MapContainer, TileLayer, Marker, Polyline } from 'react-leaflet';
-import 'leaflet/dist/leaflet.css';
-import L from 'leaflet';
-import markerIcon from 'leaflet/dist/images/marker-icon.png';
-import markerShadow from 'leaflet/dist/images/marker-shadow.png';
 
-let DefaultIcon = L.icon({
-  iconUrl: markerIcon,
-  shadowUrl: markerShadow,
-  iconAnchor: [12, 41]
-});
-L.Marker.prototype.options.icon = DefaultIcon;
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -65,6 +54,7 @@ export default function GuestDashboard() {
   const panicRef = useRef<HTMLButtonElement>(null);
 
   const [activeIncident, setActiveIncident] = useState<any>(null);
+  const [guestSafetyStatus, setGuestSafetyStatus] = useState<string | null>(null);
   const [isSendingSOS, setIsSendingSOS] = useState(false);
   const [assignedStaff, setAssignedStaff] = useState<any[]>([]);
   const [tasks, setTasks] = useState<any[]>([]);
@@ -134,6 +124,9 @@ export default function GuestDashboard() {
   useEffect(() => {
     fetchActiveIncident();
     fetchTasks();
+    if (user?.id) {
+      setGuestSafetyStatus(localStorage.getItem(`guest_safety_status_${user.id}`));
+    }
   }, [user]);
 
   // Listen for real-time updates
@@ -248,79 +241,62 @@ export default function GuestDashboard() {
 
       {/* Dynamic Status Display */}
       <section className="sh-fade-in">
-        {activeIncident ? (
-          <div style={{ background: '#000000', border: '2px solid #ef4444', color: '#ffffff', borderRadius: '0.5rem', padding: '2rem', position: 'relative', overflow: 'hidden' }}>
-            <div style={{ position: 'relative', zIndex: 2 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid #333', paddingBottom: '1rem' }}>
-                <h2 style={{ fontFamily: 'Inter, sans-serif', fontSize: '1.5rem', fontWeight: 900, letterSpacing: '0.1em', color: '#ef4444', margin: 0, textTransform: 'uppercase' }}>
+        {activeIncident && guestSafetyStatus !== 'safe' ? (
+          <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 9998, background: '#000', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ padding: '1rem', background: 'rgba(0,0,0,0.8)', position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h2 style={{ fontFamily: 'Inter, sans-serif', fontSize: '1.2rem', fontWeight: 900, color: '#ef4444', margin: 0 }}>
                   CRITICAL ALERT: {activeIncident.incident_type}
                 </h2>
                 <div style={{ background: '#ef4444', color: '#fff', padding: '0.2rem 0.8rem', fontSize: '0.8rem', fontWeight: 800, borderRadius: '0.25rem', animation: 'pulse-bg 1s infinite alternate' }}>EVACUATE</div>
               </div>
-              
-              <p style={{ fontSize: '1.1rem', marginBottom: '0.5rem', fontWeight: 400, color: '#ccc' }}>{activeIncident.description || 'Hazard detected on premises.'}</p>
-              <p style={{ fontSize: '1.2rem', marginBottom: '1.5rem', fontWeight: 700, color: '#fff' }}>{activeIncident.mass_alert_message}</p>
-              
-              <div style={{ background: 'rgba(255,255,255,0.05)', padding: '16px', borderRadius: '8px', borderLeft: '4px solid #f59e0b', marginBottom: '1.5rem' }}>
-                <h3 style={{ margin: '0 0 8px 0', fontSize: '1rem', color: '#f59e0b', textTransform: 'uppercase', fontWeight: 800 }}>MANDATORY SAFETY GUIDELINES</h3>
-                <ul style={{ margin: 0, paddingLeft: '20px', color: '#ddd', fontSize: '0.9rem', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <li><strong>STAY CALM:</strong> Follow the green highlighted route on your map below.</li>
-                  <li><strong>NO ELEVATORS:</strong> Use stairs only. Elevators are disabled during fire emergencies.</li>
-                  <li><strong>SMOKE CONDITIONS:</strong> If you encounter heavy smoke, stay low to the ground to breathe.</li>
-                  <li><strong>DO NOT RETURN:</strong> Once outside, proceed to the assembly point and press "I AM SAFE". Do not re-enter.</li>
-                </ul>
-              </div>
-              
-              {/* Live Tactical Evacuation Map */}
-              <div style={{ marginTop: '1rem', background: '#111', borderRadius: '0.5rem', overflow: 'hidden', border: '1px solid #333', height: '300px', width: '100%' }}>
-                <MapContainer center={[40.7128, -74.0060]} zoom={18} style={{ height: '100%', width: '100%' }} zoomControl={false} dragging={false}>
-                  <TileLayer
-                    url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-                    attribution="&copy; OpenStreetMap contributors"
-                  />
-                  {/* Fire Marker */}
-                  <Marker position={[40.71295, -74.0061]}>
-                  </Marker>
-                  {/* Guest Location */}
-                  <Marker position={[40.7128, -74.0060]} />
-                  {/* Exit Path */}
-                  <Polyline positions={[[40.7128, -74.0060], [40.7127, -74.0058], [40.7125, -74.0055]]} color="#10b981" weight={6} dashArray="10, 10" />
-                </MapContainer>
-              </div>
+              <p style={{ fontSize: '1rem', margin: '0.5rem 0', fontWeight: 700, color: '#fff' }}>{activeIncident.mass_alert_message}</p>
+            </div>
+            
+            <iframe 
+              title="Mappedin Map" 
+              name="Mappedin Map" 
+              allow="clipboard-write 'self' https://app.mappedin.com; web-share 'self' https://app.mappedin.com" 
+              scrolling="no" 
+              width="100%" 
+              height="100%" 
+              frameBorder="0" 
+              style={{ border: 0, flexGrow: 1 }} 
+              src="https://app.mappedin.com/map/6a2d1e9d8c2010000b751066?embedded=true"
+            ></iframe>
 
-              <div style={{ marginTop: '2rem', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                <button 
-                  onClick={() => navigate('/guest/check-in')}
-                  style={{ background: '#10b981', color: '#000', padding: '1rem', fontSize: '1.1rem', fontWeight: 800, width: '100%', border: 'none', borderRadius: '0.25rem', cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.05em' }}
-                >
-                  CONFIRM EVACUATION (MARK SAFE)
-                </button>
-                <button 
-                  onClick={triggerTrappedSOS}
-                  style={{ background: '#000', color: '#ef4444', border: '2px solid #ef4444', padding: '1rem', fontSize: '1.1rem', fontWeight: 800, width: '100%', borderRadius: '0.25rem', cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.05em' }}
-                >
-                  {isSendingSOS ? 'TRANSMITTING...' : 'I AM TRAPPED (DISPATCH RESCUE)'}
-                </button>
-                <button 
-                  onClick={toggleStrobe}
-                  style={{ 
-                    background: isStrobing ? '#fff' : '#111', 
-                    color: isStrobing ? '#000' : '#fff', 
-                    border: '1px solid #333', 
-                    padding: '1rem', 
-                    fontSize: '1rem', 
-                    fontWeight: 700, 
-                    width: '100%', 
-                    borderRadius: '0.25rem',
-                    cursor: 'pointer',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.05em',
-                    animation: isStrobing ? 'strobe-btn 0.1s infinite alternate' : 'none'
-                  }}
-                >
-                  {isStrobing ? 'DISENGAGE STROBE / SIREN' : 'ACTIVATE STROBE / SIREN'}
-                </button>
-              </div>
+            <div style={{ position: 'absolute', bottom: '1rem', left: '1rem', right: '1rem', display: 'flex', flexDirection: 'column', gap: '12px', zIndex: 10 }}>
+              <button 
+                onClick={() => navigate('/guest/check-in')}
+                style={{ background: '#10b981', color: '#000', padding: '1rem', fontSize: '1.1rem', fontWeight: 800, width: '100%', border: 'none', borderRadius: '0.25rem', cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.05em' }}
+              >
+                CONFIRM EVACUATION (MARK SAFE)
+              </button>
+              <button 
+                onClick={triggerTrappedSOS}
+                style={{ background: '#000', color: '#ef4444', border: '2px solid #ef4444', padding: '1rem', fontSize: '1.1rem', fontWeight: 800, width: '100%', borderRadius: '0.25rem', cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.05em' }}
+              >
+                {isSendingSOS ? 'TRANSMITTING...' : 'I AM TRAPPED (DISPATCH RESCUE)'}
+              </button>
+              <button 
+                onClick={toggleStrobe}
+                style={{ 
+                  background: isStrobing ? '#fff' : '#111', 
+                  color: isStrobing ? '#000' : '#fff', 
+                  border: '1px solid #333', 
+                  padding: '1rem', 
+                  fontSize: '1rem', 
+                  fontWeight: 700, 
+                  width: '100%', 
+                  borderRadius: '0.25rem',
+                  cursor: 'pointer',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                  animation: isStrobing ? 'strobe-btn 0.1s infinite alternate' : 'none'
+                }}
+              >
+                {isStrobing ? 'DISENGAGE STROBE / SIREN' : 'ACTIVATE STROBE / SIREN'}
+              </button>
             </div>
           </div>
         ) : (
@@ -335,6 +311,21 @@ export default function GuestDashboard() {
               <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', margin: 0 }}>All monitoring systems are nominal. No hazards detected in your sector.</p>
             </div>
             
+            {/* Embedded map for non-emergency */}
+            <div style={{ background: 'var(--bg-elevated)', borderRadius: '0.5rem', overflow: 'hidden', height: '300px' }}>
+              <iframe 
+                title="Mappedin Map" 
+                name="Mappedin Map" 
+                allow="clipboard-write 'self' https://app.mappedin.com; web-share 'self' https://app.mappedin.com" 
+                scrolling="no" 
+                width="100%" 
+                height="100%" 
+                frameBorder="0" 
+                style={{ border: 0 }} 
+                src="https://app.mappedin.com/map/6a2d1e9d8c2010000b751066?embedded=true"
+              ></iframe>
+            </div>
+
             <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-medium)', color: 'var(--text-primary)', borderRadius: '0.5rem', padding: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <h3 style={{ fontSize: '1.1rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>Digital Credential</h3>
