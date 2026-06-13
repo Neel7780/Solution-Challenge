@@ -37,6 +37,10 @@ export interface LocationContextType {
 export interface SocketContextType {
   socket: any | null; // using any for socket to avoid generic socket.io types import issues for now
   connected: boolean;
+  alarmActive: boolean;
+  alarmTitle: string;
+  alarmMessage: string;
+  silenceAlarm: () => void;
 }
 
 export type RootStackParamList = {

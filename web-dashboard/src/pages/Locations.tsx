@@ -1,3 +1,4 @@
+import { API_URL } from '../config';
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import {
   Box,
@@ -29,6 +30,8 @@ import axios from 'axios';
 import { useAuthStore } from '../store/authStore';
 import { useSocketStore } from '../store/socketStore';
 import { findClosestNode, findShortestPath, Hazard } from '../utils/pathfinding';
+import { useLocationStore } from '../store/locationStore';
+import '../assets/map-styles.css';
 
 // Fix Leaflet's default marker icons in React
 import L from 'leaflet';
@@ -226,7 +229,7 @@ function RotatedImageOverlay({
   return null;
 }
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+
 
 const personIcon = new L.Icon({
   iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
@@ -237,14 +240,18 @@ const personIcon = new L.Icon({
   shadowSize: [41, 41]
 });
 
-const incidentIcon = new L.Icon({
-  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41]
-});
+function getIncidentIcon() {
+  return L.divIcon({
+    className: '',
+    html: `<div class="marker-incident">
+      <div class="marker-incident__ring marker-incident__ring--outer"></div>
+      <div class="marker-incident__ring"></div>
+      <div class="marker-incident__core">🔥</div>
+    </div>`,
+    iconSize: [64, 64],
+    iconAnchor: [32, 32],
+  });
+}
 
 const exitIcon = new L.Icon({
   iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png',
@@ -257,59 +264,29 @@ const exitIcon = new L.Icon({
 
 function getOccupantIcon(user: any, navStatus?: any) {
   const role = (user.role || 'guest').toLowerCase();
-  const status = (navStatus?.status || user.user_status || '').toLowerCase();
-
-  if (status === 'distressed' || status === 'trapped' || status === 'needs_help') {
-    return new L.Icon({
-      iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
-      shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
-      iconSize: [25, 41],
-      iconAnchor: [12, 41],
-      popupAnchor: [1, -34],
-      shadowSize: [41, 41]
-    });
-  }
-
-  if (status === 'safe' || status === 'reached_exit') {
-    return new L.Icon({
-      iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png',
-      shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
-      iconSize: [25, 41],
-      iconAnchor: [12, 41],
-      popupAnchor: [1, -34],
-      shadowSize: [41, 41]
-    });
-  }
-
-  if (role === 'security' || role === 'staff') {
-    return new L.Icon({
-      iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
-      shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
-      iconSize: [25, 41],
-      iconAnchor: [12, 41],
-      popupAnchor: [1, -34],
-      shadowSize: [41, 41]
-    });
-  }
-
-  if (role === 'responder' || role === 'admin') {
-    return new L.Icon({
-      iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-gold.png',
-      shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
-      iconSize: [25, 41],
-      iconAnchor: [12, 41],
-      popupAnchor: [1, -34],
-      shadowSize: [41, 41]
-    });
-  }
-
-  return new L.Icon({
-    iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-orange.png',
-    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
-    iconSize: [25, 41],
-    iconAnchor: [12, 41],
-    popupAnchor: [1, -34],
-    shadowSize: [41, 41]
+  const status = (navStatus?.status || user.user_status || user.status || '').toLowerCase();
+  const initial = (user.name || '?').charAt(0).toUpperCase();
+  const size = role === 'guest' ? 26 : 32;
+  
+  let roleClass = 'marker-guest';
+  if (role === 'admin' || role === 'org_admin' || role === 'super_admin') roleClass = 'marker-admin';
+  else if (role === 'security') roleClass = 'marker-security';
+  else if (role === 'staff') roleClass = 'marker-staff';
+  else if (role === 'responder') roleClass = 'marker-responder';
+  
+  let statusClass = '';
+  if (['trapped', 'distressed', 'needs_help'].includes(status)) statusClass = 'marker-sos';
+  else if (['safe', 'reached_exit'].includes(status)) statusClass = 'marker-safe';
+  else if (status === 'evacuating') statusClass = 'marker-evacuating';
+  
+  return L.divIcon({
+    className: `${roleClass} ${statusClass}`,
+    html: `<div class="crisis-marker">
+      <div class="crisis-marker__pulse" style="width:${size + 12}px;height:${size + 12}px;"></div>
+      <div class="crisis-marker__dot" style="width:${size}px;height:${size}px;">${initial}</div>
+    </div>`,
+    iconSize: [size + 12, size + 12],
+    iconAnchor: [(size + 12) / 2, (size + 12) / 2],
   });
 }
 
@@ -348,8 +325,12 @@ export default function Locations() {
   const [selectedFloor, setSelectedFloor] = useState('1');
 
   const { socket } = useSocketStore();
-  const [liveUsers, setLiveUsers] = useState<any[]>([]);
-  const [occupantNavStatuses, setOccupantNavStatuses] = useState<{ [userId: string]: any }>({});
+  const locationStore = useLocationStore();
+  const liveUsers = locationStore.getAll();
+  const occupantNavStatuses: { [userId: string]: any } = {};
+  locationStore.navStatuses.forEach((ns, key) => {
+    occupantNavStatuses[key] = ns;
+  });
   const [calculatedRoutes, setCalculatedRoutes] = useState<{ [incidentId: string]: [number, number][] }>({});
 
   // Fetch Zones
@@ -385,65 +366,26 @@ export default function Locations() {
   });
 
   useEffect(() => {
+    if (propertyId) {
+      locationStore.loadFromAPI(propertyId);
+    }
+  }, [propertyId]);
+
+  // Poll as fallback every 10s (socket handles real-time)
+  useEffect(() => {
+    if (!propertyId) return;
+    const interval = setInterval(() => {
+      locationStore.loadFromAPI(propertyId);
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [propertyId]);
+
+  // Also update store when react-query activeUsers data refreshes
+  useEffect(() => {
     if (activeUsers && activeUsers.length > 0) {
-      setLiveUsers(activeUsers);
+      locationStore.setBatch(activeUsers);
     }
   }, [activeUsers]);
-
-  useEffect(() => {
-    if (!socket) return;
-
-    const handleLocationUpdate = (data: any) => {
-      setLiveUsers(prev => {
-        const userId = Number(data.userId);
-        const index = prev.findIndex(u => Number(u.user_id || u.id) === userId);
-        const now = new Date().toISOString();
-
-        if (index !== -1) {
-          const updated = [...prev];
-          updated[index] = {
-            ...updated[index],
-            latitude: data.latitude,
-            longitude: data.longitude,
-            recorded_at: now,
-          };
-          return updated;
-        } else {
-          return [...prev, {
-            id: userId,
-            user_id: userId,
-            name: `Occupant #${userId}`,
-            role: 'guest',
-            latitude: data.latitude,
-            longitude: data.longitude,
-            recorded_at: now,
-            user_status: 'evacuating',
-          }];
-        }
-      });
-    };
-
-    const handleNavStatusUpdate = (data: any) => {
-      setOccupantNavStatuses(prev => ({
-        ...prev,
-        [String(data.userId)]: {
-          name: data.name,
-          status: data.status,
-          currentWaypoint: data.currentWaypoint,
-          targetExit: data.targetExit,
-          timestamp: data.timestamp,
-        }
-      }));
-    };
-
-    socket.on('user_location_update', handleLocationUpdate);
-    socket.on('occupant_nav_status', handleNavStatusUpdate);
-
-    return () => {
-      socket.off('user_location_update', handleLocationUpdate);
-      socket.off('occupant_nav_status', handleNavStatusUpdate);
-    };
-  }, [socket]);
 
   // Calculate proper navigation routes for incidents
   useEffect(() => {
@@ -578,29 +520,21 @@ export default function Locations() {
 
   const filteredUsers = useMemo(() => {
     return liveUsers.filter((u: any) => {
-      const zone = zonesById[u.zone_id];
+      const userId = u.userId || u.user_id || u.id;
+      const zone = zonesById[u.zoneId || u.zone_id];
       if (zone) {
         return String(zone.floor_number || 1) === selectedFloor;
       }
-      const getFloorOfUser = (user: any) => {
-        if (!user.zone_name) {
-          return true;
-        }
-        const zName = String(user.zone_name).toLowerCase();
-        
-        // Explicit floor 2 markers
-        if (zName.includes('20') || zName.includes('floor 2') || zName.includes('level 2')) {
-          return selectedFloor === '2';
-        }
-        // Explicit floor 1 markers
-        if (zName.includes('10') || zName.includes('floor 1') || zName.includes('lobby') || zName.includes('restaurant') || zName.includes('gym') || zName.includes('safe')) {
-          return selectedFloor === '1';
-        }
-        
-        // If not strictly on another floor, just show them so they aren't lost
-        return true;
-      };
-      return true; 
+      const zoneName = (u.zoneName || u.zone_name || '').toLowerCase();
+      if (!zoneName) return true; // Show users without zone info on all floors
+      
+      if (zoneName.includes('20') || zoneName.includes('floor 2') || zoneName.includes('level 2')) {
+        return selectedFloor === '2';
+      }
+      if (zoneName.includes('10') || zoneName.includes('floor 1') || zoneName.includes('lobby') || zoneName.includes('restaurant') || zoneName.includes('gym') || zoneName.includes('safe')) {
+        return selectedFloor === '1';
+      }
+      return true;
     });
   }, [liveUsers, zonesById, selectedFloor]);
 
@@ -674,7 +608,7 @@ export default function Locations() {
                       />
                       <Marker 
                         position={pos}
-                        icon={incidentIcon}
+                        icon={getIncidentIcon()}
                       >
                         <Popup>
                           <Typography variant="subtitle2" sx={{ color: '#d32f2f', fontWeight: 'bold' }}>
@@ -736,7 +670,7 @@ export default function Locations() {
                 {/* Tracked Personnel */}
                 {showPersonnel && filteredUsers.map((user: any) => {
                   const pos = viewMode === 'global' ? getGeoreferencedLatLng(user) : getSchematicLatLng(user);
-                  const navStatus = occupantNavStatuses[String(user.id || user.user_id)];
+                  const navStatus = occupantNavStatuses[String(user.userId || user.id || user.user_id)];
                   const safetyStatus = navStatus?.status || user.user_status || 'evacuating';
                   
                   return (
@@ -778,6 +712,15 @@ export default function Locations() {
                   );
                 })}
               </MapContainer>
+
+              {/* Live Feed Status */}
+              <div style={{ position: 'absolute', top: 16, left: 16, zIndex: 1000, display: 'flex', gap: 8, alignItems: 'center' }}>
+                <div className="map-overlay-panel map-overlay-panel--status">
+                  <span className={`map-status-dot ${locationStore.isSocketDriven ? 'map-status-dot--live' : 'map-status-dot--polling'}`}></span>
+                  {locationStore.isSocketDriven ? 'LIVE' : 'POLL'}
+                  <span style={{ opacity: 0.6, marginLeft: 4 }}>• {locationStore.getTrackedCount()} tracked</span>
+                </div>
+              </div>
 
               {/* Floating Esri-Style Control Box */}
               <Paper

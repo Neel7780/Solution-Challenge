@@ -1,3 +1,4 @@
+import { API_URL } from '../../config';
 import React, { useState } from 'react';
 import {
   Box,
@@ -16,7 +17,7 @@ import {
 import { CheckCircle, Close as CloseIcon } from '@mui/icons-material';
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+
 
 interface Props {
   open: boolean;

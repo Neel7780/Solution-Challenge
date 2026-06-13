@@ -1,3 +1,4 @@
+import { API_URL } from '../config';
 import React, { useRef, useState } from 'react';
 import {
   Box,
@@ -45,6 +46,8 @@ import {
   Select,
   InputLabel,
   FormControl,
+  Tabs,
+  Tab,
 } from '@mui/material';
 
 import { useSocketStore } from '../store/socketStore';
@@ -54,6 +57,9 @@ import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
+import { useLocationStore, LocationEntry } from '../store/locationStore';
+import { getGeoreferencedLatLng, PROPERTY_CONFIG } from './Locations';
+import '../assets/map-styles.css';
 
 let DefaultIcon = L.icon({
   iconUrl: markerIcon,
@@ -62,18 +68,94 @@ let DefaultIcon = L.icon({
 });
 L.Marker.prototype.options.icon = DefaultIcon;
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+
 
 export default function OrganizationAdmin() {
   const containerRef = useRef(null);
   const queryClient = useQueryClient();
   const { user, switchContext } = useAuthStore();
+  const { socket } = useSocketStore();
   const [activeTab, setActiveTab] = useState<'properties' | 'personnel' | 'tasks' | 'overview'>(
     'overview'
   );
   
   const activeIncident = useCrisisStore((state) => state.activeIncident);
-  
+
+  React.useEffect(() => {
+    if (!socket) return;
+    const refreshData = () => {
+      queryClient.invalidateQueries({ queryKey: ['org-properties'] });
+      queryClient.invalidateQueries({ queryKey: ['org-personnel'] });
+      queryClient.invalidateQueries({ queryKey: ['org-tasks'] });
+    };
+
+    socket.on('crisis_reported', refreshData);
+    socket.on('incident_status_update', refreshData);
+    socket.on('property_status_update', refreshData);
+    socket.on('evacuation_triggered', refreshData);
+    socket.on('incident_enriched', refreshData);
+    socket.on('user_checkin', refreshData);
+    socket.on('task_assigned', refreshData);
+    socket.on('task_updated', refreshData);
+
+    return () => {
+      socket.off('crisis_reported', refreshData);
+      socket.off('incident_status_update', refreshData);
+      socket.off('property_status_update', refreshData);
+      socket.off('evacuation_triggered', refreshData);
+      socket.off('incident_enriched', refreshData);
+      socket.off('user_checkin', refreshData);
+      socket.off('task_assigned', refreshData);
+      socket.off('task_updated', refreshData);
+    };
+  }, [socket, queryClient]);
+
+  // ── Live Location Store ──
+  const locationStore = useLocationStore();
+  const allLocations = locationStore.getAll();
+  const trackedCount = locationStore.getTrackedCount();
+  const alertCount = locationStore.getAlertCount();
+  const safeCount = locationStore.getSafeCount();
+
+  // Load locations on mount and poll every 10s as fallback
+  const propertyId = user?.property_id || 2;
+  React.useEffect(() => {
+    locationStore.loadFromAPI(propertyId);
+    const interval = setInterval(() => {
+      locationStore.loadFromAPI(propertyId);
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [propertyId]);
+
+  // Helper: create styled DivIcon for a personnel/guest marker
+  function createPersonnelIcon(entry: LocationEntry, navStatus?: any): L.DivIcon {
+    const role = (entry.role || 'guest').toLowerCase();
+    const status = navStatus?.status || entry.status || '';
+    const initial = entry.name?.charAt(0)?.toUpperCase() || '?';
+    const size = role === 'guest' ? 26 : 32;
+
+    let roleClass = 'marker-guest';
+    if (role === 'admin' || role === 'org_admin' || role === 'super_admin') roleClass = 'marker-admin';
+    else if (role === 'security') roleClass = 'marker-security';
+    else if (role === 'staff') roleClass = 'marker-staff';
+    else if (role === 'responder') roleClass = 'marker-responder';
+
+    let statusClass = '';
+    if (['trapped', 'distressed', 'needs_help'].includes(status)) statusClass = 'marker-sos';
+    else if (['safe', 'reached_exit'].includes(status)) statusClass = 'marker-safe';
+    else if (status === 'evacuating') statusClass = 'marker-evacuating';
+
+    return L.divIcon({
+      className: `${roleClass} ${statusClass}`,
+      html: `<div class="crisis-marker">
+        <div class="crisis-marker__pulse" style="width:${size + 12}px;height:${size + 12}px;"></div>
+        <div class="crisis-marker__dot" style="width:${size}px;height:${size}px;">${initial}</div>
+      </div>`,
+      iconSize: [size + 12, size + 12],
+      iconAnchor: [(size + 12) / 2, (size + 12) / 2],
+    });
+  }
+
   // Ensure tasks and personnel load when looking at overview
   React.useEffect(() => {
     if (activeTab === 'overview') {
@@ -293,8 +375,23 @@ export default function OrganizationAdmin() {
           </Typography>
         </Box>
         <Box sx={{ display: "flex", flexDirection: "row", gap: "16px", alignItems: "center" }}>
-          <Box sx={{ display: 'none' }}></Box>
-          <Box sx={{ display: 'none' }}>
+          <Tabs
+            value={activeTab}
+            onChange={(_, newValue) => setActiveTab(newValue)}
+            textColor="inherit"
+            indicatorColor="primary"
+            sx={{
+              minHeight: 36,
+              '& .MuiTab-root': { minHeight: 36, py: 0.5, fontSize: '0.75rem', fontWeight: 600 },
+            }}
+          >
+            <Tab label="Overview" value="overview" />
+            <Tab label="Properties" value="properties" />
+            <Tab label="Personnel" value="personnel" />
+            <Tab label="Tasks" value="tasks" />
+          </Tabs>
+
+          <Box>
           {activeTab === 'properties' ? (
             <Button
               variant="outlined"
@@ -317,7 +414,7 @@ export default function OrganizationAdmin() {
             >
               Onboard Personnel
             </Button>
-          ) : (
+          ) : activeTab === 'tasks' ? (
              <Button
               variant="contained"
               size="small"
@@ -328,7 +425,7 @@ export default function OrganizationAdmin() {
             >
               Assign Task
             </Button>
-          )}
+          ) : null}
           </Box>
         </Box>
       </Box>
@@ -641,28 +738,68 @@ export default function OrganizationAdmin() {
               <h3 style={{ margin: 0, color: '#fff', fontSize: '1.2rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Live Tactical Map</h3>
               <Chip label="LIVE SENSORS LINKED" size="small" sx={{ background: 'rgba(16,185,129,0.1)', color: '#10b981', fontWeight: 800, borderRadius: '4px' }} />
             </div>
-            <div style={{ height: '500px', width: '100%', borderRadius: '8px', overflow: 'hidden', border: '1px solid #222' }}>
-              <MapContainer center={[40.7128, -74.0060]} zoom={18} style={{ height: '100%', width: '100%' }}>
+            <div style={{ height: '500px', width: '100%', borderRadius: '8px', overflow: 'hidden', border: '1px solid #222', position: 'relative' }}>
+              <MapContainer center={[PROPERTY_CONFIG.ANCHOR_LAT, PROPERTY_CONFIG.ANCHOR_LNG]} zoom={18} style={{ height: '100%', width: '100%' }}>
                 <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" attribution="&copy; OpenStreetMap contributors" />
-                
-                {activeIncident && (
-                  <Marker position={[40.7129, -74.0061]}>
-                    <Popup>🔥 EMERGENCY: {activeIncident.incident_type.toUpperCase()}</Popup>
+
+                {/* Active Incident — use real coordinates */}
+                {activeIncident && activeIncident.latitude && activeIncident.longitude && (
+                  <Marker
+                    position={getGeoreferencedLatLng({ latitude: activeIncident.latitude, longitude: activeIncident.longitude })}
+                    icon={L.divIcon({
+                      className: '',
+                      html: `<div class="marker-incident">
+                        <div class="marker-incident__ring marker-incident__ring--outer"></div>
+                        <div class="marker-incident__ring"></div>
+                        <div class="marker-incident__core">🔥</div>
+                      </div>`,
+                      iconSize: [64, 64],
+                      iconAnchor: [32, 32],
+                    })}
+                  >
+                    <Popup>🔥 EMERGENCY: {activeIncident.incident_type?.toUpperCase() || 'UNKNOWN'}</Popup>
                   </Marker>
                 )}
 
-                {personnel.filter((p: any) => p.role === 'guest' && p.status === 'active').map((guest: any, idx: number) => (
-                  <Marker key={`guest-${guest.id}`} position={[40.7128, -74.0060 + (idx * 0.0001)]}>
-                    <Popup>Guest {guest.name}<br/>Room: {guest.room_number || 'N/A'}<br/>Status: TRACKING</Popup>
-                  </Marker>
-                ))}
-
-                {tasks.filter((t: any) => t.status === 'in_progress' || t.status === 'pending').map((task: any, idx: number) => (
-                  <Marker key={`staff-${task.id}`} position={[40.7127, -74.0059 + (idx * 0.0001)]}>
-                    <Popup>👮 Staff: {task.assigned_to_name || 'Unassigned'}<br/>Task: {task.description}</Popup>
-                  </Marker>
-                ))}
+                {/* Live Personnel & Guest Markers from LocationStore */}
+                {allLocations.map((entry) => {
+                  const pos = getGeoreferencedLatLng({ latitude: entry.latitude, longitude: entry.longitude });
+                  const navStatus = locationStore.getNavStatus(entry.userId);
+                  const safetyStatus = navStatus?.status || entry.status || 'active';
+                  return (
+                    <Marker
+                      key={`loc-${entry.userId}`}
+                      position={pos}
+                      icon={createPersonnelIcon(entry, navStatus)}
+                    >
+                      <Popup>
+                        <div style={{ minWidth: '160px' }}>
+                          <strong style={{ color: '#fff', fontSize: '0.95rem' }}>{entry.name}</strong>
+                          <div style={{ color: '#94a3b8', fontSize: '0.8rem', marginTop: 2 }}>{entry.role.toUpperCase()}{entry.roomNumber ? ` • Rm ${entry.roomNumber}` : ''}</div>
+                          <div style={{ marginTop: 6, fontSize: '0.8rem', fontWeight: 700, color: ['trapped','distressed','needs_help'].includes(safetyStatus) ? '#ef4444' : ['safe','reached_exit'].includes(safetyStatus) ? '#22c55e' : '#f59e0b' }}>
+                            {safetyStatus.replace(/_/g, ' ').toUpperCase()}
+                          </div>
+                          {navStatus?.currentWaypoint && <div style={{ color: '#94a3b8', fontSize: '0.75rem', marginTop: 2 }}>Node: {navStatus.currentWaypoint}</div>}
+                          <div style={{ color: '#64748b', fontSize: '0.7rem', marginTop: 4 }}>{new Date(entry.recordedAt).toLocaleTimeString()}</div>
+                        </div>
+                      </Popup>
+                    </Marker>
+                  );
+                })}
               </MapContainer>
+
+              {/* Live Tracking Status Overlay */}
+              <div style={{ position: 'absolute', top: 16, right: 16, zIndex: 1000, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div className="map-overlay-panel map-overlay-panel--status">
+                  <span className={`map-status-dot ${locationStore.isSocketDriven ? 'map-status-dot--live' : 'map-status-dot--polling'}`}></span>
+                  {locationStore.isSocketDriven ? 'LIVE FEED' : 'POLLING'}
+                </div>
+                <div className="map-overlay-panel" style={{ padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <span className="map-personnel-badge map-personnel-badge--tracked">👥 {trackedCount} TRACKED</span>
+                  {alertCount > 0 && <span className="map-personnel-badge map-personnel-badge--alert">🚨 {alertCount} ALERT</span>}
+                  {safeCount > 0 && <span className="map-personnel-badge map-personnel-badge--safe">✅ {safeCount} SAFE</span>}
+                </div>
+              </div>
             </div>
           </div>
 

@@ -1,3 +1,4 @@
+import { API_URL } from '../config';
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Box,
@@ -28,7 +29,7 @@ import { useSocketStore } from '../store/socketStore';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+
 
 interface ChatMessage {
   id: number;

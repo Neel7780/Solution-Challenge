@@ -632,6 +632,13 @@ export const updateIncidentStatus = async (req: Request, res: Response) => {
         );
       }
 
+      if (status === 'contained' || status === 'resolved') {
+        await client.query(
+          `DELETE FROM tasks WHERE incident_id = $1`,
+          [incident.id]
+        );
+      }
+
       await client.query('COMMIT');
 
       if (req.io) {
@@ -710,6 +717,12 @@ export const resolveIncident = async (req: Request, res: Response) => {
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Incident not found or access denied' });
     }
+
+    const incident = result.rows[0];
+    await query(
+      `DELETE FROM tasks WHERE incident_id = $1`,
+      [id]
+    );
 
     if (req.io) {
       req.io.emit('incident_resolved', { incidentId: id, timestamp: new Date().toISOString() });

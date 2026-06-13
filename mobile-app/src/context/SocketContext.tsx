@@ -1,8 +1,9 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { Platform } from 'react-native';
+import React, { createContext, useContext, useEffect, useState, ReactNode, useRef } from 'react';
+import { Platform, Vibration } from 'react-native';
 import { io, Socket } from 'socket.io-client';
 import { useAuth } from './AuthContext';
 import * as Notifications from 'expo-notifications';
+import { useAudioPlayer } from 'expo-audio';
 import { SOCKET_URL } from '../config';
 import { SocketContextType } from '../types';
 import { useNotifications } from './NotificationContext';
@@ -19,6 +20,64 @@ export const SocketProvider = ({ children }: SocketProviderProps) => {
   const { token, user } = useAuth();
   const { addNotification } = useNotifications();
 
+  const [alarmActive, setAlarmActive] = useState<boolean>(false);
+  const [alarmTitle, setAlarmTitle] = useState<string>('');
+  const [alarmMessage, setAlarmMessage] = useState<string>('');
+  const alarmTimeoutRef = useRef<any>(null);
+  
+  const player = useAudioPlayer('https://raw.githubusercontent.com/fewieden/MMM-AlarmClock/master/sounds/alarm.mp3');
+
+  const startAlarmMedia = async () => {
+    // Clear any previous timeout
+    if (alarmTimeoutRef.current) {
+      clearTimeout(alarmTimeoutRef.current);
+      alarmTimeoutRef.current = null;
+    }
+
+    try {
+      player.loop = true;
+      player.play();
+    } catch (error) {
+      console.warn('Failed to play alarm sound:', error);
+    }
+    Vibration.vibrate([1000, 500, 1000, 500], true);
+
+    // Auto-silence sound and vibration after 1 minute (60,000ms)
+    alarmTimeoutRef.current = setTimeout(() => {
+      void stopAlarmMedia();
+      alarmTimeoutRef.current = null;
+    }, 60000);
+  };
+
+  const stopAlarmMedia = async () => {
+    if (alarmTimeoutRef.current) {
+      clearTimeout(alarmTimeoutRef.current);
+      alarmTimeoutRef.current = null;
+    }
+    try {
+      if (player && player.playing) {
+        player.pause();
+      }
+      if (player) {
+        player.seekTo(0);
+      }
+    } catch (error) {
+      console.log('Failed to stop alarm sound:', error?.toString());
+    }
+    Vibration.cancel();
+  };
+
+  const silenceAlarm = () => {
+    setAlarmActive(false);
+    void stopAlarmMedia();
+  };
+
+  useEffect(() => {
+    return () => {
+      void stopAlarmMedia();
+    };
+  }, []);
+
   useEffect(() => {
     if (token && user) {
       void initSocket();
@@ -32,25 +91,30 @@ export const SocketProvider = ({ children }: SocketProviderProps) => {
   }, [token, user]);
 
   const ensureNotificationsReady = async () => {
-    const { status: existingStatus } = await Notifications.getPermissionsAsync();
-    let finalStatus = existingStatus;
+    try {
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      let finalStatus = existingStatus;
 
-    if (existingStatus !== 'granted') {
-      const { status } = await Notifications.requestPermissionsAsync();
-      finalStatus = status;
+      if (existingStatus !== 'granted') {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+      }
+
+      if (Platform.OS === 'android') {
+        await Notifications.setNotificationChannelAsync('emergencies', {
+          name: 'Emergency Alerts',
+          importance: Notifications.AndroidImportance.MAX,
+          vibrationPattern: [0, 250, 250, 250],
+          lightColor: '#d32f2f',
+          sound: 'default',
+        });
+      }
+
+      return finalStatus === 'granted';
+    } catch (err) {
+      console.warn("Notifications check failed (likely Expo Go SDK 53 restriction):", err);
+      return false; // allow fallback gracefully without crashing
     }
-
-    if (Platform.OS === 'android') {
-      await Notifications.setNotificationChannelAsync('emergencies', {
-        name: 'Emergency Alerts',
-        importance: Notifications.AndroidImportance.MAX,
-        vibrationPattern: [0, 250, 250, 250],
-        lightColor: '#d32f2f',
-        sound: 'default',
-      });
-    }
-
-    return finalStatus === 'granted';
   };
 
   const initSocket = async () => {
@@ -82,30 +146,42 @@ export const SocketProvider = ({ children }: SocketProviderProps) => {
 
     // Listen for crisis alerts
     newSocket.on('crisis_reported', (data: any) => {
-      showNotification('🚨 EMERGENCY ALERT 🚨', `${data.incident.incident_type.toUpperCase()}: ${data.incident.description}`);
+      const incidentType = data.incident?.incident_type || data.incident?.type || 'EMERGENCY';
+      const description = data.incident?.description || 'Please proceed to safety.';
+      const message = `${String(incidentType).toUpperCase()}: ${description}`;
+      
+      showNotification('🚨 EMERGENCY ALERT 🚨', message, { screen: 'Navigation' }).catch(console.warn);
       addNotification({
         type: 'crisis',
         title: 'Emergency Alert',
-        message: `${data.incident.incident_type.toUpperCase()}: ${data.incident.description}`,
+        message: message,
         severity: 'critical'
       });
+      setAlarmTitle('🚨 EMERGENCY ALARM ACTIVE 🚨');
+      setAlarmMessage(message);
+      setAlarmActive(true);
+      void startAlarmMedia();
     });
 
     // Listen for nearby crisis
     newSocket.on('nearby_crisis', (data: any) => {
-      showNotification('⚠️ CRITICAL ALERT ⚠️', data.message);
+      showNotification('⚠️ CRITICAL ALERT ⚠️', data.message).catch(console.warn);
       addNotification({
         type: 'crisis',
         title: 'Critical Nearby Incident',
         message: data.message,
         severity: 'high'
       });
+      setAlarmTitle('⚠️ CRITICAL NEARBY CALAMITY ⚠️');
+      setAlarmMessage(data.message);
+      setAlarmActive(true);
+      void startAlarmMedia();
     });
 
     // Listen for AI enrichment
     newSocket.on('incident_enriched', (data: any) => {
       if (data.enrichment?.massAlertMessage) {
-        showNotification('Emergency Update', data.enrichment.massAlertMessage);
+        showNotification('Emergency Update', data.enrichment.massAlertMessage).catch(console.warn);
         addNotification({
           type: 'info',
           title: 'Emergency Update',
@@ -118,40 +194,46 @@ export const SocketProvider = ({ children }: SocketProviderProps) => {
     // Listen for property status updates (e.g. Evacuation Order)
     newSocket.on('property_status_update', (data: any) => {
       if (data.status === 'evacuating') {
-        showNotification('🛑 EVACUATION ORDER 🛑', 'IMMEDIATE EVACUATION ORDERED. Proceed to nearest safe exit.');
+        showNotification('🛑 EVACUATION ORDER 🛑', 'IMMEDIATE EVACUATION ORDERED. Proceed to nearest safe exit.', { screen: 'Navigation' }).catch(console.warn);
         addNotification({
           type: 'status',
           title: 'Evacuation Order',
           message: 'IMMEDIATE EVACUATION ORDERED. Proceed to nearest safe exit.',
           severity: 'critical'
         });
+        setAlarmTitle('🛑 IMMEDIATE EVACUATION ORDERED 🛑');
+        setAlarmMessage('Proceed to the nearest safe exit immediately and follow vocal instructions.');
+        setAlarmActive(true);
+        void startAlarmMedia();
       } else if (data.status === 'operational') {
-        showNotification('✅ Status Update', 'The property has returned to operational status.');
+        showNotification('✅ Status Update', 'The property has returned to operational status.').catch(console.warn);
         addNotification({
           type: 'status',
           title: 'Property Status Update',
           message: 'The property has returned to operational status.',
           severity: 'success'
         });
+        silenceAlarm();
       }
     });
 
     // Listen for incident status updates
     newSocket.on('incident_status_update', (data: any) => {
       if (data.status === 'resolved') {
-        showNotification('Emergency Resolved', `Incident #${data.incidentId} has been resolved.`);
+        showNotification('Emergency Resolved', `Incident #${data.incidentId} has been resolved.`).catch(console.warn);
         addNotification({
           type: 'status',
           title: 'Emergency Resolved',
           message: `Incident #${data.incidentId} has been resolved.`,
           severity: 'success'
         });
+        silenceAlarm();
       }
     });
 
     // Listen for mass notifications
     newSocket.on('mass_notification', (data: any) => {
-      showNotification('Emergency Notice', data.message);
+      showNotification('Emergency Notice', data.message).catch(console.warn);
       addNotification({
         type: 'mass',
         title: 'Emergency Notice',
@@ -164,7 +246,7 @@ export const SocketProvider = ({ children }: SocketProviderProps) => {
     newSocket.on('panic_triggered', (data: any) => {
       const isResponder = ['security', 'responder', 'admin', 'staff', 'org_admin', 'super_admin'].includes(user?.role || '');
       if (isResponder) {
-        showNotification('🆘 PANIC ALERT 🆘', `Panic button triggered by ${data.userName || 'a guest'}`);
+        showNotification('🆘 PANIC ALERT 🆘', `Panic button triggered by ${data.userName || 'a guest'}`).catch(console.warn);
         addNotification({
           type: 'panic',
           title: 'Panic Triggered',
@@ -185,20 +267,22 @@ export const SocketProvider = ({ children }: SocketProviderProps) => {
     }
   };
 
-  const showNotification = async (title: string, body: string) => {
+  const showNotification = async (title: string, body: string, data?: Record<string, any>) => {
     await Notifications.scheduleNotificationAsync({
       content: {
         title,
         body,
         sound: 'default',
+        data,
+      },
+      trigger: {
         channelId: 'emergencies',
       },
-      trigger: null
     });
   };
 
   return (
-    <SocketContext.Provider value={{ socket, connected }}>
+    <SocketContext.Provider value={{ socket, connected, alarmActive, alarmTitle, alarmMessage, silenceAlarm }}>
       {children}
     </SocketContext.Provider>
   );

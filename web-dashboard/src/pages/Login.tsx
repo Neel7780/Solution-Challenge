@@ -1,3 +1,4 @@
+import { API_URL } from '../config';
 import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -29,7 +30,7 @@ import axios from 'axios';
 
 import { useAuthStore, UserContext } from '../store/authStore';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+
 
 const getDashboardHomeByRole = (role?: string) => {
   if (role === 'responder') return '/dashboard/responder';

@@ -1,9 +1,11 @@
+import { SOCKET_URL } from '../config';
 import { create } from 'zustand';
 import { io, Socket } from 'socket.io-client';
 import { useNotificationStore } from './notificationStore';
 import { useCrisisStore } from './crisisStore';
+import { useLocationStore } from './locationStore';
 
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
+
 
 interface SocketState {
   socket: Socket | null;
@@ -178,7 +180,33 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     });
 
     socket.on('user_location_update', (data) => {
-      // Silently handle — no notification needed
+      // Route location updates to the centralized location store
+      const locationStore = useLocationStore.getState();
+      if (data.userId && (data.latitude !== undefined || data.longitude !== undefined)) {
+        locationStore.updateLocation({
+          userId: Number(data.userId),
+          latitude: Number(data.latitude),
+          longitude: Number(data.longitude),
+          beaconId: data.beaconId,
+          zoneId: data.zoneId,
+          timestamp: data.timestamp || new Date().toISOString(),
+        });
+      }
+    });
+
+    socket.on('occupant_nav_status', (data) => {
+      // Route navigation status to the centralized location store
+      const locationStore = useLocationStore.getState();
+      if (data.userId) {
+        locationStore.updateNavStatus({
+          userId: data.userId,
+          name: data.name || '',
+          status: data.status || 'evacuating',
+          currentWaypoint: data.currentWaypoint,
+          targetExit: data.targetExit,
+          timestamp: data.timestamp || new Date().toISOString(),
+        });
+      }
     });
 
     // ═══ Simulation Crisis Sync Events ═══

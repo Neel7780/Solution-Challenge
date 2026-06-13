@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
+import { validateRequest } from '../middleware/validate';
 import { body } from 'express-validator';
 import {
   getActiveIncidents,
@@ -27,7 +28,13 @@ const publicReportLimiter = rateLimit({
   message: { error: 'Too many public reports from this source. Please try again later.' },
 });
 
-router.post('/report', authenticate, [
+const crisisLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000,
+  max: 10,
+  message: { error: 'Too many crisis reports, please try again later' },
+});
+
+router.post('/report', authenticate, crisisLimiter, [
   body('propertyId').isInt().withMessage('Property ID is required'),
   body('type').isIn(['fire', 'medical', 'security', 'natural_disaster', 'evacuation', 'other']),
   body('severity').optional().isIn(['low', 'medium', 'high', 'critical']),
@@ -35,7 +42,7 @@ router.post('/report', authenticate, [
   body('longitude').optional().isFloat(),
   body('zoneId').optional().isInt(),
   body('description').optional().isString()
-], reportCrisis);
+], validateRequest, reportCrisis);
 
 router.post('/public-report', publicReportLimiter, [
   body('propertyId').isInt().withMessage('Property ID is required'),
@@ -47,7 +54,7 @@ router.post('/public-report', publicReportLimiter, [
   body('description').optional().isString(),
   body('reporterName').optional().isString(),
   body('reporterContact').optional().isString(),
-], reportPublicCrisis);
+], validateRequest, reportPublicCrisis);
 
 // Public endpoint (no auth) for published post-incident org-admin reports
 router.get('/public-resolution-reports', getPublishedResolutionReports);
@@ -56,11 +63,11 @@ router.get('/public-reports', authenticate, requireRole(['admin', 'security', 'r
 router.patch('/public-reports/:id', authenticate, requireRole(['admin', 'security', 'responder']), [
   body('action').isIn(['escalate', 'dismiss']),
   body('severity').optional().isIn(['low', 'medium', 'high', 'critical']),
-], reviewPublicCrisisReport);
+], validateRequest, reviewPublicCrisisReport);
 
 router.get('/active', authenticate, getActiveIncidents);
 router.get('/:id', authenticate, getIncident);
-router.patch('/:id/status', authenticate, [body('status').isIn(['active', 'contained', 'resolved', 'false_alarm'])], updateIncidentStatus);
+router.patch('/:id/status', authenticate, [body('status').isIn(['active', 'contained', 'resolved', 'false_alarm'])], validateRequest, updateIncidentStatus);
 router.get('/:id/full', authenticate, getIncidentDetails);
 router.post('/:id/resolve', authenticate, resolveIncident);
 router.post('/:id/verify-cctv', authenticate, requireRole(['admin', 'security', 'responder', 'org_admin', 'super_admin']), verifyCCTVFeed);

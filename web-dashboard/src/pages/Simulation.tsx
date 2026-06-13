@@ -1,3 +1,4 @@
+import { API_URL } from '../config';
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import {
   Box,
@@ -47,7 +48,7 @@ import { useAuthStore } from '../store/authStore';
 import { godotToLatLng } from './Locations';
 
 const SIMULATION_URL = '/simulation/hotel_fire_simulation.html';
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+
 const DEFAULT_PROPERTY_ID = 2; // Hardcoded fallback for prototype
 
 /* ─── Tool Config ─── */

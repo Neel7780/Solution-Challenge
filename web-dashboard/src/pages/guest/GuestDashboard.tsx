@@ -1,3 +1,4 @@
+import { API_URL } from '../../config';
 import React, { useRef, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -53,7 +54,7 @@ L.Marker.prototype.options.icon = DefaultIcon;
 
 gsap.registerPlugin(ScrollTrigger);
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+
 
 export default function GuestDashboard() {
   const navigate = useNavigate();
@@ -231,15 +232,15 @@ export default function GuestDashboard() {
       {/* Hero Section */}
       <section style={{ paddingTop: '1rem', paddingBottom: '1rem' }}>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-          <h1 style={{ fontSize: 'clamp(2.5rem, 8vw, 4rem)', lineHeight: 1.1, margin: 0, fontFamily: 'Fraunces, Georgia, serif', fontWeight: 600, letterSpacing: '-0.05em' }}>
-            <span className="sh-line-mask"><span className="sh-line-inner" style={{ color: 'var(--gp-text-primary)' }}>Hello,</span></span>
+          <h1 style={{ fontSize: 'clamp(2.5rem, 8vw, 4rem)', lineHeight: 1.1, margin: 0, fontFamily: 'Fraunces, Georgia, serif', fontWeight: 600, letterSpacing: '-0.05em', color: 'var(--text-primary)' }}>
+            <span className="sh-line-mask"><span className="sh-line-inner" style={{ color: 'var(--text-primary)' }}>Hello,</span></span>
             <span className="sh-line-mask">
-              <span className="sh-line-inner guest-hword" style={{ WebkitTextFillColor: 'transparent' }}>
+              <span className="sh-line-inner sh-hword" style={{ WebkitTextFillColor: 'transparent' }}>
                 {user?.name || 'Guest'}
               </span>
             </span>
           </h1>
-          <div className="sh-fade-in" style={{ marginTop: '0.5rem', maxWidth: '100%', fontSize: '1.1rem', color: 'var(--gp-text-secondary)' }}>
+          <div className="sh-fade-in" style={{ marginTop: '0.5rem', maxWidth: '100%', fontSize: '1.1rem', color: 'var(--text-secondary)' }}>
             <p>Your safety is our top priority. We are monitoring the property 24/7.</p>
           </div>
         </div>
@@ -324,23 +325,23 @@ export default function GuestDashboard() {
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-            <div style={{ background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '0.5rem', padding: '2rem', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)' }}>
+            <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: '0.5rem', padding: '2rem', boxShadow: 'var(--shadow-soft)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
-                <div style={{ width: '12px', height: '12px', background: '#10b981', borderRadius: '50%' }}></div>
-                <h2 style={{ fontFamily: 'Inter, sans-serif', fontSize: '1.1rem', fontWeight: 600, letterSpacing: '0.05em', margin: 0, color: '#374151', textTransform: 'uppercase' }}>
+                <div style={{ width: '12px', height: '12px', background: 'var(--accent-green)', borderRadius: '50%' }}></div>
+                <h2 style={{ fontFamily: 'Inter, sans-serif', fontSize: '1.1rem', fontWeight: 600, letterSpacing: '0.05em', margin: 0, color: 'var(--text-primary)', textTransform: 'uppercase' }}>
                   Status: Secure
                 </h2>
               </div>
-              <p style={{ color: '#6b7280', fontSize: '0.95rem', margin: 0 }}>All monitoring systems are nominal. No hazards detected in your sector.</p>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', margin: 0 }}>All monitoring systems are nominal. No hazards detected in your sector.</p>
             </div>
             
-            <div style={{ background: '#1f2937', color: 'white', borderRadius: '0.5rem', padding: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-medium)', color: 'var(--text-primary)', borderRadius: '0.5rem', padding: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <h3 style={{ fontSize: '1.1rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>Digital Credential</h3>
-                <p style={{ color: '#9ca3af', fontSize: '0.85rem', margin: '0.25rem 0 0 0' }}>Authorized Access Active</p>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', margin: '0.25rem 0 0 0' }}>Authorized Access Active</p>
               </div>
-              <div style={{ width: '40px', height: '40px', border: '2px solid #3b82f6', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <div style={{ width: '20px', height: '20px', background: '#3b82f6', borderRadius: '50%' }}></div>
+              <div style={{ width: '40px', height: '40px', border: '2px solid var(--accent-blue)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ width: '20px', height: '20px', background: 'var(--accent-blue)', borderRadius: '50%' }}></div>
               </div>
             </div>
           </div>
@@ -351,37 +352,37 @@ export default function GuestDashboard() {
 
       {/* Quick Actions Grid */}
       <section className="sh-fade-in" style={{ marginBottom: '1rem' }}>
-        <h2 style={{ fontSize: '1.5rem', fontWeight: 700, letterSpacing: '-0.03em', marginBottom: '1rem', color: 'var(--gp-text-primary)' }}>Quick Actions</h2>
+        <h2 style={{ fontSize: '1.5rem', fontWeight: 700, letterSpacing: '-0.03em', marginBottom: '1rem', color: 'var(--text-primary)' }}>Quick Actions</h2>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
           
-          <div onClick={() => window.location.href = 'tel:+15550199'} className="guest-card" style={{ padding: '1.5rem', cursor: 'pointer', display: 'flex', flexDirection: 'column', minHeight: '160px' }}>
-            <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'var(--gp-bg)', color: 'var(--gp-text-primary)', border: '1px solid var(--gp-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', marginBottom: 'auto' }}>
+          <div onClick={() => window.location.href = 'tel:+15550199'} className="guest-card" style={{ padding: '1.5rem', cursor: 'pointer', display: 'flex', flexDirection: 'column', minHeight: '160px', background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: '1rem' }}>
+            <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'var(--bg-elevated)', color: 'var(--text-primary)', border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', marginBottom: 'auto' }}>
               📞
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: '1.5rem' }}>
-              <h3 style={{ fontSize: '1.2rem', fontWeight: 700, letterSpacing: '-0.02em', margin: 0, color: 'var(--gp-text-primary)' }}>Call Security</h3>
-              <span style={{ fontSize: '1.2rem', color: 'var(--gp-text-secondary)' }}>→</span>
+              <h3 style={{ fontSize: '1.2rem', fontWeight: 700, letterSpacing: '-0.02em', margin: 0, color: 'var(--text-primary)' }}>Call Security</h3>
+              <span style={{ fontSize: '1.2rem', color: 'var(--text-secondary)' }}>→</span>
             </div>
           </div>
 
-          <div onClick={() => navigate('/guest/chat')} className="guest-card" style={{ padding: '1.5rem', cursor: 'pointer', display: 'flex', flexDirection: 'column', minHeight: '160px' }}>
-            <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'var(--gp-teal)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', marginBottom: 'auto' }}>
+          <div onClick={() => navigate('/guest/chat')} className="guest-card" style={{ padding: '1.5rem', cursor: 'pointer', display: 'flex', flexDirection: 'column', minHeight: '160px', background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: '1rem' }}>
+            <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'var(--accent-blue)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', marginBottom: 'auto' }}>
               💬
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: '1.5rem' }}>
-              <h3 style={{ fontSize: '1.2rem', fontWeight: 700, letterSpacing: '-0.02em', margin: 0, color: 'var(--gp-text-primary)' }}>Radio Chat</h3>
-              <span style={{ fontSize: '1.2rem', color: 'var(--gp-text-secondary)' }}>→</span>
+              <h3 style={{ fontSize: '1.2rem', fontWeight: 700, letterSpacing: '-0.02em', margin: 0, color: 'var(--text-primary)' }}>Radio Chat</h3>
+              <span style={{ fontSize: '1.2rem', color: 'var(--text-secondary)' }}>→</span>
             </div>
           </div>
 
-          <div onClick={() => navigate('/guest/emergency')} className="guest-card" style={{ padding: '1.5rem', cursor: 'pointer', display: 'flex', flexDirection: 'column', minHeight: '160px', gridColumn: '1 / -1', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
-            <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', marginBottom: '1rem' }}>
+          <div onClick={() => navigate('/guest/emergency')} className="guest-card" style={{ padding: '1.5rem', cursor: 'pointer', display: 'flex', flexDirection: 'column', minHeight: '160px', gridColumn: '1 / -1', background: 'var(--bg-card)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '1rem' }}>
+            <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'rgba(239, 68, 68, 0.1)', color: 'var(--accent-red)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', marginBottom: '1rem' }}>
               ⚠
             </div>
-            <h3 style={{ fontSize: '1.2rem', fontWeight: 700, letterSpacing: '-0.02em', margin: 0, color: '#ef4444' }}>Report Emergency</h3>
-            <p style={{ color: 'var(--gp-text-secondary)', marginTop: '0.2rem', marginBottom: '1rem', fontSize: '0.9rem' }}>Notify the command center of a hazard.</p>
+            <h3 style={{ fontSize: '1.2rem', fontWeight: 700, letterSpacing: '-0.02em', margin: 0, color: 'var(--accent-red)' }}>Report Emergency</h3>
+            <p style={{ color: 'var(--text-secondary)', marginTop: '0.2rem', marginBottom: '1rem', fontSize: '0.9rem' }}>Notify the command center of a hazard.</p>
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 'auto' }}>
-              <span style={{ fontSize: '1.2rem', color: '#ef4444' }}>→</span>
+              <span style={{ fontSize: '1.2rem', color: 'var(--accent-red)' }}>→</span>
             </div>
           </div>
 

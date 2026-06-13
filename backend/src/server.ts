@@ -1,7 +1,8 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
-console.log('--- CRISIS RESPONSE API STARTING ---');
+import logger from './utils/logger';
+logger.info('--- CRISIS RESPONSE API STARTING ---');
 
 import cors from 'cors';
 import express from 'express';
@@ -18,18 +19,18 @@ import platformRoutes from './routes/platform';
 import simulationRoutes from './routes/simulation';
 import taskRoutes from './routes/tasks';
 import chatRoutes from './routes/chat';
-import logger from './utils/logger';
+// logger is already imported at the top
 import { analyzeSimulation } from './services/simulationAnalysisService';
 import { createAutomatedIncident } from './controllers/crisisController';
 import { enrichIncident } from './services/intelligenceService';
 import navigationRoutes from './routes/navigation';
 
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  logger.error('Unhandled Rejection at:', { promise, reason });
 });
 
 process.on('uncaughtException', (err) => {
-  console.error('Uncaught Exception:', err);
+  logger.error('Uncaught Exception:', err);
   process.exit(1);
 });
 
@@ -57,7 +58,7 @@ const checkOrigin = (origin: string | undefined, callback: (err: Error | null, a
     callback(null, true);
     return;
   }
-  const isAllowed = allowedOrigins.includes(origin) || origin.endsWith('.vercel.app') || origin.endsWith('.netlify.app') || origin.includes('localhost');
+  const isAllowed = allowedOrigins.includes(origin) || origin.endsWith('.vercel.app') || origin.endsWith('.netlify.app') || origin.startsWith('http://localhost:') || origin === 'http://localhost';
   callback(null, isAllowed);
 };
 
@@ -125,7 +126,7 @@ app.use((req: any, res: any, next: any) => {
   next();
 });
 
-app.use('/api/crisis', crisisLimiter, crisisRoutes);
+app.use('/api/crisis', crisisRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/locations', locationRoutes);
 app.use('/api/notifications', notificationRoutes);

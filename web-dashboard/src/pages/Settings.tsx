@@ -1,3 +1,4 @@
+import { API_URL } from '../config';
 import React, { useRef, useState } from 'react';
 import {
   Box,
@@ -21,7 +22,7 @@ import axios from 'axios';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '../store/authStore';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+
 
 export default function Settings() {
   const containerRef = useRef(null);

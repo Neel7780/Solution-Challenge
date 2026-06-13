@@ -1,3 +1,4 @@
+import { API_URL } from '../config';
 import React, { useRef, useState } from 'react';
 import {
   Box,
@@ -31,7 +32,7 @@ import gsap from 'gsap';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+
 
 interface OnboardingRequest {
   id: number;

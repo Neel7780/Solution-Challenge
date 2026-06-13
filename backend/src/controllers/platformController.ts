@@ -108,11 +108,7 @@ export const reviewOnboardingRequest = async (req: Request, res: Response) => {
         [orgId, propertyId, request.contact_name, request.contact_email, request.contact_phone, 'org_admin', passwordHash]
       );
 
-      // 4. Link user to property in mapping table
-      await client.query(
-        `INSERT INTO user_properties (user_id, property_id, role) VALUES ($1, $2, $3)`,
-        [userResult.rows[0].id, propertyId, 'admin']
-      );
+
 
       logger.info(`Organization ${request.org_name} approved and onboarded. Admin password: ${tempPassword}`);
       

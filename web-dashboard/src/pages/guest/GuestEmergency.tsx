@@ -1,3 +1,4 @@
+import { API_URL } from '../../config';
 import React, { useRef, useState } from 'react';
 import {
   Box,
@@ -24,7 +25,7 @@ import gsap from 'gsap';
 import axios from 'axios';
 import { useAuthStore } from '../../store/authStore';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+
 
 const emergencies = [
   { id: 'fire', title: 'Fire', color: '#ef4444', icon: FireIcon },

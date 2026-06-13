@@ -49,12 +49,6 @@ export const createGuestAccount = async (req: Request, res: Response) => {
     const user = result.rows[0];
     delete user.password_hash;
 
-    // Also link to user_properties for consistency
-    await query(
-      `INSERT INTO user_properties (user_id, property_id, role) VALUES ($1, $2, $3)`,
-      [user.id, resolvedPropertyId, role]
-    );
-
     logger.info(`Guest account created by user ${req.user!.userId}: ${email || phone}`);
 
     res.status(201).json({ success: true, user, message: 'Guest account created successfully' });
@@ -90,15 +84,6 @@ export const createUser = async (req: Request, res: Response) => {
     );
 
     const newUser = result.rows[0];
-
-    // If a property was specified, also create a mapping in user_properties
-    if (finalPropertyId) {
-      await query(
-        `INSERT INTO user_properties (user_id, property_id, role)
-         VALUES ($1, $2, $3)`,
-        [newUser.id, finalPropertyId, role]
-      );
-    }
 
     logger.info(`User ${newUser.id} (${newUser.role}) created by Admin ${userContext.userId}`);
 
@@ -165,19 +150,6 @@ export const updateUser = async (req: Request, res: Response) => {
       );
 
       const updatedUser = result.rows[0];
-
-      // Update user_properties mapping if property changed
-      if (propertyId) {
-        await client.query(
-          `DELETE FROM user_properties WHERE user_id = $1`,
-          [id]
-        );
-        await client.query(
-          `INSERT INTO user_properties (user_id, property_id, role)
-           VALUES ($1, $2, $3)`,
-          [id, propertyId, role || updatedUser.role]
-        );
-      }
 
       await client.query('COMMIT');
       res.json({ success: true, user: updatedUser, message: 'User updated successfully' });
@@ -273,18 +245,7 @@ export const login = async (req: Request, res: Response) => {
       );
       contexts = orgProps.rows;
     } else {
-      const contextResult = await query(
-        `SELECT up.property_id, up.role, p.name as property_name, p.organization_id
-         FROM user_properties up
-         JOIN properties p ON up.property_id = p.id
-         WHERE up.user_id = $1`,
-        [user.id]
-      );
-      contexts = contextResult.rows;
-
-      // Backward compatibility: some legacy accounts only have users.property_id populated.
-      // If so, create a synthetic context and backfill user_properties.
-      if (contexts.length === 0 && user.property_id) {
+      if (user.property_id) {
         const propertyResult = await query(
           `SELECT id, name, organization_id FROM properties WHERE id = $1 LIMIT 1`,
           [user.property_id]
@@ -298,15 +259,6 @@ export const login = async (req: Request, res: Response) => {
             property_name: property.name,
             organization_id: property.organization_id,
           }];
-
-          // Self-heal missing mapping so future logins work through user_properties.
-          await query(
-            `INSERT INTO user_properties (user_id, property_id, role)
-             VALUES ($1, $2, $3)
-             ON CONFLICT (user_id, property_id)
-             DO UPDATE SET role = EXCLUDED.role`,
-            [user.id, property.id, user.role]
-          );
         }
       }
     }
@@ -405,52 +357,46 @@ export const switchContext = async (req: Request, res: Response) => {
   const userId = req.user!.userId;
 
   try {
-    const contextResult = await query(
-      `SELECT up.property_id, up.role, p.organization_id
-       FROM user_properties up
-       JOIN properties p ON up.property_id = p.id
-       WHERE up.user_id = $1 AND up.property_id = $2`,
-      [userId, propertyId]
-    );
+    const userResult = await query(`SELECT id, role, property_id, organization_id FROM users WHERE id = $1`, [userId]);
+    const user = userResult.rows[0];
 
-    if (contextResult.rows.length === 0) {
-      // Check if user is super_admin or org_admin for this property
-      const userResult = await query(`SELECT id, role, organization_id FROM users WHERE id = $1`, [userId]);
-      const user = userResult.rows[0];
-
-      if (user.role === 'super_admin' || (user.role === 'org_admin' && user.organization_id)) {
-         const propResult = await query(`SELECT id, organization_id FROM properties WHERE id = $1`, [propertyId]);
-         if (propResult.rows.length === 0) return res.status(404).json({ error: 'Property not found' });
-         
-         if (user.role === 'org_admin' && propResult.rows[0].organization_id !== user.organization_id) {
-           return res.status(403).json({ error: 'Access denied for this property' });
-         }
-
-         await query(`UPDATE users SET last_property_id = $1 WHERE id = $2`, [propertyId, userId]);
-
-         const newToken = signUserToken({
-           id: userId,
-           role: user.role,
-           property_id: propertyId,
-           organization_id: propResult.rows[0].organization_id
-         });
-         return res.json({ success: true, token: newToken, message: 'Context switched' });
-      }
-
-      return res.status(403).json({ error: 'Access denied for the requested property' });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
     }
 
-    const context = contextResult.rows[0];
-    await query(`UPDATE users SET last_property_id = $1 WHERE id = $2`, [propertyId, userId]);
+    if (user.role === 'super_admin' || (user.role === 'org_admin' && user.organization_id)) {
+       const propResult = await query(`SELECT id, organization_id FROM properties WHERE id = $1`, [propertyId]);
+       if (propResult.rows.length === 0) return res.status(404).json({ error: 'Property not found' });
+       
+       if (user.role === 'org_admin' && propResult.rows[0].organization_id !== user.organization_id) {
+         return res.status(403).json({ error: 'Access denied for this property' });
+       }
 
-    const newToken = signUserToken({
-      id: userId,
-      role: context.role,
-      property_id: context.property_id,
-      organization_id: context.organization_id
-    });
+       await query(`UPDATE users SET last_property_id = $1 WHERE id = $2`, [propertyId, userId]);
 
-    res.json({ success: true, token: newToken, message: 'Context switched' });
+       const newToken = signUserToken({
+         id: userId,
+         role: user.role,
+         property_id: propertyId,
+         organization_id: propResult.rows[0].organization_id
+       });
+       return res.json({ success: true, token: newToken, message: 'Context switched' });
+    } else if (user.property_id === Number(propertyId)) {
+       const propResult = await query(`SELECT id, organization_id FROM properties WHERE id = $1`, [propertyId]);
+       if (propResult.rows.length === 0) return res.status(404).json({ error: 'Property not found' });
+
+       await query(`UPDATE users SET last_property_id = $1 WHERE id = $2`, [propertyId, userId]);
+
+       const newToken = signUserToken({
+         id: userId,
+         role: user.role,
+         property_id: propertyId,
+         organization_id: propResult.rows[0].organization_id
+       });
+       return res.json({ success: true, token: newToken, message: 'Context switched' });
+    }
+
+    return res.status(403).json({ error: 'Access denied for the requested property' });
   } catch (error: any) {
     logger.error('Error switching context:', error);
     res.status(500).json({ error: 'Failed to switch context' });

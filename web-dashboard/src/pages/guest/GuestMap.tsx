@@ -1,3 +1,4 @@
+import { API_URL } from '../../config';
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import {
   Box,
@@ -22,9 +23,12 @@ import 'leaflet/dist/leaflet.css';
 import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
 import { useAuthStore } from '../../store/authStore';
+import { useSocketStore } from '../../store/socketStore';
+import { useLocationStore } from '../../store/locationStore';
+import '../../assets/map-styles.css';
 import { findClosestNode, findShortestPath, generateVoiceInstructions, Hazard } from '../../utils/pathfinding';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+
 
 // Georeference constants matching Locations.tsx
 export const PROPERTY_CONFIG = {
@@ -220,6 +224,8 @@ export default function GuestMap() {
   const [calculatedRoute, setCalculatedRoute] = useState<[number, number][] | null>(null);
   const [routeInstructions, setRouteInstructions] = useState<string[]>([]);
   const hasSpokenRef = useRef(false);
+  const lastRouteRef = useRef<string | null>(null);
+  const { socket } = useSocketStore();
 
   // Set default floor from room number on mount
   useEffect(() => {
@@ -243,6 +249,23 @@ export default function GuestMap() {
     enabled: Boolean(user?.id),
     refetchInterval: 3000, // Frequent updates for live tracking
   });
+
+  // Emit guest location to server so admins can track us
+  useEffect(() => {
+    if (!socket || !user?.id) return;
+
+    // When location history updates, broadcast our position via socket
+    if (locationHistory.length > 0) {
+      const latest = locationHistory[0];
+      socket.emit('location_update', {
+        userId: user.id,
+        latitude: latest.latitude,
+        longitude: latest.longitude,
+        beaconId: latest.beacon_id,
+        zoneId: latest.zone_id,
+      });
+    }
+  }, [socket, user?.id, locationHistory]);
 
   // Fetch Zones (Assembly Points/Exits)
   const { data: zones = [], isLoading: loadingZones } = useQuery({
@@ -347,6 +370,24 @@ export default function GuestMap() {
 
   const activeIncident = incidents.length > 0 ? incidents[0] : null;
 
+  // Distance and ETA to nearest exit
+  const distanceToExit = useMemo(() => {
+    if (!nearestExit || !locationHistory.length) return null;
+    const latest = locationHistory[0];
+    const lat1 = Number(latest.latitude);
+    const lng1 = Number(latest.longitude);
+    if (isNaN(lat1) || isNaN(lng1)) return null;
+
+    // Convert exit to lat/lng for distance calc
+    const exitLat = Number(nearestExit.latitude);
+    const exitLng = Number(nearestExit.longitude);
+    if (isNaN(exitLat) || isNaN(exitLng)) return null;
+
+    const meters = getDistanceInMeters(lat1, lng1, exitLat, exitLng);
+    const walkingMinutes = Math.ceil(meters / 80); // ~80m/min walking speed
+    return { meters, walkingMinutes };
+  }, [nearestExit, locationHistory]);
+
   // Calculate proper route
   useEffect(() => {
     const getRoute = async () => {
@@ -355,7 +396,7 @@ export default function GuestMap() {
       const hazards: Hazard[] = incidents.map((inc: any) => {
         let x = 0, y = 0;
         if (inc.latitude && inc.longitude) {
-           const [gx, gy] = godotToLatLng(Number(inc.latitude), Number(inc.longitude));
+           const [gx, gy] = latLngToGodot(Number(inc.latitude), Number(inc.longitude));
            x = gx; y = gy;
         }
         return { x, y, floor: Number(selectedFloor), radius: 5.0 };
@@ -377,10 +418,14 @@ export default function GuestMap() {
            const instructions = generateVoiceInstructions(route.path);
            setRouteInstructions(instructions);
 
-           if (!hasSpokenRef.current && instructions.length > 0 && 'speechSynthesis' in window) {
-              const utterance = new SpeechSynthesisUtterance(instructions[0]);
-              window.speechSynthesis.speak(utterance);
-              hasSpokenRef.current = true;
+           // Re-announce when route changes significantly
+           const routeKey = instructions[0] || '';
+           if (routeKey !== lastRouteRef.current && instructions.length > 0 && 'speechSynthesis' in window) {
+             window.speechSynthesis.cancel();
+             const utterance = new SpeechSynthesisUtterance(instructions[0]);
+             window.speechSynthesis.speak(utterance);
+             lastRouteRef.current = routeKey;
+             hasSpokenRef.current = true;
            }
 
          } else {
@@ -420,6 +465,27 @@ export default function GuestMap() {
         .leaflet-container {
           background-color: var(--bg-card) !important;
         }
+        @keyframes route-dash-flow {
+          0% { stroke-dashoffset: 0; }
+          100% { stroke-dashoffset: -40; }
+        }
+        .leaflet-overlay-pane svg path {
+          animation: route-dash-flow 1.5s linear infinite;
+        }
+        .map-status-dot {
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          display: inline-block;
+        }
+        .map-status-dot--live {
+          background-color: #10b981;
+          box-shadow: 0 0 6px #10b981;
+        }
+        .map-status-dot--polling {
+          background-color: #f59e0b;
+          box-shadow: 0 0 6px #f59e0b;
+        }
       `}</style>
 
       {/* Floating Floor Plan / View Mode Controls */}
@@ -446,6 +512,30 @@ export default function GuestMap() {
           <ToggleButton value="1" sx={{ px: 2, fontWeight: 700, color: '#fff', '&.Mui-selected': { bgcolor: 'rgba(59, 130, 246, 0.2)' } }}>FLOOR 1</ToggleButton>
           <ToggleButton value="2" sx={{ px: 2, fontWeight: 700, color: '#fff', '&.Mui-selected': { bgcolor: 'rgba(59, 130, 246, 0.2)' } }}>FLOOR 2</ToggleButton>
         </ToggleButtonGroup>
+      </Paper>
+
+      {/* Live Connection Status */}
+      <Paper
+        sx={{
+          position: 'absolute',
+          top: 16,
+          right: 16,
+          zIndex: 1000,
+          background: 'rgba(15, 23, 42, 0.9)',
+          border: '1px solid rgba(255,255,255,0.1)',
+          backdropFilter: 'blur(10px)',
+          p: '6px 12px',
+          borderRadius: 2,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1,
+        }}
+        elevation={6}
+      >
+        <span className={`map-status-dot ${socket?.connected ? 'map-status-dot--live' : 'map-status-dot--polling'}`} />
+        <Typography variant="caption" sx={{ color: socket?.connected ? '#10b981' : '#f59e0b', fontWeight: 800, fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+          {socket?.connected ? 'LIVE TRACKING' : 'POLLING'}
+        </Typography>
       </Paper>
 
       {/* Main Map Container */}
@@ -550,16 +640,30 @@ export default function GuestMap() {
                   </Typography>
                 </Box>
                 {nearestExit && (
-                  <Chip
-                    label={`Nearest exit located`}
-                    size="small"
-                    sx={{
-                      backgroundColor: 'rgba(16, 185, 129, 0.2)',
-                      color: '#34d399',
-                      fontWeight: 800,
-                      fontSize: '0.75rem',
-                    }}
-                  />
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <Chip
+                      label={distanceToExit ? `${distanceToExit.meters}m away` : 'Nearest exit located'}
+                      size="small"
+                      sx={{
+                        backgroundColor: 'rgba(16, 185, 129, 0.2)',
+                        color: '#34d399',
+                        fontWeight: 800,
+                        fontSize: '0.75rem',
+                      }}
+                    />
+                    {distanceToExit && (
+                      <Chip
+                        label={`~${distanceToExit.walkingMinutes} min walk`}
+                        size="small"
+                        sx={{
+                          backgroundColor: 'rgba(251, 191, 36, 0.15)',
+                          color: '#fbbf24',
+                          fontWeight: 700,
+                          fontSize: '0.72rem',
+                        }}
+                      />
+                    )}
+                  </div>
                 )}
               </Box>
 

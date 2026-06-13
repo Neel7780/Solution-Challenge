@@ -1,3 +1,4 @@
+import { API_URL } from '../config';
 import React, { useState, useRef, useEffect } from 'react';
 import {
   Alert,
@@ -34,7 +35,7 @@ import { useAuthStore } from '../store/authStore';
 import { useSocketStore } from '../store/socketStore';
 
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+
 
 interface Incident {
   id: number;

@@ -26,6 +26,8 @@ export default function TriageScreen({ navigation }: TriageScreenProps) {
   const { user } = useAuth();
   const { socket } = useSocket();
   const [incidents, setIncidents] = useState<any[]>([]);
+  const [tasks, setTasks] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<'incidents' | 'tasks'>('incidents');
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
 
@@ -40,15 +42,32 @@ export default function TriageScreen({ navigation }: TriageScreenProps) {
       socket.on('incident_status_update', (data: any) => {
         fetchIncidents(); // Refresh to get updated list
       });
+      socket.on('task_assigned', () => {
+        fetchTasks();
+      });
+      socket.on('task_updated', () => {
+        fetchTasks();
+      });
+    }
+
+    let interval: NodeJS.Timeout;
+    if (!socket || !socket.connected) {
+      interval = setInterval(() => {
+        fetchTasks();
+        fetchIncidents();
+      }, 3000);
     }
 
     return () => {
+      if (interval) clearInterval(interval);
       if (socket) {
         socket.off('new_crisis');
         socket.off('incident_status_update');
+        socket.off('task_assigned');
+        socket.off('task_updated');
       }
     };
-  }, [socket]);
+  }, [socket, socket?.connected]);
 
   const fetchIncidents = async () => {
     try {
@@ -62,9 +81,27 @@ export default function TriageScreen({ navigation }: TriageScreenProps) {
     }
   };
 
+  const fetchTasks = async () => {
+    try {
+      const response = await axios.get(`${API_URL}/tasks`);
+      // Filter for active/pending tasks relevant to the user if needed, but getTasks already scopes it
+      setTasks(response.data.tasks?.filter((t: any) => t.status !== 'completed') || []);
+    } catch (error) {
+      console.error('Error fetching active tasks:', error);
+    }
+  };
+
+  useEffect(() => {
+    fetchTasks();
+  }, []);
+
   const onRefresh = () => {
     setRefreshing(true);
-    fetchIncidents();
+    if (activeTab === 'incidents') {
+      fetchIncidents();
+    } else {
+      fetchTasks().finally(() => setRefreshing(false));
+    }
   };
 
   const getSeverityColor = (severity: string, status?: string) => {
@@ -128,13 +165,30 @@ export default function TriageScreen({ navigation }: TriageScreenProps) {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Incident Triage</Text>
-        <View style={styles.activeBadge}>
-          <Text style={styles.activeBadgeText}>{incidents.length} Active</Text>
-        </View>
+        <Text style={styles.headerTitle}>Security Dashboard</Text>
+      </View>
+      
+      <View style={styles.tabContainer}>
+        <TouchableOpacity 
+          style={[styles.tab, activeTab === 'incidents' && styles.activeTab]} 
+          onPress={() => setActiveTab('incidents')}
+        >
+          <Text style={[styles.tabText, activeTab === 'incidents' && styles.activeTabText]}>
+            Active Incidents ({incidents.length})
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={[styles.tab, activeTab === 'tasks' && styles.activeTab]} 
+          onPress={() => setActiveTab('tasks')}
+        >
+          <Text style={[styles.tabText, activeTab === 'tasks' && styles.activeTabText]}>
+            My Tasks ({tasks.length})
+          </Text>
+        </TouchableOpacity>
       </View>
 
-      {incidents.length === 0 ? (
+      {activeTab === 'incidents' ? (
+        incidents.length === 0 ? (
         <View style={styles.emptyState}>
           <Icon name="check-circle" size={64} color="#4caf50" />
           <Text style={styles.emptyTitle}>All Clear</Text>
@@ -153,6 +207,53 @@ export default function TriageScreen({ navigation }: TriageScreenProps) {
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#d32f2f']} />
           }
         />
+      )) : (
+        tasks.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Icon name="assignment-turned-in" size={64} color="#4caf50" />
+            <Text style={styles.emptyTitle}>All Caught Up</Text>
+            <Text style={styles.emptySubtext}>You have no active tasks assigned.</Text>
+            <TouchableOpacity style={styles.refreshButton} onPress={() => fetchTasks().finally(()=>setRefreshing(false))}>
+              <Text style={styles.refreshButtonText}>Refresh</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <FlatList
+            data={tasks}
+            renderItem={({ item }) => (
+              <View style={styles.incidentCard}>
+                <View style={[styles.severityBar, { backgroundColor: item.priority === 'high' ? '#f44336' : '#2196f3' }]} />
+                <View style={styles.incidentContent}>
+                  <View style={styles.incidentHeader}>
+                    <Text style={styles.incidentType}>{item.task_type.toUpperCase()}</Text>
+                    <Text style={styles.incidentTime}>
+                      {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </Text>
+                  </View>
+                  <Text style={styles.incidentDescription} numberOfLines={2}>
+                    {item.description}
+                  </Text>
+                  <View style={styles.incidentFooter}>
+                    <View style={styles.locationRow}>
+                      <Icon name="person" size={16} color="#666" />
+                      <Text style={styles.locationText}>Assigned by: {item.assigned_by_name || 'System'}</Text>
+                    </View>
+                    <View style={[styles.statusBadge, { borderColor: '#ff9800' }]}>
+                      <Text style={[styles.statusText, { color: '#ff9800' }]}>
+                        {item.status.toUpperCase()}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              </View>
+            )}
+            keyExtractor={(item) => item.id.toString()}
+            contentContainerStyle={styles.listContainer}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#d32f2f']} />
+            }
+          />
+        )
       )}
     </View>
   );
@@ -191,6 +292,30 @@ const styles = StyleSheet.create({
   activeBadgeText: {
     color: '#d32f2f',
     fontSize: 12,
+    fontWeight: 'bold',
+  },
+  tabContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  activeTab: {
+    borderBottomWidth: 2,
+    borderBottomColor: '#d32f2f',
+  },
+  tabText: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '500',
+  },
+  activeTabText: {
+    color: '#d32f2f',
     fontWeight: 'bold',
   },
   listContainer: {

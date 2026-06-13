@@ -1,3 +1,4 @@
+import { API_URL } from '../config';
 import React, { useEffect, useMemo, useRef } from 'react';
 import {
   Grid,
@@ -51,7 +52,7 @@ import { useAuthStore } from '../store/authStore';
 import { OverviewData, TriageData } from '../types';
 
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+
 
 interface StatCardProps {
   title: string;

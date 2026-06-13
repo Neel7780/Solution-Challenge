@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { getTasks, createTask, updateTask, deleteTask, aiPrioritizeTasks } from '../controllers/taskController';
 import { authenticate, requireRole } from '../middleware/auth';
+import { validateRequest } from '../middleware/validate';
 import { body } from 'express-validator';
 
 const router = Router();
@@ -15,14 +16,14 @@ router.post('/', authenticate, requireRole(['super_admin', 'org_admin', 'admin']
   body('priority').optional().isIn(['low', 'medium', 'high', 'urgent']),
   body('taskType').optional().isString(),
   body('incidentId').optional().isInt(),
-], createTask);
+], validateRequest, createTask);
 
 router.patch('/:id', authenticate, requireRole(['super_admin', 'org_admin', 'admin']), [
   body('assignedTo').optional().isInt(),
   body('priority').optional().isIn(['low', 'medium', 'high', 'urgent']),
   body('status').optional().isIn(['pending', 'in_progress', 'completed', 'cancelled']),
   body('description').optional().isString(),
-], updateTask);
+], validateRequest, updateTask);
 
 router.delete('/:id', authenticate, requireRole(['super_admin', 'org_admin', 'admin']), deleteTask);
 

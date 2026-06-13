@@ -37,7 +37,7 @@ export default function IncidentDetailsScreen({ route, navigation }: IncidentDet
 
   const fetchIncidentDetails = async () => {
     try {
-      const response = await axios.get(`${API_URL}/crisis/incidents/${incidentId}/details`);
+      const response = await axios.get(`${API_URL}/crisis/${incidentId}/full`);
       setIncident(response.data.incident);
       setCheckIns(response.data.checkIns);
     } catch (error) {
@@ -56,7 +56,7 @@ export default function IncidentDetailsScreen({ route, navigation }: IncidentDet
 
     setUpdating(true);
     try {
-      await axios.put(`${API_URL}/crisis/incidents/${incidentId}/status`, {
+      await axios.patch(`${API_URL}/crisis/${incidentId}/status`, {
         status,
         resolutionReportText: status === 'resolved' ? 'Incident resolved via mobile responder app.' : undefined
       });
@@ -113,6 +113,14 @@ export default function IncidentDetailsScreen({ route, navigation }: IncidentDet
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color="#d32f2f" />
+      </View>
+    );
+  }
+
+  if (!incident) {
+    return (
+      <View style={styles.centered}>
+        <Text style={{ fontSize: 16, color: '#666' }}>Incident not found or could not be loaded.</Text>
       </View>
     );
   }
