@@ -11,6 +11,7 @@ import ProfileScreen from '../screens/ProfileScreen';
 import TriageScreen from '../screens/TriageScreen';
 import MapScreen from '../screens/MapScreen';
 import AlertsScreen from '../screens/AlertsScreen';
+import ChatScreen from '../screens/ChatScreen';
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
@@ -35,6 +36,8 @@ export default function MainTabNavigator() {
             iconName = 'map';
           } else if (route.name === 'Alerts') {
             iconName = 'notifications';
+          } else if (route.name === 'Chat') {
+            iconName = 'chat';
           } else if (route.name === 'Profile') {
             iconName = 'person';
           }
@@ -78,6 +81,11 @@ export default function MainTabNavigator() {
             component={MapScreen as any}
             options={{ title: 'Evacuation Map' }}
           />
+          <Tab.Screen
+            name="Chat"
+            component={ChatScreen as any}
+            options={{ title: 'Chat' }}
+          />
         </>
       ) : (
         <>
@@ -90,6 +98,11 @@ export default function MainTabNavigator() {
             name="Map"
             component={MapScreen as any}
             options={{ title: 'Live Map' }}
+          />
+          <Tab.Screen
+            name="Chat"
+            component={ChatScreen as any}
+            options={{ title: 'Radio' }}
           />
         </>
       )}

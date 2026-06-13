@@ -355,6 +355,21 @@ export default function Incidents() {
                     </TableCell>
                     <TableCell align="right">
                       <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end' }}>
+                        {incident.status === 'active' && !incident.verified && (
+                          <Button
+                            size="small"
+                            variant="contained"
+                            color="error"
+                            startIcon={<ViewIcon sx={{ fontSize: '12px !important' }} />}
+                            onClick={() => {
+                              setSelectedIncident(incident);
+                              setOpenManage(true);
+                            }}
+                            sx={{ fontSize: '0.65rem', py: 0, height: 24, borderRadius: 0.5, backgroundColor: '#ef4444' }}
+                          >
+                            CCTV Verify
+                          </Button>
+                        )}
                         {incident.status === 'active' && (
                           <Button
                             size="small"

@@ -9,13 +9,10 @@ import {
 } from 'react-native';
 import { MaterialIcons as Icon } from '@expo/vector-icons';
 import { useSocket } from '../context/SocketContext';
-import { useNavigation } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
-import { RootStackParamList } from '../types';
+import { navigationRef } from '../../App';
 
 export default function AlarmOverlay() {
   const { alarmActive, alarmTitle, alarmMessage, silenceAlarm } = useSocket();
-  const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
   const [pulse] = useState(new Animated.Value(0));
 
   // Pulse animation for warning colors

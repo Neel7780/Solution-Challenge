@@ -63,6 +63,8 @@ export default function GuestDashboard() {
   const [toastMessage, setToastMessage] = useState('');
   const [toastSeverity, setToastSeverity] = useState<'success' | 'info' | 'error'>('info');
   const [isStrobing, setIsStrobing] = useState(false);
+  const [isModalMinimized, setIsModalMinimized] = useState(false);
+  const [isNormalMapMinimized, setIsNormalMapMinimized] = useState(false);
   const [sirenAudio] = useState(new Audio('https://assets.mixkit.co/sfx/preview/mixkit-warning-alarm-buzzer-991.mp3'));
 
   const showToast = (message: string, severity: 'success' | 'info' | 'error') => {
@@ -243,38 +245,78 @@ export default function GuestDashboard() {
       <section className="sh-fade-in">
         {activeIncident && guestSafetyStatus !== 'safe' ? (
           <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 9998, background: '#000', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ padding: '1rem', background: 'rgba(0,0,0,0.8)', position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h2 style={{ fontFamily: 'Inter, sans-serif', fontSize: '1.2rem', fontWeight: 900, color: '#ef4444', margin: 0 }}>
-                  CRITICAL ALERT: {activeIncident.incident_type}
-                </h2>
-                <div style={{ background: '#ef4444', color: '#fff', padding: '0.2rem 0.8rem', fontSize: '0.8rem', fontWeight: 800, borderRadius: '0.25rem', animation: 'pulse-bg 1s infinite alternate' }}>EVACUATE</div>
+            {isModalMinimized ? (
+              <div style={{ position: 'absolute', bottom: '2rem', right: '2rem', zIndex: 9999 }}>
+                <button 
+                  onClick={() => setIsModalMinimized(false)}
+                  style={{ background: '#ef4444', color: '#fff', border: 'none', padding: '1rem', borderRadius: '50px', fontWeight: 800, boxShadow: '0 4px 20px rgba(239, 68, 68, 0.5)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', animation: 'pulse-bg 1s infinite alternate' }}
+                >
+                  <WarningIcon /> ACTIVE EMERGENCY
+                </button>
               </div>
-              <p style={{ fontSize: '1rem', margin: '0.5rem 0', fontWeight: 700, color: '#fff' }}>{activeIncident.mass_alert_message}</p>
-            </div>
+            ) : (
+              <>
+                <div style={{ padding: '1rem', background: 'rgba(0,0,0,0.8)', zIndex: 10, display: 'flex', flexDirection: 'column' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <h2 style={{ fontFamily: 'Inter, sans-serif', fontSize: '1.2rem', fontWeight: 900, color: '#ef4444', margin: 0 }}>
+                      CRITICAL ALERT: {activeIncident.incident_type}
+                    </h2>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <div style={{ background: '#ef4444', color: '#fff', padding: '0.2rem 0.8rem', fontSize: '0.8rem', fontWeight: 800, borderRadius: '0.25rem', animation: 'pulse-bg 1s infinite alternate' }}>EVACUATE</div>
+                      <button onClick={() => setIsModalMinimized(true)} style={{ background: 'transparent', color: '#fff', border: '1px solid #fff', borderRadius: '0.25rem', padding: '0.2rem 0.5rem', cursor: 'pointer' }}>_</button>
+                    </div>
+                  </div>
+                  <p style={{ fontSize: '1rem', margin: '0.5rem 0', fontWeight: 700, color: '#fff' }}>{activeIncident.mass_alert_message}</p>
+                  
+                  {activeIncident.evacuation_routes?.guestEmergencyPlan && (
+                    <div style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', padding: '0.8rem', borderRadius: '0.5rem', marginTop: '0.5rem' }}>
+                      <h3 style={{ color: '#fca5a5', fontSize: '0.9rem', margin: '0 0 0.5rem 0', textTransform: 'uppercase' }}>AI Evacuation Protocol:</h3>
+                      <ul style={{ margin: 0, paddingLeft: '1.2rem', color: '#fff', fontSize: '0.85rem' }}>
+                        {activeIncident.evacuation_routes.guestEmergencyPlan.map((plan: string, i: number) => (
+                          <li key={i} style={{ marginBottom: '0.2rem' }}>{plan}</li>
+                        ))}
+                      </ul>
+                      <button 
+                         onClick={() => {
+                            if ('speechSynthesis' in window) {
+                              window.speechSynthesis.cancel();
+                              const text = activeIncident.evacuation_routes.guestEmergencyPlan.join(". ");
+                              const utterance = new SpeechSynthesisUtterance(text);
+                              window.speechSynthesis.speak(utterance);
+                            }
+                         }}
+                         style={{ background: 'transparent', border: '1px solid #fca5a5', color: '#fca5a5', padding: '0.4rem 0.8rem', borderRadius: '0.25rem', marginTop: '0.5rem', cursor: 'pointer', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+                      >
+                        🔊 Play Voice Protocol
+                      </button>
+                    </div>
+                  )}
+                </div>
             
-            <iframe 
-              title="Mappedin Map" 
-              name="Mappedin Map" 
-              allow="clipboard-write 'self' https://app.mappedin.com; web-share 'self' https://app.mappedin.com" 
-              scrolling="no" 
-              width="100%" 
-              height="100%" 
-              frameBorder="0" 
-              style={{ border: 0, flexGrow: 1 }} 
-              src="https://app.mappedin.com/map/6a2d1e9d8c2010000b751066?embedded=true"
-            ></iframe>
+            <div style={{ flex: 1, position: 'relative' }}>
+              <iframe 
+                title="Mappedin Map" 
+                name="Mappedin Map" 
+                allow="clipboard-write 'self' https://app.mappedin.com; web-share 'self' https://app.mappedin.com" 
+                scrolling="no" 
+                width="100%" 
+                height="100%" 
+                frameBorder="0" 
+                style={{ border: 0, position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }} 
+                src="https://app.mappedin.com/map/6a2d1e9d8c2010000b751066?embedded=true"
+              ></iframe>
+            </div>
 
-            <div style={{ position: 'absolute', bottom: '1rem', left: '1rem', right: '1rem', display: 'flex', flexDirection: 'column', gap: '12px', zIndex: 10 }}>
+            <div style={{ padding: '1rem', background: '#000', display: 'flex', flexDirection: 'column', gap: '8px', zIndex: 10, borderTop: '1px solid #333' }}>
               <button 
                 onClick={() => navigate('/guest/check-in')}
-                style={{ background: '#10b981', color: '#000', padding: '1rem', fontSize: '1.1rem', fontWeight: 800, width: '100%', border: 'none', borderRadius: '0.25rem', cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.05em' }}
+                style={{ background: '#10b981', color: '#000', padding: '0.8rem', fontSize: '1rem', fontWeight: 800, width: '100%', border: 'none', borderRadius: '0.25rem', cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.05em' }}
               >
                 CONFIRM EVACUATION (MARK SAFE)
               </button>
               <button 
                 onClick={triggerTrappedSOS}
-                style={{ background: '#000', color: '#ef4444', border: '2px solid #ef4444', padding: '1rem', fontSize: '1.1rem', fontWeight: 800, width: '100%', borderRadius: '0.25rem', cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.05em' }}
+                style={{ background: '#000', color: '#ef4444', border: '2px solid #ef4444', padding: '0.8rem', fontSize: '1rem', fontWeight: 800, width: '100%', borderRadius: '0.25rem', cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.05em' }}
               >
                 {isSendingSOS ? 'TRANSMITTING...' : 'I AM TRAPPED (DISPATCH RESCUE)'}
               </button>
@@ -284,8 +326,8 @@ export default function GuestDashboard() {
                   background: isStrobing ? '#fff' : '#111', 
                   color: isStrobing ? '#000' : '#fff', 
                   border: '1px solid #333', 
-                  padding: '1rem', 
-                  fontSize: '1rem', 
+                  padding: '0.8rem', 
+                  fontSize: '0.9rem', 
                   fontWeight: 700, 
                   width: '100%', 
                   borderRadius: '0.25rem',
@@ -298,6 +340,8 @@ export default function GuestDashboard() {
                 {isStrobing ? 'DISENGAGE STROBE / SIREN' : 'ACTIVATE STROBE / SIREN'}
               </button>
             </div>
+            </>
+            )}
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
@@ -312,18 +356,26 @@ export default function GuestDashboard() {
             </div>
             
             {/* Embedded map for non-emergency */}
-            <div style={{ background: 'var(--bg-elevated)', borderRadius: '0.5rem', overflow: 'hidden', height: '300px' }}>
-              <iframe 
-                title="Mappedin Map" 
-                name="Mappedin Map" 
-                allow="clipboard-write 'self' https://app.mappedin.com; web-share 'self' https://app.mappedin.com" 
-                scrolling="no" 
-                width="100%" 
-                height="100%" 
-                frameBorder="0" 
-                style={{ border: 0 }} 
-                src="https://app.mappedin.com/map/6a2d1e9d8c2010000b751066?embedded=true"
-              ></iframe>
+            <div style={{ background: 'var(--bg-elevated)', borderRadius: '0.5rem', overflow: 'hidden', height: isNormalMapMinimized ? 'auto' : '300px', display: 'flex', flexDirection: 'column' }}>
+              <div style={{ padding: '0.5rem 1rem', background: 'rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Typography variant="caption" sx={{ color: 'var(--text-muted)', fontWeight: 600 }}>PROPERTY MAP</Typography>
+                <IconButton size="small" onClick={() => setIsNormalMapMinimized(!isNormalMapMinimized)} sx={{ color: 'var(--text-muted)' }}>
+                  {isNormalMapMinimized ? <MapIcon fontSize="small" /> : <span style={{ fontSize: '1.2rem', lineHeight: 1 }}>_</span>}
+                </IconButton>
+              </div>
+              {!isNormalMapMinimized && (
+                <iframe 
+                  title="Mappedin Map" 
+                  name="Mappedin Map" 
+                  allow="clipboard-write 'self' https://app.mappedin.com; web-share 'self' https://app.mappedin.com" 
+                  scrolling="no" 
+                  width="100%" 
+                  height="100%" 
+                  frameBorder="0" 
+                  style={{ border: 0, flex: 1 }} 
+                  src="https://app.mappedin.com/map/6a2d1e9d8c2010000b751066?embedded=true"
+                ></iframe>
+              )}
             </div>
 
             <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-medium)', color: 'var(--text-primary)', borderRadius: '0.5rem', padding: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

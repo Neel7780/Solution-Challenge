@@ -60,4 +60,5 @@ export type MainTabParamList = {
   Map: undefined;
   Profile: undefined;
   Alerts: undefined;
+  Chat: undefined;
 };

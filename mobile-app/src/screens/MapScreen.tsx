@@ -87,6 +87,7 @@ export default function MapScreen({ navigation }: any) {
   const [guestLocationUpdatedAt, setGuestLocationUpdatedAt] = useState<string | null>(null);
   const [activeUsers, setActiveUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [isMapMinimized, setIsMapMinimized] = useState<boolean>(false);
 
   const { socket, connected } = useSocket();
   const propertyId = user?.property_id || 2;
@@ -287,16 +288,56 @@ export default function MapScreen({ navigation }: any) {
         </View>
       </View>
       <View style={{ flex: 1, marginTop: 100 }}>
-        <WebView 
-          source={{ uri: 'https://app.mappedin.com/map/6a2d1e9d8c2010000b751066?embedded=true' }}
-          style={styles.map}
-          javaScriptEnabled={true}
-        />
+        {isMapMinimized ? (
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+            <Icon name="map" size={48} color="#94a3b8" />
+            <Text style={{ color: '#94a3b8', marginTop: 12, fontSize: 16, fontWeight: 'bold' }}>Map Minimized</Text>
+            <Text style={{ color: '#64748b', marginTop: 4, fontSize: 12 }}>Tap the eye icon to expand</Text>
+          </View>
+        ) : (
+          <WebView 
+            source={{ uri: 'https://app.mappedin.com/map/6a2d1e9d8c2010000b751066?embedded=true' }}
+            style={styles.map}
+            javaScriptEnabled={true}
+          />
+        )}
       </View>
 
       <TouchableOpacity style={styles.refreshButton} onPress={() => { fetchIncidents(); fetchZones(); }}>
         <Icon name="refresh" size={24} color="#333" />
       </TouchableOpacity>
+
+      <TouchableOpacity style={[styles.refreshButton, { top: 156 }]} onPress={() => setIsMapMinimized(!isMapMinimized)}>
+        <Icon name={isMapMinimized ? "visibility" : "visibility-off"} size={24} color="#333" />
+      </TouchableOpacity>
+
+      {activeIncident && nearestExit && (
+        <View style={styles.evacuationPanel}>
+          <View style={styles.evacuationHeader}>
+            <View style={styles.evacuationTitleRow}>
+              <Icon name="directions-run" size={20} color="#10b981" />
+              <Text style={styles.evacuationTitle}>EVACUATION ROUTE ACTIVE</Text>
+            </View>
+            <View style={styles.distanceBadge}>
+              <Text style={styles.distanceText}>{nearestExit.distance}m away</Text>
+            </View>
+          </View>
+          <Text style={styles.evacuationInstructions}>
+            Follow the 3D Mappedin evacuation path towards {nearestExit.name}.
+          </Text>
+          <TouchableOpacity 
+            style={styles.navButton} 
+            onPress={() => navigation.navigate('Navigation')}
+          >
+            <Icon name="navigation" size={16} color="#fff" style={{ marginRight: 6 }} />
+            <Text style={styles.navButtonText}>Start AI Voice Navigation</Text>
+          </TouchableOpacity>
+          <View style={styles.safetyTipRow}>
+            <Icon name="warning" size={14} color="#fbbf24" />
+            <Text style={styles.safetyTipText}>Do not use elevators. Stay low to avoid smoke.</Text>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
