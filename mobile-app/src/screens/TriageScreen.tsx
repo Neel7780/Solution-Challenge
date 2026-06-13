@@ -50,7 +50,16 @@ export default function TriageScreen({ navigation }: TriageScreenProps) {
       });
     }
 
+    let interval: NodeJS.Timeout;
+    if (!socket || !socket.connected) {
+      interval = setInterval(() => {
+        fetchTasks();
+        fetchIncidents();
+      }, 3000);
+    }
+
     return () => {
+      if (interval) clearInterval(interval);
       if (socket) {
         socket.off('new_crisis');
         socket.off('incident_status_update');
@@ -58,7 +67,7 @@ export default function TriageScreen({ navigation }: TriageScreenProps) {
         socket.off('task_updated');
       }
     };
-  }, [socket]);
+  }, [socket, socket?.connected]);
 
   const fetchIncidents = async () => {
     try {

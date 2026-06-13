@@ -1,3 +1,4 @@
+import { API_URL } from '../config';
 import React, { useRef, useState } from 'react';
 import {
   Box,
@@ -67,7 +68,7 @@ let DefaultIcon = L.icon({
 });
 L.Marker.prototype.options.icon = DefaultIcon;
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+
 
 export default function OrganizationAdmin() {
   const containerRef = useRef(null);

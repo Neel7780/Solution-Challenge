@@ -1,3 +1,4 @@
+import { API_URL } from '../../config';
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import {
   Box,
@@ -27,7 +28,7 @@ import { useLocationStore } from '../../store/locationStore';
 import '../../assets/map-styles.css';
 import { findClosestNode, findShortestPath, generateVoiceInstructions, Hazard } from '../../utils/pathfinding';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+
 
 // Georeference constants matching Locations.tsx
 export const PROPERTY_CONFIG = {

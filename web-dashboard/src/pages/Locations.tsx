@@ -1,3 +1,4 @@
+import { API_URL } from '../config';
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import {
   Box,
@@ -228,7 +229,7 @@ function RotatedImageOverlay({
   return null;
 }
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+
 
 const personIcon = new L.Icon({
   iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',

@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { validateRequest } from '../middleware/validate';
 import { body } from 'express-validator';
 import {
   getNotificationHistory,
@@ -18,13 +19,13 @@ router.post('/mass', authenticate, requireRole(['admin', 'security', 'staff', 'o
   body('message').notEmpty(),
   body('channels').isArray().optional(),
   body('zones').optional().isArray(),
-], sendMassNotification);
+], validateRequest, sendMassNotification);
 
 router.post('/send', authenticate, [
   body('userIds').isArray(),
   body('message').notEmpty(),
   body('channel').optional().isIn(['push', 'sms', 'email']),
-], sendNotification);
+], validateRequest, sendNotification);
 
 router.get('/status/:notificationId', authenticate, getNotificationStatus);
 router.get('/history/:propertyId', authenticate, getNotificationHistory);

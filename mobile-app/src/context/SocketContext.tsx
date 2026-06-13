@@ -55,10 +55,14 @@ export const SocketProvider = ({ children }: SocketProviderProps) => {
       alarmTimeoutRef.current = null;
     }
     try {
-      player.pause();
-      player.seekTo(0);
+      if (player && player.playing) {
+        player.pause();
+      }
+      if (player) {
+        player.seekTo(0);
+      }
     } catch (error) {
-      console.warn('Failed to stop alarm sound:', error);
+      console.log('Failed to stop alarm sound:', error?.toString());
     }
     Vibration.cancel();
   };

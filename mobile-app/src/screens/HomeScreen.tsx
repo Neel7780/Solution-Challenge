@@ -33,7 +33,12 @@ export default function HomeScreen({ navigation }: any) {
 
   useEffect(() => {
     fetchDashboardData();
-  }, []);
+    
+    if (!connected) {
+      const interval = setInterval(fetchDashboardData, 3000);
+      return () => clearInterval(interval);
+    }
+  }, [connected]);
 
   const fetchDashboardData = async () => {
     try {
@@ -127,11 +132,28 @@ export default function HomeScreen({ navigation }: any) {
         <View style={styles.alertBox}>
           <View style={styles.alertHeader}>
             <Icon name="error" size={24} color="#d32f2f" />
-            <Text style={styles.alertTitle}>Active Emergency</Text>
+            <Text style={styles.alertTitle}>AI Detected Live Crisis</Text>
+          </View>
+          <View style={{ backgroundColor: 'rgba(255,92,92,0.2)', alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4, marginBottom: 8 }}>
+            <Text style={{ color: '#d32f2f', fontWeight: 'bold', fontSize: 12 }}>Immediate Action Required</Text>
           </View>
           <Text style={styles.alertText}>
-            {activeIncident.incident_type.toUpperCase()}: {activeIncident.description}
+            EMERGENCY DETECTED. Please evacuate immediately via the nearest safe exit and follow all staff instructions.
           </Text>
+          
+          <Text style={{ fontWeight: 'bold', color: '#d32f2f', marginTop: 12, marginBottom: 4 }}>SAFE EXITS</Text>
+          <Text style={{ color: '#333', marginBottom: 12 }}>Main Entrance • North Stairwell • South Fire Escape</Text>
+          
+          <Text style={{ fontWeight: 'bold', color: '#d32f2f', marginBottom: 4 }}>EVACUATION PLAN</Text>
+          <Text style={{ color: '#333', marginBottom: 2 }}>1. Stay calm and alert.</Text>
+          <Text style={{ color: '#333', marginBottom: 2 }}>2. Follow the illuminated exit signs.</Text>
+          <Text style={{ color: '#333', marginBottom: 2 }}>3. Do not use elevators.</Text>
+          <Text style={{ color: '#333', marginBottom: 12 }}>4. Once outside, proceed to the designated assembly point.</Text>
+          
+          <Text style={{ fontWeight: 'bold', color: '#388e3c', marginBottom: 4 }}>SAFETY TIPS</Text>
+          <Text style={{ color: '#333', marginBottom: 2 }}>• Stay low to the ground if there is smoke.</Text>
+          <Text style={{ color: '#333', marginBottom: 2 }}>• Touch doors with the back of your hand before opening.</Text>
+          <Text style={{ color: '#333', marginBottom: 16 }}>• If you are trapped, seal the door with wet cloths.</Text>
           <View style={styles.checkInButtons}>
             <TouchableOpacity
               style={[styles.checkInButton, styles.safeButton]}
