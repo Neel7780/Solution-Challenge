@@ -302,9 +302,7 @@ export default function MapScreen({ navigation }: any) {
             javaScriptEnabled={true}
           />
         )}
-
-
-
+      </View>
       <TouchableOpacity style={styles.refreshButton} onPress={() => { fetchIncidents(); fetchZones(); }}>
         <Icon name="refresh" size={24} color="#333" />
       </TouchableOpacity>
