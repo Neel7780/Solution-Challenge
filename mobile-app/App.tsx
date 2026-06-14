@@ -4,6 +4,7 @@ import { createStackNavigator } from '@react-navigation/stack';
 import { StatusBar } from 'expo-status-bar';
 import * as Notifications from 'expo-notifications';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { View, ActivityIndicator } from 'react-native';
 import { RootStackParamList } from './src/types';
 
 Notifications.setNotificationHandler({
@@ -16,7 +17,7 @@ Notifications.setNotificationHandler({
   }),
 });
 
-import { AuthProvider } from './src/context/AuthContext';
+import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { SocketProvider } from './src/context/SocketContext';
 import { LocationProvider } from './src/context/LocationContext';
 import { NotificationProvider } from './src/context/NotificationContext';
@@ -31,7 +32,75 @@ import NavigationScreen from './src/screens/NavigationScreen';
 import AlarmOverlay from './src/components/AlarmOverlay';
 
 import { navigationRef } from './src/navigation/navigationRef';
+
 const Stack = createStackNavigator<RootStackParamList>();
+
+function RootNavigator() {
+  const { token, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f5f5f5' }}>
+        <ActivityIndicator size="large" color="#d32f2f" />
+      </View>
+    );
+  }
+
+  return (
+    <Stack.Navigator initialRouteName={token ? "Main" : "Login"} screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="Login" component={LoginScreen as any} />
+      <Stack.Screen name="Main" component={MainTabNavigator as any} />
+      <Stack.Screen
+        name="Panic"
+        component={PanicScreen as any}
+        options={{
+          presentation: 'modal',
+          animationTypeForReplace: 'pop'
+        }}
+      />
+      <Stack.Screen 
+        name="IncidentDetails" 
+        component={IncidentDetailsScreen as any} 
+        options={{ 
+          headerShown: true, 
+          title: 'Incident Details',
+          headerStyle: { backgroundColor: '#d32f2f' },
+          headerTintColor: '#fff'
+        }} 
+      />
+      <Stack.Screen 
+        name="EmergencyContacts" 
+        component={ContactsScreen as any} 
+        options={{ 
+          headerShown: true, 
+          title: 'Emergency Contacts',
+          headerStyle: { backgroundColor: '#d32f2f' },
+          headerTintColor: '#fff'
+        }} 
+      />
+      <Stack.Screen 
+        name="SafetyGuide" 
+        component={SafetyGuideScreen as any} 
+        options={{ 
+          headerShown: true, 
+          title: 'Safety Guide',
+          headerStyle: { backgroundColor: '#d32f2f' },
+          headerTintColor: '#fff'
+        }} 
+      />
+      <Stack.Screen 
+        name="Navigation" 
+        component={NavigationScreen as any} 
+        options={{ 
+          headerShown: true, 
+          title: 'Evacuation Navigation',
+          headerStyle: { backgroundColor: '#10b981' },
+          headerTintColor: '#fff'
+        }} 
+      />
+    </Stack.Navigator>
+  );
+}
 
 export default function App() {
   React.useEffect(() => {
@@ -53,61 +122,10 @@ export default function App() {
           <SocketProvider>
             <LocationProvider>
               <NavigationContainer ref={navigationRef}>
-              <Stack.Navigator initialRouteName="Login" screenOptions={{ headerShown: false }}>
-                <Stack.Screen name="Login" component={LoginScreen as any} />
-                <Stack.Screen name="Main" component={MainTabNavigator as any} />
-                <Stack.Screen
-                  name="Panic"
-                  component={PanicScreen as any}
-                  options={{
-                    presentation: 'modal',
-                    animationTypeForReplace: 'pop'
-                  }}
-                />
-                <Stack.Screen 
-                  name="IncidentDetails" 
-                  component={IncidentDetailsScreen as any} 
-                  options={{ 
-                    headerShown: true, 
-                    title: 'Incident Details',
-                    headerStyle: { backgroundColor: '#d32f2f' },
-                    headerTintColor: '#fff'
-                  }} 
-                />
-                <Stack.Screen 
-                  name="EmergencyContacts" 
-                  component={ContactsScreen as any} 
-                  options={{ 
-                    headerShown: true, 
-                    title: 'Emergency Contacts',
-                    headerStyle: { backgroundColor: '#d32f2f' },
-                    headerTintColor: '#fff'
-                  }} 
-                />
-                <Stack.Screen 
-                  name="SafetyGuide" 
-                  component={SafetyGuideScreen as any} 
-                  options={{ 
-                    headerShown: true, 
-                    title: 'Safety Guide',
-                    headerStyle: { backgroundColor: '#d32f2f' },
-                    headerTintColor: '#fff'
-                  }} 
-                />
-                <Stack.Screen 
-                  name="Navigation" 
-                  component={NavigationScreen as any} 
-                  options={{ 
-                    headerShown: true, 
-                    title: 'Evacuation Navigation',
-                    headerStyle: { backgroundColor: '#10b981' },
-                    headerTintColor: '#fff'
-                  }} 
-                />
-              </Stack.Navigator>
-              <StatusBar style="auto" />
-              <AlarmOverlay />
-            </NavigationContainer>
+                <RootNavigator />
+                <StatusBar style="auto" />
+                <AlarmOverlay />
+              </NavigationContainer>
             </LocationProvider>
           </SocketProvider>
         </NotificationProvider>

@@ -24,24 +24,23 @@ interface TriageScreenProps {
 
 export default function TriageScreen({ navigation }: TriageScreenProps) {
   const { user } = useAuth();
-  const { socket } = useSocket();
-  const [incidents, setIncidents] = useState<any[]>([]);
+  const { socket, activeIncidents, fetchActiveIncidents } = useSocket();
   const [tasks, setTasks] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<'incidents' | 'tasks'>('incidents');
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
 
   useEffect(() => {
-    fetchIncidents();
+    const initData = async () => {
+      await fetchActiveIncidents();
+      await fetchTasks();
+      setLoading(false);
+    };
+    initData();
+  }, []);
 
+  useEffect(() => {
     if (socket) {
-      socket.on('new_crisis', (data: any) => {
-        setIncidents((prev) => [data.incident, ...prev]);
-      });
-
-      socket.on('incident_status_update', (data: any) => {
-        fetchIncidents(); // Refresh to get updated list
-      });
       socket.on('task_assigned', () => {
         fetchTasks();
       });
@@ -54,32 +53,18 @@ export default function TriageScreen({ navigation }: TriageScreenProps) {
     if (!socket || !socket.connected) {
       interval = setInterval(() => {
         fetchTasks();
-        fetchIncidents();
+        fetchActiveIncidents();
       }, 3000);
     }
 
     return () => {
       if (interval) clearInterval(interval);
       if (socket) {
-        socket.off('new_crisis');
-        socket.off('incident_status_update');
         socket.off('task_assigned');
         socket.off('task_updated');
       }
     };
   }, [socket, socket?.connected]);
-
-  const fetchIncidents = async () => {
-    try {
-      const response = await axios.get(`${API_URL}/crisis/active`);
-      setIncidents(response.data.incidents);
-    } catch (error) {
-      console.error('Error fetching active incidents:', error);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
 
   const fetchTasks = async () => {
     try {
@@ -91,14 +76,10 @@ export default function TriageScreen({ navigation }: TriageScreenProps) {
     }
   };
 
-  useEffect(() => {
-    fetchTasks();
-  }, []);
-
   const onRefresh = () => {
     setRefreshing(true);
     if (activeTab === 'incidents') {
-      fetchIncidents();
+      fetchActiveIncidents().finally(() => setRefreshing(false));
     } else {
       fetchTasks().finally(() => setRefreshing(false));
     }
@@ -174,7 +155,7 @@ export default function TriageScreen({ navigation }: TriageScreenProps) {
           onPress={() => setActiveTab('incidents')}
         >
           <Text style={[styles.tabText, activeTab === 'incidents' && styles.activeTabText]}>
-            Active Incidents ({incidents.length})
+            Active Incidents ({activeIncidents.length})
           </Text>
         </TouchableOpacity>
         <TouchableOpacity 
@@ -188,18 +169,18 @@ export default function TriageScreen({ navigation }: TriageScreenProps) {
       </View>
 
       {activeTab === 'incidents' ? (
-        incidents.length === 0 ? (
+        activeIncidents.length === 0 ? (
         <View style={styles.emptyState}>
           <Icon name="check-circle" size={64} color="#4caf50" />
           <Text style={styles.emptyTitle}>All Clear</Text>
           <Text style={styles.emptySubtext}>No active incidents at this property.</Text>
-          <TouchableOpacity style={styles.refreshButton} onPress={fetchIncidents}>
+          <TouchableOpacity style={styles.refreshButton} onPress={fetchActiveIncidents}>
             <Text style={styles.refreshButtonText}>Refresh</Text>
           </TouchableOpacity>
         </View>
       ) : (
         <FlatList
-          data={incidents}
+          data={activeIncidents}
           renderItem={renderIncidentItem}
           keyExtractor={(item) => item.id.toString()}
           contentContainerStyle={styles.listContainer}

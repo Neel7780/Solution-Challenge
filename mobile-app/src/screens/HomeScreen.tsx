@@ -28,8 +28,7 @@ interface HomeScreenProps {
 
 export default function HomeScreen({ navigation }: any) {
   const { user } = useAuth();
-  const { connected, socket } = useSocket();
-  const [activeIncident, setActiveIncident] = useState<any>(null);
+  const { connected, socket, activeIncident, fetchActiveIncidents } = useSocket();
   const [stats, setStats] = useState<any>({});
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
@@ -38,36 +37,16 @@ export default function HomeScreen({ navigation }: any) {
   useEffect(() => {
     fetchDashboardData();
     
-    // Always poll every 2 seconds as requested fallback
-    const interval = setInterval(fetchDashboardData, 2000); 
+    // Always poll stats every 5 seconds if not guest
+    const interval = setInterval(fetchDashboardData, 5000); 
 
-    if (socket) {
-      socket.on('crisis_reported', fetchDashboardData);
-      socket.on('incident_enriched', fetchDashboardData);
-      socket.on('incident_status_update', fetchDashboardData);
-    }
-    
     return () => {
       clearInterval(interval);
-      if (socket) {
-        socket.off('crisis_reported', fetchDashboardData);
-        socket.off('incident_enriched', fetchDashboardData);
-        socket.off('incident_status_update', fetchDashboardData);
-      }
     };
   }, [socket]);
 
   const fetchDashboardData = async () => {
     try {
-      const propertyId = user?.property_id || 2;
-      const incidentsRes = await axios.get(`${API_URL}/crisis/active?propertyId=${propertyId}`);
-      if (incidentsRes.data.incidents && incidentsRes.data.incidents.length > 0) {
-        const detailsRes = await axios.get(`${API_URL}/crisis/${incidentsRes.data.incidents[0].id}`);
-        setActiveIncident(detailsRes.data.incident || null);
-      } else {
-        setActiveIncident(null);
-      }
-
       // Get stats (only for staff/responders/admins)
       if (user?.property_id && user?.role && user.role !== 'guest') {
         const statsRes = await axios.get(`${API_URL}/dashboard/stats/${user.property_id}`);
@@ -90,6 +69,7 @@ export default function HomeScreen({ navigation }: any) {
 
   const onRefresh = async () => {
     setRefreshing(true);
+    await fetchActiveIncidents();
     await fetchDashboardData();
     setRefreshing(false);
   };

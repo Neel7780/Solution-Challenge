@@ -10,34 +10,21 @@ import {
 import Icon from '@expo/vector-icons/MaterialIcons';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
+import { useSocket } from '../context/SocketContext';
 import { API_URL } from '../config';
 
 export default function StatusScreen() {
   const { user } = useAuth();
-  const [activeIncidents, setActiveIncidents] = useState<any[]>([]);
-  const [myCheckIns, setMyCheckIns] = useState<any[]>([]);
+  const { activeIncidents, fetchActiveIncidents } = useSocket();
   const [refreshing, setRefreshing] = useState<boolean>(false);
 
   useEffect(() => {
-    fetchStatusData();
+    fetchActiveIncidents();
   }, []);
-
-  const fetchStatusData = async () => {
-    try {
-      // Get active incidents
-      const incidentsRes = await axios.get(`${API_URL}/crisis/active`);
-      setActiveIncidents(incidentsRes.data.incidents);
-
-      // Get my check-ins (would need endpoint for this)
-      // For now, we'll skip this
-    } catch (error) {
-      console.log('Status fetch error:', error);
-    }
-  };
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchStatusData();
+    await fetchActiveIncidents();
     setRefreshing(false);
   };
 
