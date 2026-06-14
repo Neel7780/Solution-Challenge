@@ -2,6 +2,10 @@
 
 A high-performance, multi-tenant crisis management ecosystem designed for global organizations (hotel chains, mall networks, hospital systems). CrisisRespond synchronizes real-time data across mobile and web platforms to eliminate information silos during high-stakes emergencies.
 
+**🔗 Project Links:**
+- **GitHub Repository**: [Neel7780/Solution-Challenge](https://github.com/Neel7780/Solution-Challenge)
+- **Working Prototype**: [solution-challenge-nu.vercel.app](https://solution-challenge-nu.vercel.app/)
+
 ## 🚀 Enterprise Multi-Tenant Architecture
 
 CrisisRespond has transitioned from a single-property application to a robust enterprise platform:
@@ -93,11 +97,30 @@ All endpoints below are **automatically filtered** by the active `property_id` i
 
 ## 🌟 Key Enterprise Features
 
-- **Gemini Intelligence Integration**: Advanced, robust integration with Google's Gemini API for real-time crisis analysis and simulation predictions, featuring built-in auto-retry logic for enterprise reliability.
+- **Automated CCTV AI Verification**: Integrates Google Gemini Vision to autonomously analyze security camera snapshots in reported zones, actively confirming threats (fire/smoke/intruders) and filtering out false alarms before triggering a mass panic.
+- **Multi-Agent Emergency Council**: A Groq-powered AI pipeline (Llama-3.3-70b & Mixtral-8x7b) splitting crisis logic into dedicated agents (Spatial, Synthesizer, and Task Prioritizer) to autonomously generate verdicts and dispatch security staff in milliseconds.
+- **Adaptive AI Voice Evacuation**: Calculates a dynamic Dijkstra shortest-path across the 3D Mappedin environment to route guests away from physical hazards, feeding the vectors into Google Gemini 3.5 Flash to generate near-instant, calm voice navigation instructions.
+- **Haptic Mobile Alarms & SOS Triage**: Bypasses passive text messages by triggering native mobile sirens and vibrations during critical calamities. Pressing the SOS button instantly drops the user onto the admin's tactical map in a "Distressed" state.
+- **Proximity-Based Alerting (PostGIS)**: Uses spatial geometry to identify and notify only users within a specific "danger radius" (e.g., 200m) of an incident, preventing platform-wide notification fatigue.
+- **Spatial Digital Twin & Shadow Mode**: A bi-directional Godot engine simulation syncing live occupant coordinates. Admins can run "What-If" crisis simulations alongside real operations to identify architectural bottlenecks.
+- **Enterprise 3D Indoor Wayfinding**: Integrates Mappedin’s SDK to replace flat 2D maps with fully interactive, vector-based 3D models of the property for a unified, high-performance spatial view.
+- **Public Crisis Reporting Pipeline**: A secure portal for non-registered visitors to report incidents, placing them in a verification queue validated by AI or security.
+- **Architectural Data Isolation (QueryWithContext)**: An enterprise-grade security layer that intercepts SQL queries to inject mandatory `organization_id` and `property_id` filters, ensuring strict multi-tenant data privacy on shared servers.
 - **Automated Onboarding**: Super Admin approves organization requests, which auto-provisions org records, main properties, and admin accounts.
 - **Context-Aware UI**: The Web Dashboard and Mobile App dynamically adapt their menus and data based on the user's role and selected property.
-- **QueryWithContext**: A critical backend safety layer that intercepts SQL queries to inject mandatory `organization_id` and `property_id` filters.
 - **Organization-Wide Sockets**: Real-time alerts can be broadcast to a specific property (`property_[id]`) or an entire organization (`organization_[id]`).
+
+## 🤖 Google Technologies & Services Used
+
+CrisisRespond is deeply integrated with Google's ecosystem to provide high-performance, intelligence-driven emergency orchestration:
+
+1. **Google AI Studio & Gemini API (`@google/generative-ai`)**:
+   - **Gemini 3.5 Flash (Voice Evacuation Routing)**: Feeds raw Dijkstra pathfinding vectors (avoiding active physical hazards) into a highly restricted Gemini 3.5 Flash model (0.2 temperature, 100 max tokens) to generate near-instant, calm voice navigation instructions dynamically.
+   - **Gemini Vision (Automated CCTV Verification)**: When an incident is reported, the system pipes base64 security camera snapshots into Gemini Vision. The model autonomously confirms real threats (smoke/intruders) and filters out false alarms, updating the database automatically.
+   - **Gemini 2.0 Flash (Incident Intelligence)**: Used in the backend pipeline to instantly enrich emergency telemetry data—calculating severity scores, estimating potential casualties, and identifying architectural bottlenecks during live simulations.
+2. **Google Material Design (via Material UI)**: The entire Web Dashboard architecture is built using Google’s Material Design principles. We heavily utilized MUI components (DataGrids, thematic buttons, navigation drawers, and typography) to ensure the interface remains clean, accessible, and highly legible during high-stress emergency situations.
+3. **Android Native Architecture (via Expo/React Native)**: Our mobile field application leverages core Android OS integrations. During a critical calamity, the app hooks into the Android hardware layer to bypass silent modes, triggering native haptic vibrations and siren audio loops to seize the user's immediate physical attention.
+4. **Google Fonts**: Integrated fonts (such as Inter and Roboto) to guarantee high legibility and a premium aesthetic across both mobile and web platforms.
 
 ## 🆕 Recent Session Upgrades
 
@@ -133,10 +156,23 @@ We are continuously evolving CrisisRespond to be the ultimate safety ecosystem. 
 
 ## 👥 Development Team
 
-- **Backend**: Node.js/Express with PostgreSQL & PostGIS
-- **Mobile**: React Native (Expo)
-- **Web Dashboard**: React + Material-UI + Zustand + GSAP
-- **Visualization**: Godot Engine
+### 👥 Team Details
+- **Team Name**: Quadruple
+- **Team Leader**: Vedant Shah
+- **Problem Statement**: [Rapid Crisis Response] Accelerated Emergency Response and Crisis Coordination in Hospitality
+
+### 🛠 Tech Stack Details
+- **Backend**: Node.js, Express.js, TypeScript, and Socket.io (for low-latency, bidirectional real-time telemetry)
+- **Frontend (Web Dashboard)**: React (Vite), TypeScript, Material UI (MUI), Zustand (State Management), GSAP (Micro-animations), React Leaflet, and Mappedin 3D SDK
+- **Frontend (Mobile App)**: React Native, Expo, React Navigation, Expo Speech & Audio (for voice navigation and siren alarms), React Native Maps, and Mappedin 3D SDK
+- **Database**: PostgreSQL with PostGIS spatial extensions (for geolocation filtering and boundary checking)
+- **AI Engine & Models**:
+  - **Google Gemini 3.5 Flash**: For generating near-instant, adaptive voice evacuation instructions
+  - **Google Gemini Vision**: For autonomous CCTV snapshot analysis to verify fire/intruder threats
+  - **Google Gemini 2.0 Flash**: For incident intelligence and simulation telemetry enrichment
+  - **Groq API (Llama-3.3-70b & Mixtral-8x7b)**: Powering the Multi-Agent Emergency Council (Spatial, Synthesizer, and Prioritizer agents)
+- **Simulation/Digital Twin**: Godot Engine 4 (compiled to HTML5/WebAssembly via JavaScriptBridge) for scenario modeling and telemetry generation
+- **DevOps/Deployment**: Render (Node.js Backend & PostgreSQL Database hosting) and Vercel (Frontend Web application hosting)
 
 ---
 © 2025 CrisisRespond. Enterprise-Grade Emergency Coordination.
