@@ -4,9 +4,10 @@ import { io, Socket } from 'socket.io-client';
 import { useAuth } from './AuthContext';
 import * as Notifications from 'expo-notifications';
 import { useAudioPlayer } from 'expo-audio';
-import { SOCKET_URL } from '../config';
+import { SOCKET_URL, API_URL } from '../config';
 import { SocketContextType } from '../types';
 import { useNotifications } from './NotificationContext';
+import axios from 'axios';
 
 const SocketContext = createContext<SocketContextType>({} as SocketContextType);
 
@@ -20,12 +21,25 @@ export const SocketProvider = ({ children }: SocketProviderProps) => {
   const { token, user } = useAuth();
   const { addNotification } = useNotifications();
 
+  const [activeIncidents, setActiveIncidents] = useState<any[]>([]);
+  const activeIncident = activeIncidents.length > 0 ? activeIncidents[0] : null;
+
   const [alarmActive, setAlarmActive] = useState<boolean>(false);
   const [alarmTitle, setAlarmTitle] = useState<string>('');
   const [alarmMessage, setAlarmMessage] = useState<string>('');
   const alarmTimeoutRef = useRef<any>(null);
 
   const player = useAudioPlayer(require('../../assets/alarm.mp3'));
+
+  const fetchActiveIncidents = async () => {
+    if (!token) return;
+    try {
+      const response = await axios.get(`${API_URL}/crisis/active`);
+      setActiveIncidents(response.data.incidents || []);
+    } catch (error) {
+      console.error('Error fetching active incidents in SocketContext:', error);
+    }
+  };
 
   const startAlarmMedia = async () => {
     // Clear any previous timeout
@@ -80,9 +94,11 @@ export const SocketProvider = ({ children }: SocketProviderProps) => {
 
   useEffect(() => {
     if (token && user) {
+      void fetchActiveIncidents();
       void initSocket();
     } else {
       disconnectSocket();
+      setActiveIncidents([]);
     }
 
     return () => {
@@ -144,10 +160,20 @@ export const SocketProvider = ({ children }: SocketProviderProps) => {
       setConnected(false);
     });
 
-    // Listen for crisis alerts
-    newSocket.on('crisis_reported', (data: any) => {
-      const incidentType = data.incident?.incident_type || data.incident?.type || 'EMERGENCY';
-      const description = data.incident?.description || 'Please proceed to safety.';
+    // Handle new incident ingestion (crisis_reported, new_crisis, new_incident, incident_invoked)
+    const handleNewIncident = (data: any) => {
+      const incident = data.incident || data;
+      if (incident && incident.id) {
+        setActiveIncidents((prev) => {
+          if (prev.some((item) => item.id === incident.id)) {
+            return prev.map((item) => item.id === incident.id ? incident : item);
+          }
+          return [incident, ...prev];
+        });
+      }
+
+      const incidentType = incident.incident_type || incident.type || 'EMERGENCY';
+      const description = incident.description || 'Please proceed to safety.';
       const message = `${String(incidentType).toUpperCase()}: ${description}`;
       
       showNotification('🚨 EMERGENCY ALERT 🚨', message, { screen: 'Navigation' }).catch(console.warn);
@@ -157,14 +183,28 @@ export const SocketProvider = ({ children }: SocketProviderProps) => {
         message: message,
         severity: 'critical'
       });
-      setAlarmTitle('🚨 EMERGENCY ALARM ACTIVE 🚨');
+      setAlarmTitle(`🚨 EMERGENCY ALARM: ${String(incidentType).toUpperCase()} 🚨`);
       setAlarmMessage(message);
       setAlarmActive(true);
       void startAlarmMedia();
-    });
+    };
+
+    newSocket.on('crisis_reported', handleNewIncident);
+    newSocket.on('new_crisis', handleNewIncident);
+    newSocket.on('new_incident', handleNewIncident);
+    newSocket.on('incident_invoked', handleNewIncident);
 
     // Listen for nearby crisis
     newSocket.on('nearby_crisis', (data: any) => {
+      const incident = data.incident || data;
+      if (incident && incident.id) {
+        setActiveIncidents((prev) => {
+          if (prev.some((item) => item.id === incident.id)) {
+            return prev;
+          }
+          return [incident, ...prev];
+        });
+      }
       showNotification('⚠️ CRITICAL ALERT ⚠️', data.message).catch(console.warn);
       addNotification({
         type: 'crisis',
@@ -180,6 +220,21 @@ export const SocketProvider = ({ children }: SocketProviderProps) => {
 
     // Listen for AI enrichment
     newSocket.on('incident_enriched', (data: any) => {
+      const incidentId = data.incidentId || data.incident?.id;
+      if (incidentId && data.enrichment) {
+        setActiveIncidents((prev) =>
+          prev.map((inc) =>
+            inc.id === incidentId
+              ? { 
+                  ...inc, 
+                  enrichment: data.enrichment, 
+                  mass_alert_message: data.enrichment.massAlertMessage || inc.mass_alert_message,
+                  evacuation_routes: data.enrichment.evacuationRoutes || inc.evacuation_routes
+                }
+              : inc
+          )
+        );
+      }
       if (data.enrichment?.massAlertMessage) {
         showNotification('Emergency Update', data.enrichment.massAlertMessage).catch(console.warn);
         addNotification({
@@ -214,20 +269,27 @@ export const SocketProvider = ({ children }: SocketProviderProps) => {
           severity: 'success'
         });
         silenceAlarm();
+        setActiveIncidents([]);
       }
     });
 
     // Listen for incident status updates
     newSocket.on('incident_status_update', (data: any) => {
+      const incidentId = data.incidentId || data.incident?.id;
       if (data.status === 'resolved') {
-        showNotification('Emergency Resolved', `Incident #${data.incidentId} has been resolved.`).catch(console.warn);
+        setActiveIncidents((prev) => prev.filter((inc) => inc.id !== incidentId));
+        showNotification('Emergency Resolved', `Incident #${incidentId} has been resolved.`).catch(console.warn);
         addNotification({
           type: 'status',
           title: 'Emergency Resolved',
-          message: `Incident #${data.incidentId} has been resolved.`,
+          message: `Incident #${incidentId} has been resolved.`,
           severity: 'success'
         });
         silenceAlarm();
+      } else {
+        setActiveIncidents((prev) =>
+          prev.map((inc) => (inc.id === incidentId ? { ...inc, status: data.status } : inc))
+        );
       }
     });
 
@@ -286,7 +348,7 @@ export const SocketProvider = ({ children }: SocketProviderProps) => {
   };
 
   return (
-    <SocketContext.Provider value={{ socket, connected, alarmActive, alarmTitle, alarmMessage, silenceAlarm }}>
+    <SocketContext.Provider value={{ socket, connected, alarmActive, alarmTitle, alarmMessage, silenceAlarm, activeIncidents, activeIncident, fetchActiveIncidents }}>
       {children}
     </SocketContext.Provider>
   );

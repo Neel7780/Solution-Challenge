@@ -81,7 +81,7 @@ function getDistanceInMeters(lat1: number, lon1: number, lat2: number, lon2: num
 export default function MapScreen({ navigation }: any) {
   const { user } = useAuth();
   const { location } = useLocation();
-  const [incidents, setIncidents] = useState<any[]>([]);
+  const { socket, connected, activeIncidents, fetchActiveIncidents } = useSocket();
   const [zones, setZones] = useState<any[]>([]);
   const [guestCoords, setGuestCoords] = useState<{ latitude: number; longitude: number } | null>(null);
   const [guestLocationUpdatedAt, setGuestLocationUpdatedAt] = useState<string | null>(null);
@@ -89,19 +89,7 @@ export default function MapScreen({ navigation }: any) {
   const [loading, setLoading] = useState<boolean>(true);
   const [isMapMinimized, setIsMapMinimized] = useState<boolean>(false);
 
-  const { socket, connected } = useSocket();
   const propertyId = user?.property_id || 2;
-
-  const fetchIncidents = async () => {
-    try {
-      const response = await axios.get(`${API_URL}/crisis/active`);
-      setIncidents(response.data.incidents);
-    } catch (error) {
-      console.error('Error fetching incidents for map:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const fetchZones = async () => {
     try {
@@ -142,24 +130,29 @@ export default function MapScreen({ navigation }: any) {
   };
 
   useEffect(() => {
-    fetchIncidents();
-    fetchZones();
-    fetchLocationData();
+    const initData = async () => {
+      try {
+        await Promise.all([
+          fetchActiveIncidents(),
+          fetchZones(),
+          fetchLocationData()
+        ]);
+      } catch (err) {
+        console.error('Error loading MapScreen data:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    initData();
   }, [propertyId]);
 
   // Socket listener for live updates
   useEffect(() => {
     if (!socket || !connected) return;
 
-    socket.on('crisis_reported', fetchIncidents);
-    socket.on('incident_status_update', fetchIncidents);
-    socket.on('property_status_update', fetchIncidents);
     socket.on('location_update', fetchLocationData);
 
     return () => {
-      socket.off('crisis_reported', fetchIncidents);
-      socket.off('incident_status_update', fetchIncidents);
-      socket.off('property_status_update', fetchIncidents);
       socket.off('location_update', fetchLocationData);
     };
   }, [socket, connected]);
@@ -181,7 +174,7 @@ export default function MapScreen({ navigation }: any) {
   };
 
   const displayLocation = guestCoords || location || { latitude: PROPERTY_CONFIG.ANCHOR_LAT, longitude: PROPERTY_CONFIG.ANCHOR_LNG };
-  const activeIncident = incidents.length > 0 ? incidents[0] : null;
+  const activeIncident = activeIncidents.length > 0 ? activeIncidents[0] : null;
 
   // Safe Exit Assembly Points (Dynamic from DB + Fallback)
   const exitPoints = useMemo(() => {
@@ -275,7 +268,7 @@ export default function MapScreen({ navigation }: any) {
         <View style={styles.hudPills}>
           <View style={styles.hudPill}>
             <Text style={styles.hudPillLabel}>Incidents</Text>
-            <Text style={styles.hudPillValue}>{incidents.length}</Text>
+            <Text style={styles.hudPillValue}>{activeIncidents.length}</Text>
           </View>
           <View style={styles.hudPillMuted}>
             <Text style={styles.hudPillLabelMuted}>Guest</Text>
@@ -303,7 +296,7 @@ export default function MapScreen({ navigation }: any) {
           />
         )}
       </View>
-      <TouchableOpacity style={styles.refreshButton} onPress={() => { fetchIncidents(); fetchZones(); }}>
+      <TouchableOpacity style={styles.refreshButton} onPress={() => { fetchActiveIncidents(); fetchZones(); }}>
         <Icon name="refresh" size={24} color="#333" />
       </TouchableOpacity>
 

@@ -41,6 +41,9 @@ export interface SocketContextType {
   alarmTitle: string;
   alarmMessage: string;
   silenceAlarm: () => void;
+  activeIncidents: any[];
+  activeIncident: any | null;
+  fetchActiveIncidents: () => Promise<void>;
 }
 
 export type RootStackParamList = {

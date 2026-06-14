@@ -1,5 +1,5 @@
 import React, { createContext, useState, useContext, useEffect, ReactNode } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 import axios from 'axios';
 import { API_URL } from '../config';
 import { User, AuthContextType } from '../types';
@@ -21,8 +21,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const checkAuthStatus = async () => {
     try {
-      const storedToken = await AsyncStorage.getItem('token');
-      const storedUser = await AsyncStorage.getItem('user');
+      const storedToken = await SecureStore.getItemAsync('token');
+      const storedUser = await SecureStore.getItemAsync('user');
       if (storedToken && storedUser) {
         setToken(storedToken);
         setUser(JSON.parse(storedUser));
@@ -51,14 +51,14 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         };
       }
 
-      const { token, user } = response.data;
+      const { token: receivedToken, user: receivedUser } = response.data;
 
-      await AsyncStorage.setItem('token', token);
-      await AsyncStorage.setItem('user', JSON.stringify(user));
+      await SecureStore.setItemAsync('token', receivedToken);
+      await SecureStore.setItemAsync('user', JSON.stringify(receivedUser));
 
-      setToken(token);
-      setUser(user);
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      setToken(receivedToken);
+      setUser(receivedUser);
+      axios.defaults.headers.common['Authorization'] = `Bearer ${receivedToken}`;
 
       return { success: true };
     } catch (error: any) {
@@ -70,8 +70,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   };
 
   const logout = async (): Promise<void> => {
-    await AsyncStorage.removeItem('token');
-    await AsyncStorage.removeItem('user');
+    await SecureStore.deleteItemAsync('token');
+    await SecureStore.deleteItemAsync('user');
     setToken(null);
     setUser(null);
     delete axios.defaults.headers.common['Authorization'];
@@ -81,7 +81,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     try {
       const response = await axios.patch(`${API_URL}/users/me`, updates);
       setUser(response.data.user);
-      await AsyncStorage.setItem('user', JSON.stringify(response.data.user));
+      await SecureStore.setItemAsync('user', JSON.stringify(response.data.user));
       return { success: true };
     } catch (error: any) {
       return { success: false, error: error.response?.data?.error };
