@@ -9,9 +9,17 @@ import {
 } from 'react-native';
 import { MaterialIcons as Icon } from '@expo/vector-icons';
 import { useSocket } from '../context/SocketContext';
+
 import { navigationRef } from '../navigation/navigationRef';
 
+import { useNavigation } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
+import { RootStackParamList } from '../types';
+import { useAuth } from '../context/AuthContext';
+
+
 export default function AlarmOverlay() {
+  const { user } = useAuth();
   const { alarmActive, alarmTitle, alarmMessage, silenceAlarm } = useSocket();
   const [pulse] = useState(new Animated.Value(0));
 
@@ -37,7 +45,7 @@ export default function AlarmOverlay() {
     }
   }, [alarmActive]);
 
-  if (!alarmActive) return null;
+  if (!alarmActive || user?.role === 'org_admin') return null;
 
   const backgroundColor = pulse.interpolate({
     inputRange: [0, 1],

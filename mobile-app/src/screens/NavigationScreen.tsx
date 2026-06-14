@@ -21,6 +21,7 @@ import { getDistanceInMeters, godotToLatLng, latLngToGodot, getGeoreferencedLatL
 import { findClosestNodeOffline, findShortestPathOffline, Hazard } from '../utils/pathfinding';
 import { speakGuidance, stopSpeech } from '../utils/voiceGuidance';
 import { NavigationNode } from '../types/navigation';
+import { WebView } from 'react-native-webview';
 import LeafletMapView, { type LeafletMapCircle, type LeafletMapMarker, type LeafletMapPolyline } from '../components/LeafletMapView';
 
 export default function NavigationScreen({ navigation }: any) {
@@ -397,17 +398,13 @@ export default function NavigationScreen({ navigation }: any) {
         </View>
       </View>
 
-      <LeafletMapView
-        style={styles.map}
-        center={mapCenter}
-        zoom={0}
-        fitToData
-        markers={mapMarkers}
-        circles={mapCircles}
-        polylines={mapPolylines}
-        mode="floorplan"
-        floorPlanUrl={floorPlanDataUrl || undefined}
-      />
+      <View style={{ flex: 1 }}>
+        <WebView 
+          source={{ uri: 'https://app.mappedin.com/map/6a2d1e9d8c2010000b751066?embedded=true' }}
+          style={styles.map}
+          javaScriptEnabled={true}
+        />
+      </View>
 
       {/* Floating Instructions Panel */}
       <View style={styles.floatingPanel}>

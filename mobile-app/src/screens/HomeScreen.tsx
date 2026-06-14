@@ -18,6 +18,7 @@ import { API_URL } from '../config';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../types';
 import { WebView } from 'react-native-webview';
+import OrgAdminEmergencyDashboard from '../components/OrgAdminEmergencyDashboard';
 
 type HomeScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Main'>;
 
@@ -128,10 +129,16 @@ export default function HomeScreen({ navigation }: any) {
     );
   }
 
+  if (activeIncident && user?.role === 'org_admin') {
+    return <OrgAdminEmergencyDashboard activeIncident={activeIncident} />;
+  }
+
   if (activeIncident && userStatus !== 'safe') {
     return (
       <View style={{ flex: 1, backgroundColor: '#000' }}>
-        <View style={{ padding: 16, backgroundColor: 'rgba(15, 23, 42, 0.95)', position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, paddingTop: 60, borderBottomWidth: 1, borderBottomColor: '#334155' }}>
+
+        <View style={{ padding: 16, backgroundColor: 'rgba(0,0,0,0.8)', zIndex: 10, paddingTop: 60 }}>
+
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
             <Text style={{ color: '#ef4444', fontSize: 20, fontWeight: '900' }}>CRITICAL ALERT: {activeIncident.incident_type?.toUpperCase() || 'EMERGENCY'}</Text>
             <View style={{ backgroundColor: '#ef4444', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 }}>
@@ -152,13 +159,15 @@ export default function HomeScreen({ navigation }: any) {
           )}
         </View>
 
+
         <WebView 
           source={{ uri: 'https://app.mappedin.com/map/6a2d1e9d8c2010000b751066?embedded=true' }}
           style={{ flex: 1, marginTop: 120 }}
           javaScriptEnabled={true}
         />
 
-        <View style={{ position: 'absolute', bottom: 30, left: 16, right: 16, zIndex: 10 }}>
+
+        <View style={{ padding: 16, paddingBottom: 30, backgroundColor: '#000', zIndex: 10 }}>
           <TouchableOpacity
             style={[styles.checkInButton, styles.safeButton, { marginBottom: 12, paddingVertical: 16, justifyContent: 'center' }]}
             onPress={() => handleCheckIn('safe')}

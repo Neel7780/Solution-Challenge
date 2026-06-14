@@ -287,6 +287,7 @@ export default function MapScreen({ navigation }: any) {
           </View>
         </View>
       </View>
+
       <View style={{ flex: 1, marginTop: 100 }}>
         {isMapMinimized ? (
           <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
@@ -301,7 +302,8 @@ export default function MapScreen({ navigation }: any) {
             javaScriptEnabled={true}
           />
         )}
-      </View>
+
+
 
       <TouchableOpacity style={styles.refreshButton} onPress={() => { fetchIncidents(); fetchZones(); }}>
         <Icon name="refresh" size={24} color="#333" />
@@ -348,22 +350,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#f4f6f9',
   },
   topHud: {
-    position: 'absolute',
-    top: 14,
-    left: 14,
-    right: 14,
-    zIndex: 20,
-    backgroundColor: 'rgba(15, 23, 42, 0.82)',
-    borderRadius: 20,
+    backgroundColor: '#0f172a',
     paddingHorizontal: 16,
     paddingVertical: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.22,
-    shadowRadius: 18,
-    elevation: 10,
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'space-between',
@@ -486,7 +475,7 @@ const styles = StyleSheet.create({
   },
   refreshButton: {
     position: 'absolute',
-    top: 96,
+    bottom: 16,
     right: 16,
     backgroundColor: '#fff',
     padding: 12,
